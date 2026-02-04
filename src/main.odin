@@ -52,8 +52,8 @@ run_init :: proc() {
         os.exit(1)
     }
     
-    fmt.eprintln("Error: 'init' command not yet implemented")
-    os.exit(1)
+    module_name := os.args[2]
+    cli.init_module(module_name)
 }
 
 // run_load implements the default load behavior

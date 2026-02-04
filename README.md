@@ -33,8 +33,17 @@ cd zephyr
 Add to your `.zshrc`:
 
 ```bash
+eval "$($HOME/.zsh/bin/zephyr load)"
+```
+
+Or add the bin directory to your PATH:
+
+```bash
+export PATH="$HOME/.zsh/bin:$PATH"
 eval "$(zephyr load)"
 ```
+
+For detailed integration instructions, see [INTEGRATION.md](INTEGRATION.md).
 
 ### Creating Modules
 

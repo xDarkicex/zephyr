@@ -1,8 +1,15 @@
 [module]
 name = "core"
 version = "1.0.0"
-description = "Core shell utilities"
+description = "Core shell configuration and utilities"
+author = "Zephyr Shell Loader"
+license = "MIT"
 
 [load]
 priority = 10
-files = ["init.zsh"]
+files = ["exports.zsh", "aliases.zsh", "functions.zsh"]
+
+[settings]
+editor = "vim"
+pager = "less"
+history_size = "10000"
