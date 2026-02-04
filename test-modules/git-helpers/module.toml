@@ -1,0 +1,20 @@
+[module]
+name = "git-helpers"
+version = "1.2.0"
+description = "Git utility functions and aliases"
+author = "Test Author"
+
+[dependencies]
+required = ["core"]
+
+[load]
+priority = 50
+files = ["git-aliases.zsh", "git-functions.zsh"]
+
+[hooks]
+pre_load = "git_check_version"
+post_load = "git_setup_completion"
+
+[settings]
+default_branch = "main"
+auto_fetch = "true"

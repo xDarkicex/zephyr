@@ -131,6 +131,84 @@ parse_detailed :: proc(file_path: string) -> ParseResult {
                             priority = 100 // default if parsing failed
                         }
                         result.module.priority = priority
+                    case "files":
+                        // Parse array format: ["file1.zsh", "file2.zsh"]
+                        if strings.has_prefix(value, "[") && strings.has_suffix(value, "]") {
+                            array_content := strings.trim(value, "[]")
+                            if len(array_content) > 0 {
+                                items := strings.split(array_content, ",")
+                                defer delete(items)
+                                
+                                for item in items {
+                                    trimmed_item := strings.trim_space(item)
+                                    // Remove quotes
+                                    if len(trimmed_item) >= 2 && trimmed_item[0] == '"' && trimmed_item[len(trimmed_item)-1] == '"' {
+                                        trimmed_item = trimmed_item[1:len(trimmed_item)-1]
+                                    }
+                                    if len(trimmed_item) > 0 {
+                                        append(&result.module.files, strings.clone(trimmed_item))
+                                    }
+                                }
+                            }
+                        } else {
+                            // Single file without array brackets
+                            if len(value) > 0 {
+                                append(&result.module.files, strings.clone(value))
+                            }
+                        }
+                    }
+                case "dependencies":
+                    switch key {
+                    case "required":
+                        // Parse array format: ["dep1", "dep2"]
+                        if strings.has_prefix(value, "[") && strings.has_suffix(value, "]") {
+                            array_content := strings.trim(value, "[]")
+                            if len(array_content) > 0 {
+                                items := strings.split(array_content, ",")
+                                defer delete(items)
+                                
+                                for item in items {
+                                    trimmed_item := strings.trim_space(item)
+                                    // Remove quotes
+                                    if len(trimmed_item) >= 2 && trimmed_item[0] == '"' && trimmed_item[len(trimmed_item)-1] == '"' {
+                                        trimmed_item = trimmed_item[1:len(trimmed_item)-1]
+                                    }
+                                    if len(trimmed_item) > 0 {
+                                        append(&result.module.required, strings.clone(trimmed_item))
+                                    }
+                                }
+                            }
+                        } else {
+                            // Single dependency without array brackets
+                            if len(value) > 0 {
+                                append(&result.module.required, strings.clone(value))
+                            }
+                        }
+                    case "optional":
+                        // Parse array format: ["dep1", "dep2"]
+                        if strings.has_prefix(value, "[") && strings.has_suffix(value, "]") {
+                            array_content := strings.trim(value, "[]")
+                            if len(array_content) > 0 {
+                                items := strings.split(array_content, ",")
+                                defer delete(items)
+                                
+                                for item in items {
+                                    trimmed_item := strings.trim_space(item)
+                                    // Remove quotes
+                                    if len(trimmed_item) >= 2 && trimmed_item[0] == '"' && trimmed_item[len(trimmed_item)-1] == '"' {
+                                        trimmed_item = trimmed_item[1:len(trimmed_item)-1]
+                                    }
+                                    if len(trimmed_item) > 0 {
+                                        append(&result.module.optional, strings.clone(trimmed_item))
+                                    }
+                                }
+                            }
+                        } else {
+                            // Single dependency without array brackets
+                            if len(value) > 0 {
+                                append(&result.module.optional, strings.clone(value))
+                            }
+                        }
                     }
                 case "hooks":
                     switch key {

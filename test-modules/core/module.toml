@@ -1,0 +1,8 @@
+[module]
+name = "core"
+version = "1.0.0"
+description = "Core shell utilities"
+
+[load]
+priority = 10
+files = ["init.zsh"]
