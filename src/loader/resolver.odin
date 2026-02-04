@@ -19,6 +19,13 @@ ResolutionResult :: struct {
     message: string,
 }
 
+// cleanup_resolution_result cleans up allocated memory in ResolutionResult
+cleanup_resolution_result :: proc(result: ^ResolutionResult) {
+    manifest.cleanup_modules(result.modules[:])
+    delete(result.modules)
+    delete(result.message)
+}
+
 // resolve performs dependency resolution using Kahn's algorithm for topological sorting
 // Returns modules in dependency order with priority sorting within constraints
 resolve :: proc(modules: [dynamic]manifest.Module) -> ([dynamic]manifest.Module, string) {

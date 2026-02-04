@@ -34,6 +34,11 @@ list_modules :: proc() {
     
     // Discovery phase
     modules := loader.discover(modules_dir)
+    defer {
+        manifest.cleanup_modules(modules[:])
+        delete(modules)
+    }
+    
     if len(modules) == 0 {
         fmt.eprintfln("No modules found in: %s", modules_dir)
         fmt.eprintln("")
@@ -43,7 +48,6 @@ list_modules :: proc() {
         fmt.eprintln("  3. Use 'zephyr validate' to check for manifest errors")
         return
     }
-    defer delete(modules)
     
     // Dependency resolution phase
     resolved_modules, err := loader.resolve(modules)
@@ -56,7 +60,11 @@ list_modules :: proc() {
         fmt.eprintln("  - Check that all required dependencies are installed")
         return
     }
-    defer delete(resolved_modules)
+    defer {
+        if resolved_modules != nil {
+            delete(resolved_modules)
+        }
+    }
     
     // Display header
     fmt.eprintfln("Modules directory: %s", modules_dir)

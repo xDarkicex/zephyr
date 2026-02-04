@@ -1,6 +1,0 @@
-[module]
-name = "simple"
-version = "1.0.0"
-
-[load]
-files = ["init.zsh"]

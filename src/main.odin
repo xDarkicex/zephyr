@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:os"
 import "loader"
 import "cli"
+import "manifest"
 
 main :: proc() {
     // Command routing logic
@@ -92,7 +93,10 @@ run_load :: proc() {
         fmt.eprintln("  3. Use 'zephyr validate' to check for manifest errors")
         os.exit(1)
     }
-    defer delete(modules)
+    defer {
+        manifest.cleanup_modules(modules[:])
+        delete(modules)
+    }
     
     // Dependency resolution phase with detailed error handling
     resolved_modules, err := loader.resolve(modules)
@@ -106,7 +110,11 @@ run_load :: proc() {
         fmt.eprintln("  - Check that all required dependencies are installed")
         os.exit(1)
     }
-    defer delete(resolved_modules)
+    defer {
+        if resolved_modules != nil {
+            delete(resolved_modules)
+        }
+    }
     
     // Shell code emission phase
     // Note: emit() writes to stdout, so any errors would be from I/O

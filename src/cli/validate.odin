@@ -231,62 +231,9 @@ validate_dependency_references :: proc(summary: ^ValidationSummary) {
                 append(&result.dependency_errors, strings.clone(error_msg))
             }
         }
-        
-        // Clean up the module
-        cleanup_module(&module)
     }
 }
 
-// cleanup_module cleans up allocated memory in a Module struct
-cleanup_module :: proc(module: ^manifest.Module) {
-    // Clean up string fields
-    delete(module.name)
-    delete(module.version)
-    delete(module.description)
-    delete(module.author)
-    delete(module.license)
-    delete(module.path)
-    
-    // Clean up dynamic arrays of strings
-    for dep in module.required {
-        delete(dep)
-    }
-    delete(module.required)
-    
-    for dep in module.optional {
-        delete(dep)
-    }
-    delete(module.optional)
-    
-    for file in module.files {
-        delete(file)
-    }
-    delete(module.files)
-    
-    // Clean up platform filter strings
-    for os in module.platforms.os {
-        delete(os)
-    }
-    delete(module.platforms.os)
-    
-    for arch in module.platforms.arch {
-        delete(arch)
-    }
-    delete(module.platforms.arch)
-    delete(module.platforms.shell)
-    delete(module.platforms.min_version)
-    
-    // Clean up hooks
-    delete(module.hooks.pre_load)
-    delete(module.hooks.post_load)
-    
-    // Clean up settings map
-    for key, value in module.settings {
-        delete(key)
-        delete(value)
-    }
-    delete(module.settings)
-}
 
 // report_dependency_errors displays dependency validation errors
 report_dependency_errors :: proc(summary: ^ValidationSummary) {
@@ -361,7 +308,7 @@ check_circular_dependencies :: proc(summary: ^ValidationSummary) {
     }
     
     for &module in valid_modules {
-        cleanup_module(&module)
+        // Module cleanup will be handled by the arena allocator
     }
 }
 

@@ -21,6 +21,13 @@ DiscoveryResult :: struct {
     message: string,
 }
 
+// cleanup_discovery_result cleans up allocated memory in DiscoveryResult
+cleanup_discovery_result :: proc(result: ^DiscoveryResult) {
+    manifest.cleanup_modules(result.modules[:])
+    delete(result.modules)
+    delete(result.message)
+}
+
 // get_modules_dir returns the modules directory path, checking ZSH_MODULES_DIR environment variable first
 get_modules_dir :: proc() -> string {
     modules_dir := os.get_env("ZSH_MODULES_DIR")
