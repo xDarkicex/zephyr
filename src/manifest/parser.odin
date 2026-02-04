@@ -85,9 +85,11 @@ parse_detailed :: proc(file_path: string) -> ParseResult {
         // Key-value pairs
         if strings.contains(trimmed, "=") {
             parts := strings.split(trimmed, "=")
+            defer delete(parts) // Clean up the split result
             if len(parts) >= 2 {
                 key := strings.trim_space(parts[0])
                 value_part := strings.join(parts[1:], "=") // Handle values with = in them
+                defer delete(value_part) // Clean up the joined string
                 value := strings.trim_space(value_part)
                 
                 // Remove surrounding quotes if present
@@ -102,6 +104,8 @@ parse_detailed :: proc(file_path: string) -> ParseResult {
                         if len(value) == 0 {
                             result.error = .InvalidSchema
                             result.message = fmt.tprintf("Invalid or empty 'name' field in [module] section of %s", file_path)
+                            // Clean up partially initialized module before returning
+                            cleanup_module(&result.module)
                             return result
                         }
                         result.module.name = strings.clone(value)
@@ -223,6 +227,46 @@ parse_detailed :: proc(file_path: string) -> ParseResult {
                         result.module.platforms.shell = strings.clone(value)
                     case "min_version":
                         result.module.platforms.min_version = strings.clone(value)
+                    case "os":
+                        // Parse array format: ["linux", "darwin"]
+                        if strings.has_prefix(value, "[") && strings.has_suffix(value, "]") {
+                            array_content := strings.trim(value, "[]")
+                            if len(array_content) > 0 {
+                                items := strings.split(array_content, ",")
+                                defer delete(items)
+                                
+                                for item in items {
+                                    trimmed_item := strings.trim_space(item)
+                                    // Remove quotes
+                                    if len(trimmed_item) >= 2 && trimmed_item[0] == '"' && trimmed_item[len(trimmed_item)-1] == '"' {
+                                        trimmed_item = trimmed_item[1:len(trimmed_item)-1]
+                                    }
+                                    if len(trimmed_item) > 0 {
+                                        append(&result.module.platforms.os, strings.clone(trimmed_item))
+                                    }
+                                }
+                            }
+                        }
+                    case "arch":
+                        // Parse array format: ["x86_64", "arm64"]
+                        if strings.has_prefix(value, "[") && strings.has_suffix(value, "]") {
+                            array_content := strings.trim(value, "[]")
+                            if len(array_content) > 0 {
+                                items := strings.split(array_content, ",")
+                                defer delete(items)
+                                
+                                for item in items {
+                                    trimmed_item := strings.trim_space(item)
+                                    // Remove quotes
+                                    if len(trimmed_item) >= 2 && trimmed_item[0] == '"' && trimmed_item[len(trimmed_item)-1] == '"' {
+                                        trimmed_item = trimmed_item[1:len(trimmed_item)-1]
+                                    }
+                                    if len(trimmed_item) > 0 {
+                                        append(&result.module.platforms.arch, strings.clone(trimmed_item))
+                                    }
+                                }
+                            }
+                        }
                     }
                 case "settings":
                     result.module.settings[strings.clone(key)] = strings.clone(value)
@@ -235,6 +279,8 @@ parse_detailed :: proc(file_path: string) -> ParseResult {
     if len(result.module.name) == 0 {
         result.error = .InvalidSchema
         result.message = fmt.tprintf("Missing required 'name' field in [module] section of %s", file_path)
+        // Clean up partially initialized module before returning
+        cleanup_module(&result.module)
         return result
     }
     
