@@ -1,0 +1,29 @@
+.kiro
+# Odin build artifacts
+zephyr
+*.bin
+*.exe
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test artifacts
+test_results/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
