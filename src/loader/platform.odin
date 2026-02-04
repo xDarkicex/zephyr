@@ -220,17 +220,16 @@ parse_version :: proc(version: string) -> [dynamic]int {
     return parts
 }
 
-// filter_compatible_modules filters a list of modules to only include those compatible with the current platform
-filter_compatible_modules :: proc(modules: [dynamic]manifest.Module) -> [dynamic]manifest.Module {
+// filter_compatible_modules returns indices of modules that are compatible with the current platform
+filter_compatible_indices :: proc(modules: [dynamic]manifest.Module) -> [dynamic]int {
     current_platform := get_current_platform()
-    compatible_modules := make([dynamic]manifest.Module)
+    compatible_indices := make([dynamic]int)
     
-    for module in modules {
-        module_copy := module // Create a copy to avoid modifying the original
-        if is_platform_compatible(&module_copy, current_platform) {
-            append(&compatible_modules, module_copy)
+    for &module, idx in modules {
+        if is_platform_compatible(&module, current_platform) {
+            append(&compatible_indices, idx)
         }
     }
     
-    return compatible_modules
+    return compatible_indices
 }

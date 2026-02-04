@@ -49,8 +49,13 @@ list_modules :: proc() {
         return
     }
     
+    // Platform filtering phase
+    current_platform := loader.get_current_platform()
+    compatible_indices := loader.filter_compatible_indices(modules)
+    defer delete(compatible_indices)
+    
     // Dependency resolution phase
-    resolved_modules, err := loader.resolve(modules)
+    resolved_modules, err := loader.resolve_filtered(modules, compatible_indices)
     if err != "" {
         fmt.eprintfln("Error: Dependency resolution failed")
         fmt.eprintfln("Details: %s", err)
@@ -68,9 +73,72 @@ list_modules :: proc() {
     
     // Display header
     fmt.eprintfln("Modules directory: %s", modules_dir)
-    fmt.eprintfln("Found %d module(s)", len(modules))
+    fmt.eprintfln("Found %d module(s), %d compatible with current platform", len(modules), len(compatible_indices))
+    fmt.eprintfln("Current platform: %s/%s, shell: %s %s", current_platform.os, current_platform.arch, current_platform.shell, current_platform.version)
     fmt.println("")
-    fmt.println("Resolved load order:")
+    
+    // Show incompatible modules if any
+    if len(modules) > len(compatible_indices) {
+        fmt.println("Incompatible modules (skipped):")
+        for module, idx in modules {
+            // Check if this module is in the compatible list
+            is_compatible := false
+            for comp_idx in compatible_indices {
+                if comp_idx == idx {
+                    is_compatible = true
+                    break
+                }
+            }
+            
+            if !is_compatible {
+                fmt.printf("  - %s", module.name)
+                if len(module.version) > 0 && module.version != "0.0.0" {
+                    fmt.printf(" v%s", module.version)
+                }
+                fmt.printf(" (")
+                
+                // Show platform requirements
+                filter := module.platforms
+                
+                if len(filter.os) > 0 {
+                    fmt.printf("os: ")
+                    for os_name, i in filter.os {
+                        if i > 0 do fmt.printf(", ")
+                        fmt.printf("%s", os_name)
+                    }
+                }
+                
+                if len(filter.arch) > 0 {
+                    if len(filter.os) > 0 do fmt.printf(", ")
+                    fmt.printf("arch: ")
+                    for arch_name, i in filter.arch {
+                        if i > 0 do fmt.printf(", ")
+                        fmt.printf("%s", arch_name)
+                    }
+                }
+                
+                if filter.shell != "" {
+                    if len(filter.os) > 0 || len(filter.arch) > 0 do fmt.printf(", ")
+                    fmt.printf("shell: %s", filter.shell)
+                }
+                
+                if filter.min_version != "" {
+                    if len(filter.os) > 0 || len(filter.arch) > 0 || filter.shell != "" do fmt.printf(", ")
+                    fmt.printf("min_version: %s", filter.min_version)
+                }
+                
+                fmt.println(")")
+            }
+        }
+        fmt.println("")
+    }
+    
+    if len(compatible_indices) == 0 {
+        fmt.println("No modules are compatible with the current platform.")
+        return
+    }
+    
+    fmt.println("Compatible modules (load order):")
     fmt.println("")
     
     // Display modules in resolved order

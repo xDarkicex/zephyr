@@ -26,7 +26,23 @@ cleanup_resolution_result :: proc(result: ^ResolutionResult) {
     delete(result.message)
 }
 
-// resolve performs dependency resolution using Kahn's algorithm for topological sorting
+// resolve_filtered performs dependency resolution on a filtered set of modules
+resolve_filtered :: proc(modules: [dynamic]manifest.Module, indices: [dynamic]int) -> ([dynamic]manifest.Module, string) {
+    if len(indices) == 0 {
+        return make([dynamic]manifest.Module), ""
+    }
+    
+    // Create a temporary array with only the filtered modules
+    filtered_modules := make([dynamic]manifest.Module)
+    defer delete(filtered_modules)
+    
+    for idx in indices {
+        append(&filtered_modules, modules[idx])
+    }
+    
+    // Use the existing resolve function
+    return resolve(filtered_modules)
+}
 // Returns modules in dependency order with priority sorting within constraints
 resolve :: proc(modules: [dynamic]manifest.Module) -> ([dynamic]manifest.Module, string) {
     result := resolve_detailed(modules)

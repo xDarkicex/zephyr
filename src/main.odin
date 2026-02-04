@@ -98,8 +98,21 @@ run_load :: proc() {
         delete(modules)
     }
     
+    // Platform filtering phase
+    compatible_indices := loader.filter_compatible_indices(modules)
+    if len(compatible_indices) == 0 {
+        fmt.eprintfln("No compatible modules found for current platform in: %s", modules_dir)
+        fmt.eprintln("")
+        fmt.eprintln("This may be because:")
+        fmt.eprintln("  - All modules have platform restrictions that don't match your system")
+        fmt.eprintln("  - Use 'zephyr list' to see all discovered modules")
+        fmt.eprintln("  - Use 'zephyr validate' to check for manifest errors")
+        os.exit(1)
+    }
+    defer delete(compatible_indices)
+    
     // Dependency resolution phase with detailed error handling
-    resolved_modules, err := loader.resolve(modules)
+    resolved_modules, err := loader.resolve_filtered(modules, compatible_indices)
     if err != "" {
         fmt.eprintfln("Error: Dependency resolution failed")
         fmt.eprintfln("Details: %s", err)
