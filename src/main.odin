@@ -5,16 +5,59 @@ import "core:os"
 import "loader"
 import "cli"
 import "manifest"
+import "colors"
+import "errors"
+import "debug"
 
 main :: proc() {
+    // Initialize colors and debug modules
+    colors.init_colors()
+    debug.init_debug()
+    
+    debug.debug_args(os.args[:])
+    
+    // Parse command line arguments for flags
+    args := os.args[1:]
+    command := ""
+    verbose := false
+    debug_mode := false
+    
+    // Process flags and find command
+    i := 0
+    for i < len(args) {
+        arg := args[i]
+        
+        if arg == "-v" || arg == "--verbose" {
+            verbose = true
+            debug.set_debug_level(.Info)
+            debug.debug_info("Verbose mode enabled")
+        } else if arg == "-d" || arg == "--debug" {
+            debug_mode = true
+            debug.set_debug_level(.Debug)
+            debug.debug_debug("Debug mode enabled")
+        } else if arg == "--trace" {
+            debug.set_debug_level(.Trace)
+            debug.debug_trace("Trace mode enabled")
+        } else if arg == "--no-color" {
+            colors.disable_colors()
+            debug.debug_info("Color output disabled")
+        } else {
+            // First non-flag argument is the command
+            command = arg
+            break
+        }
+        i += 1
+    }
+    
+    debug.debug_info("Processing command: %s", command)
+    
     // Command routing logic
-    if len(os.args) < 2 {
+    if command == "" {
         // Default behavior: run load command
+        debug.debug_info("No command specified, defaulting to load")
         run_load()
         return
     }
-    
-    command := os.args[1]
     
     switch command {
     case "load":
@@ -28,7 +71,7 @@ main :: proc() {
     case "help", "--help", "-h":
         print_usage()
     case:
-        fmt.eprintfln("Error: Unknown command '%s'", command)
+        colors.print_error("Unknown command '%s'", command)
         print_usage()
         os.exit(1)
     }
@@ -44,53 +87,78 @@ run_validate :: proc() {
 }
 
 run_init :: proc() {
-    if len(os.args) < 3 {
-        fmt.eprintln("Error: Module name required")
+    // Find the module name argument after processing flags
+    args := os.args[1:]
+    module_name := ""
+    
+    // Skip flags to find module name
+    for arg in args {
+        if arg != "-v" && arg != "--verbose" && arg != "-d" && arg != "--debug" && 
+           arg != "--trace" && arg != "--no-color" && arg != "init" {
+            module_name = arg
+            break
+        }
+    }
+    
+    if module_name == "" {
+        colors.print_error("Module name required")
         fmt.eprintln("Usage: zephyr init <module-name>")
         fmt.eprintln("")
         fmt.eprintln("Example: zephyr init my-shell-module")
         os.exit(1)
     }
     
-    module_name := os.args[2]
+    debug.debug_info("Creating module: %s", module_name)
     cli.init_module(module_name)
 }
 
 // run_load implements the default load behavior
 run_load :: proc() {
+    debug.debug_enter("run_load")
+    defer debug.debug_exit("run_load")
+    
     // Get modules directory with error handling
     modules_dir := get_modules_directory()
+    debug.debug_info("Using modules directory: %s", modules_dir)
     
     // Verify directory exists and is accessible
     if !os.exists(modules_dir) {
-        fmt.eprintfln("Error: Modules directory does not exist: %s", modules_dir)
-        fmt.eprintln("Create the directory or set ZSH_MODULES_DIR to a valid path")
-        fmt.eprintln("Use 'zephyr init <module-name>' to create your first module")
+        debug.debug_error("Modules directory does not exist: %s", modules_dir)
+        colors.print_error("Modules directory does not exist: %s", modules_dir)
+        fmt.eprintln("")
+        errors.suggest_for_directory_error(modules_dir, false, false)
         os.exit(1)
     }
     
     // Check if it's actually a directory
     file_info, stat_err := os.stat(modules_dir)
     if stat_err != os.ERROR_NONE {
-        fmt.eprintfln("Error: Cannot access modules directory: %s", modules_dir)
-        fmt.eprintfln("System error: %v", stat_err)
+        debug.debug_error("Cannot access modules directory: %s, error: %v", modules_dir, stat_err)
+        colors.print_error("Cannot access modules directory: %s", modules_dir)
+        colors.print_error("System error: %v", stat_err)
+        fmt.eprintln("")
+        errors.suggest_for_directory_error(modules_dir, true, false)
         os.exit(1)
     }
     
     if !file_info.is_dir {
-        fmt.eprintfln("Error: Path is not a directory: %s", modules_dir)
+        debug.debug_error("Path is not a directory: %s", modules_dir)
+        colors.print_error("Path is not a directory: %s", modules_dir)
+        fmt.eprintln("")
+        errors.suggest_for_directory_error(modules_dir, true, false)
         os.exit(1)
     }
     
     // Discovery phase with detailed error handling
+    debug.debug_info("Starting module discovery")
     modules := loader.discover(modules_dir)
+    debug.debug_info("Discovered %d modules", len(modules))
+    
     if len(modules) == 0 {
-        fmt.eprintfln("No modules found in: %s", modules_dir)
+        debug.debug_warn("No modules found in directory")
+        colors.print_warning("No modules found in: %s", modules_dir)
         fmt.eprintln("")
-        fmt.eprintln("To get started:")
-        fmt.eprintln("  1. Use 'zephyr init <module-name>' to create your first module")
-        fmt.eprintln("  2. Or check that your modules directory contains valid module.toml files")
-        fmt.eprintln("  3. Use 'zephyr validate' to check for manifest errors")
+        errors.suggest_for_directory_error(modules_dir, true, true)
         os.exit(1)
     }
     defer {
@@ -99,28 +167,28 @@ run_load :: proc() {
     }
     
     // Platform filtering phase
+    debug.debug_info("Starting platform filtering")
     compatible_indices := loader.filter_compatible_indices(modules)
+    debug.debug_info("Found %d compatible modules", len(compatible_indices))
+    
     if len(compatible_indices) == 0 {
-        fmt.eprintfln("No compatible modules found for current platform in: %s", modules_dir)
+        debug.debug_warn("No compatible modules for current platform")
+        colors.print_warning("No compatible modules found for current platform in: %s", modules_dir)
         fmt.eprintln("")
-        fmt.eprintln("This may be because:")
-        fmt.eprintln("  - All modules have platform restrictions that don't match your system")
-        fmt.eprintln("  - Use 'zephyr list' to see all discovered modules")
-        fmt.eprintln("  - Use 'zephyr validate' to check for manifest errors")
+        errors.suggest_for_platform_error()
         os.exit(1)
     }
     defer delete(compatible_indices)
     
     // Dependency resolution phase with detailed error handling
+    debug.debug_info("Starting dependency resolution")
     resolved_modules, err := loader.resolve_filtered(modules, compatible_indices)
     if err != "" {
-        fmt.eprintfln("Error: Dependency resolution failed")
-        fmt.eprintfln("Details: %s", err)
+        debug.debug_error("Dependency resolution failed: %s", err)
+        colors.print_error("Dependency resolution failed")
+        colors.print_error("Details: %s", err)
         fmt.eprintln("")
-        fmt.eprintln("Suggestions:")
-        fmt.eprintln("  - Use 'zephyr validate' to check all manifests")
-        fmt.eprintln("  - Use 'zephyr list' to see module dependencies")
-        fmt.eprintln("  - Check that all required dependencies are installed")
+        errors.suggest_for_dependency_error(err)
         os.exit(1)
     }
     defer {
@@ -129,31 +197,46 @@ run_load :: proc() {
         }
     }
     
+    debug.debug_info("Resolved %d modules in dependency order", len(resolved_modules))
+    
     // Shell code emission phase
+    debug.debug_info("Emitting shell code")
     // Note: emit() writes to stdout, so any errors would be from I/O
     // The loader.emit() function handles its own error cases internally
     loader.emit(resolved_modules)
+    debug.debug_info("Shell code emission completed")
 }
 
 // get_modules_directory resolves the modules directory path
 // Uses ZSH_MODULES_DIR environment variable if set, otherwise defaults to $HOME/.zsh/modules
 get_modules_directory :: proc() -> string {
+    debug.debug_enter("get_modules_directory")
+    defer debug.debug_exit("get_modules_directory")
+    
     // Check for ZSH_MODULES_DIR environment variable first
     modules_dir := os.get_env("ZSH_MODULES_DIR")
+    debug.debug_env_var("ZSH_MODULES_DIR", modules_dir)
+    
     if modules_dir != "" {
+        debug.debug_info("Using ZSH_MODULES_DIR: %s", modules_dir)
         return modules_dir
     }
     
     // Default to $HOME/.zsh/modules
     home := os.get_env("HOME")
+    debug.debug_env_var("HOME", home)
+    
     if home == "" {
         // Fallback if HOME is not set (shouldn't happen on Unix systems)
-        fmt.eprintln("Warning: HOME environment variable not set, using current directory")
+        colors.print_warning("HOME environment variable not set, using current directory")
+        debug.debug_warn("HOME not set, using fallback")
         return ".zsh/modules"
     }
     
     // Use the loader package's get_modules_dir function for consistency
-    return loader.get_modules_dir()
+    result := loader.get_modules_dir()
+    debug.debug_info("Using default modules directory: %s", result)
+    return result
 }
 
 // print_usage displays help information for the CLI
@@ -161,7 +244,14 @@ print_usage :: proc() {
     fmt.println("Zephyr Shell Loader - Modular shell configuration management")
     fmt.println("")
     fmt.println("USAGE:")
-    fmt.println("    zephyr [COMMAND]")
+    fmt.println("    zephyr [FLAGS] [COMMAND]")
+    fmt.println("")
+    fmt.println("FLAGS:")
+    fmt.println("    -v, --verbose     Enable verbose output")
+    fmt.println("    -d, --debug       Enable debug output")
+    fmt.println("        --trace       Enable trace output (maximum verbosity)")
+    fmt.println("        --no-color    Disable colored output")
+    fmt.println("    -h, --help        Show this help message")
     fmt.println("")
     fmt.println("COMMANDS:")
     fmt.println("    load        Generate shell code for loading modules (default)")
@@ -172,13 +262,18 @@ print_usage :: proc() {
     fmt.println("")
     fmt.println("EXAMPLES:")
     fmt.println("    zephyr                    # Load modules (same as 'zephyr load')")
-    fmt.println("    zephyr load               # Generate shell code for sourcing")
-    fmt.println("    zephyr list               # Show modules and dependencies")
+    fmt.println("    zephyr -v load            # Load modules with verbose output")
+    fmt.println("    zephyr --debug list       # Show modules with debug information")
     fmt.println("    zephyr validate           # Check manifests for errors")
     fmt.println("    zephyr init my-module     # Create new module 'my-module'")
     fmt.println("")
     fmt.println("ENVIRONMENT:")
-    fmt.println("    ZSH_MODULES_DIR    Directory containing modules (default: ~/.zsh/modules)")
+    fmt.println("    ZSH_MODULES_DIR           Directory containing modules (default: ~/.zsh/modules)")
+    fmt.println("    ZEPHYR_DEBUG              Enable debug output (0-3 or false/true/debug/trace)")
+    fmt.println("    ZEPHYR_VERBOSE            Enable verbose output (0-3 or false/true)")
+    fmt.println("    ZEPHYR_DEBUG_TIMESTAMPS   Show timestamps in debug output")
+    fmt.println("    ZEPHYR_DEBUG_LOCATION     Show source location in debug output")
+    fmt.println("    NO_COLOR                  Disable colored output")
     fmt.println("")
     fmt.println("INTEGRATION:")
     fmt.println("    Add this to your .zshrc to load modules automatically:")

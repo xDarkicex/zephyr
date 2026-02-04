@@ -3,6 +3,7 @@ package loader
 import "core:fmt"
 import "core:slice"
 import "../manifest"
+import "../debug"
 
 // ResolutionError represents different types of dependency resolution errors
 ResolutionError :: enum {
@@ -28,7 +29,13 @@ cleanup_resolution_result :: proc(result: ^ResolutionResult) {
 
 // resolve_filtered performs dependency resolution on a filtered set of modules
 resolve_filtered :: proc(modules: [dynamic]manifest.Module, indices: [dynamic]int) -> ([dynamic]manifest.Module, string) {
+    debug.debug_enter("resolve_filtered")
+    defer debug.debug_exit("resolve_filtered")
+    
+    debug.debug_info("Resolving dependencies for %d filtered modules", len(indices))
+    
     if len(indices) == 0 {
+        debug.debug_warn("No modules to resolve")
         return make([dynamic]manifest.Module), ""
     }
     
@@ -38,6 +45,7 @@ resolve_filtered :: proc(modules: [dynamic]manifest.Module, indices: [dynamic]in
     
     for idx in indices {
         append(&filtered_modules, modules[idx])
+        debug.debug_trace("Including module: %s", modules[idx].name)
     }
     
     // Use the existing resolve function
@@ -45,10 +53,18 @@ resolve_filtered :: proc(modules: [dynamic]manifest.Module, indices: [dynamic]in
 }
 // Returns modules in dependency order with priority sorting within constraints
 resolve :: proc(modules: [dynamic]manifest.Module) -> ([dynamic]manifest.Module, string) {
+    debug.debug_enter("resolve")
+    defer debug.debug_exit("resolve")
+    
+    debug.debug_info("Resolving dependencies for %d modules", len(modules))
+    
     result := resolve_detailed(modules)
     if result.error != .None {
+        debug.debug_error("Resolution failed: %s", result.message)
         return nil, result.message
     }
+    
+    debug.debug_info("Resolution successful: %d modules in order", len(result.modules))
     return result.modules, ""
 }
 

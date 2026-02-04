@@ -5,19 +5,17 @@ import "core:os"
 import "core:strings"
 import "core:path/filepath"
 import "../loader"
+import "../colors"
+import "../errors"
 
 // init_module implements the 'zephyr init <module-name>' command
 // Creates a new module skeleton with directory structure and template files
 init_module :: proc(module_name: string) {
     // Validate module name
     if !is_valid_module_name(module_name) {
-        fmt.eprintfln("Error: Invalid module name '%s'", module_name)
-        fmt.eprintln("Module names must:")
-        fmt.eprintln("  - Contain only letters, numbers, hyphens, and underscores")
-        fmt.eprintln("  - Start with a letter")
-        fmt.eprintln("  - Be between 1 and 50 characters long")
+        colors.print_error("Invalid module name '%s'", module_name)
         fmt.eprintln("")
-        fmt.eprintln("Examples of valid names: my-module, git_helpers, core, utils2")
+        errors.suggest_for_module_name_error(module_name)
         os.exit(1)
     }
     
@@ -29,12 +27,13 @@ init_module :: proc(module_name: string) {
     
     // Check if module already exists
     if os.exists(module_dir) {
-        fmt.eprintfln("Error: Module '%s' already exists at: %s", module_name, module_dir)
-        fmt.eprintln("Choose a different name or remove the existing module first")
+        colors.print_error("Module '%s' already exists at: %s", module_name, module_dir)
+        fmt.eprintln("")
+        errors.suggest_for_module_exists_error(module_name)
         os.exit(1)
     }
     
-    fmt.eprintfln("Creating new module: %s", module_name)
+    colors.print_info("Creating new module: %s", module_name)
     fmt.eprintfln("Location: %s", module_dir)
     fmt.println("")
     
@@ -111,21 +110,25 @@ create_module_directory :: proc(module_dir: string, module_name: string) {
     // Ensure the parent modules directory exists
     modules_dir := filepath.dir(module_dir)
     if !os.exists(modules_dir) {
-        fmt.eprintfln("Creating modules directory: %s", modules_dir)
+        colors.print_info("Creating modules directory: %s", modules_dir)
         err := os.make_directory(modules_dir, 0o755)
         if err != os.ERROR_NONE {
-            fmt.eprintfln("Error: Failed to create modules directory: %s", modules_dir)
-            fmt.eprintfln("System error: %v", err)
+            colors.print_error("Failed to create modules directory: %s", modules_dir)
+            colors.print_error("System error: %v", err)
+            fmt.eprintln("")
+            errors.suggest_for_file_creation_error(modules_dir)
             os.exit(1)
         }
     }
     
     // Create the module directory
-    fmt.eprintfln("Creating module directory: %s", module_dir)
+    colors.print_info("Creating module directory: %s", module_dir)
     err := os.make_directory(module_dir, 0o755)
     if err != os.ERROR_NONE {
-        fmt.eprintfln("Error: Failed to create module directory: %s", module_dir)
-        fmt.eprintfln("System error: %v", err)
+        colors.print_error("Failed to create module directory: %s", module_dir)
+        colors.print_error("System error: %v", err)
+        fmt.eprintln("")
+        errors.suggest_for_file_creation_error(module_dir)
         os.exit(1)
     }
     
@@ -138,11 +141,11 @@ create_module_directory :: proc(module_dir: string, module_name: string) {
     
     for subdir in subdirs {
         subdir_path := filepath.join({module_dir, subdir})
-        fmt.eprintfln("Creating subdirectory: %s", subdir)
+        colors.print_info("Creating subdirectory: %s", subdir)
         err := os.make_directory(subdir_path, 0o755)
         if err != os.ERROR_NONE {
-            fmt.eprintfln("Warning: Failed to create subdirectory: %s", subdir_path)
-            fmt.eprintfln("System error: %v", err)
+            colors.print_warning("Failed to create subdirectory: %s", subdir_path)
+            colors.print_warning("System error: %v", err)
             // Continue with other directories instead of exiting
         }
     }
@@ -200,10 +203,12 @@ files = ["init.zsh"]
 `, module_name, module_name, module_name)
     
     // Write the manifest file
-    fmt.eprintfln("Creating module manifest: module.toml")
+    colors.print_info("Creating module manifest: module.toml")
     success := os.write_entire_file(manifest_path, transmute([]u8)template_content)
     if !success {
-        fmt.eprintfln("Error: Failed to create module manifest: %s", manifest_path)
+        colors.print_error("Failed to create module manifest: %s", manifest_path)
+        fmt.eprintln("")
+        errors.suggest_for_file_creation_error(manifest_path)
         os.exit(1)
     }
 }
@@ -256,10 +261,12 @@ done
    strings.to_upper(module_name), strings.to_upper(module_name), 
    strings.to_upper(module_name), module_name)
     
-    fmt.eprintfln("Creating main script: init.zsh")
+    colors.print_info("Creating main script: init.zsh")
     success := os.write_entire_file(init_path, transmute([]u8)init_content)
     if !success {
-        fmt.eprintfln("Error: Failed to create init.zsh: %s", init_path)
+        colors.print_error("Failed to create init.zsh: %s", init_path)
+        fmt.eprintln("")
+        errors.suggest_for_file_creation_error(init_path)
         os.exit(1)
     }
 }
@@ -296,10 +303,10 @@ create_example_function_file :: proc(module_dir: string, module_name: string) {
    replace_chars(module_name, '-', '_'), strings.to_upper(module_name),
    strings.to_upper(module_name))
     
-    fmt.eprintfln("Creating example functions: functions/example.zsh")
+    colors.print_info("Creating example functions: functions/example.zsh")
     success := os.write_entire_file(func_file, transmute([]u8)func_content)
     if !success {
-        fmt.eprintfln("Warning: Failed to create functions/example.zsh: %s", func_file)
+        colors.print_warning("Failed to create functions/example.zsh: %s", func_file)
     }
 }
 
@@ -330,10 +337,10 @@ alias %s-debug='%s_debug'
    replace_chars(module_name, '_', '-'),
    replace_chars(module_name, '-', '_'))
     
-    fmt.eprintfln("Creating example aliases: aliases/example.zsh")
+    colors.print_info("Creating example aliases: aliases/example.zsh")
     success := os.write_entire_file(alias_file, transmute([]u8)alias_content)
     if !success {
-        fmt.eprintfln("Warning: Failed to create aliases/example.zsh: %s", alias_file)
+        colors.print_warning("Failed to create aliases/example.zsh: %s", alias_file)
     }
 }
 
@@ -412,15 +419,15 @@ MIT License - see module.toml for details.
    replace_chars(module_name, '-', '_'),
    strings.to_upper(module_name), module_name)
     
-    fmt.eprintfln("Creating documentation: README.md")
+    colors.print_info("Creating documentation: README.md")
     success := os.write_entire_file(readme_path, transmute([]u8)readme_content)
     if !success {
-        fmt.eprintfln("Warning: Failed to create README.md: %s", readme_path)
+        colors.print_warning("Failed to create README.md: %s", readme_path)
     }
 }
 // provide_usage_instructions displays helpful information after module creation
 provide_usage_instructions :: proc(module_name: string, module_dir: string) {
-    fmt.println("✓ Module created successfully!")
+    colors.print_success("Module created successfully!")
     fmt.println("")
     
     fmt.println("Files created:")
@@ -477,5 +484,5 @@ provide_usage_instructions :: proc(module_name: string, module_dir: string) {
     fmt.eprintfln("   %s_info \"Hello World\"     # Function with parameter", replace_chars(module_name, '-', '_'))
     fmt.println("")
     
-    fmt.eprintfln("Happy coding with your new '%s' module!", module_name)
+    colors.print_success("Happy coding with your new '%s' module!", module_name)
 }

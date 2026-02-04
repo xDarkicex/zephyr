@@ -6,6 +6,8 @@ import "core:strings"
 import "core:path/filepath"
 import "../loader"
 import "../manifest"
+import "../colors"
+import "../errors"
 
 // ValidationResult represents the result of validating a single module
 ValidationResult :: struct {
@@ -34,22 +36,26 @@ validate_manifests :: proc() {
     
     // Verify directory exists and is accessible
     if !os.exists(modules_dir) {
-        fmt.eprintfln("Error: Modules directory does not exist: %s", modules_dir)
-        fmt.eprintln("Create the directory or set ZSH_MODULES_DIR to a valid path")
-        fmt.eprintln("Use 'zephyr init <module-name>' to create your first module")
+        colors.print_error("Modules directory does not exist: %s", modules_dir)
+        fmt.eprintln("")
+        errors.suggest_for_directory_error(modules_dir, false, false)
         os.exit(1)
     }
     
     // Check if it's actually a directory
     file_info, stat_err := os.stat(modules_dir)
     if stat_err != os.ERROR_NONE {
-        fmt.eprintfln("Error: Cannot access modules directory: %s", modules_dir)
-        fmt.eprintfln("System error: %v", stat_err)
+        colors.print_error("Cannot access modules directory: %s", modules_dir)
+        colors.print_error("System error: %v", stat_err)
+        fmt.eprintln("")
+        errors.suggest_for_directory_error(modules_dir, true, false)
         os.exit(1)
     }
     
     if !file_info.is_dir {
-        fmt.eprintfln("Error: Path is not a directory: %s", modules_dir)
+        colors.print_error("Path is not a directory: %s", modules_dir)
+        fmt.eprintln("")
+        errors.suggest_for_directory_error(modules_dir, true, false)
         os.exit(1)
     }
     
@@ -179,15 +185,27 @@ report_parsing_errors :: proc(summary: ^ValidationSummary) {
         return
     }
     
-    fmt.println("PARSING ERRORS:")
-    fmt.println("===============")
+    fmt.println("")
+    errors.print_formatted_error("PARSING ERRORS", 
+        fmt.tprintf("Found %d module(s) with parsing errors", summary.invalid_modules))
+    fmt.println("")
     
     for result in summary.results {
         if !result.is_valid && len(result.parse_error) > 0 {
             manifest_path := filepath.join({result.module_path, "module.toml"})
-            fmt.eprintfln("✗ %s", manifest_path)
-            fmt.eprintfln("  Error: %s", result.parse_error)
+            
+            ctx := errors.ErrorContext{
+                file_path = manifest_path,
+                operation = "TOML parsing",
+                module_name = result.module_name,
+            }
+            
+            formatted_error := errors.format_validation_error(manifest_path, result.parse_error)
+            fmt.print(formatted_error)
             fmt.println("")
+            
+            // Provide specific suggestions for this parsing error
+            errors.suggest_for_manifest_error(result.parse_error, manifest_path)
         }
     }
 }
@@ -251,19 +269,23 @@ report_dependency_errors :: proc(summary: ^ValidationSummary) {
         return
     }
     
-    fmt.println("DEPENDENCY ERRORS:")
-    fmt.println("==================")
+    fmt.println("")
+    errors.print_formatted_error("DEPENDENCY ERRORS", 
+        "Found modules with dependency issues")
+    fmt.println("")
     
     for result in summary.results {
         if len(result.dependency_errors) > 0 {
             manifest_path := filepath.join({result.module_path, "module.toml"})
-            fmt.eprintfln("✗ %s (%s)", manifest_path, result.module_name)
+            
+            fmt.printf("%s Module: %s\n", colors.error_symbol(), colors.bold(result.module_name))
+            fmt.printf("  %s %s\n", colors.dim("Path:"), manifest_path)
             
             for error in result.dependency_errors {
                 if strings.contains(error, "warning") {
-                    fmt.eprintfln("  ⚠  %s", error)
+                    fmt.printf("  %s %s\n", colors.warning_symbol(), error)
                 } else {
-                    fmt.eprintfln("  ✗ %s", error)
+                    fmt.printf("  %s %s\n", colors.error_symbol(), error)
                 }
             }
             fmt.println("")
@@ -318,13 +340,17 @@ report_circular_dependencies :: proc(summary: ^ValidationSummary) {
         return
     }
     
-    fmt.println("CIRCULAR DEPENDENCY ERROR:")
-    fmt.println("==========================")
-    fmt.eprintfln("✗ %s", summary.circular_error)
     fmt.println("")
-    fmt.println("Circular dependencies prevent modules from loading in a valid order.")
-    fmt.println("Review your module dependencies to break the cycle.")
+    ctx := errors.ErrorContext{
+        operation = "Dependency resolution",
+    }
+    
+    formatted_error := errors.format_error("CIRCULAR DEPENDENCY", summary.circular_error, ctx)
+    fmt.print(formatted_error)
     fmt.println("")
+    
+    // Provide suggestions for resolving circular dependencies
+    errors.suggest_for_dependency_error(summary.circular_error)
 }
 // provide_validation_summary displays a comprehensive summary of validation results
 provide_validation_summary :: proc(summary: ^ValidationSummary) {
@@ -338,15 +364,20 @@ provide_validation_summary :: proc(summary: ^ValidationSummary) {
     report_circular_dependencies(summary)
     
     // Display overall summary
-    fmt.println("VALIDATION SUMMARY:")
-    fmt.println("===================")
-    fmt.eprintfln("Total modules found: %d", summary.total_modules)
-    fmt.eprintfln("Valid modules: %d", summary.valid_modules)
-    fmt.eprintfln("Invalid modules: %d", summary.invalid_modules)
+    fmt.println("")
+    
+    // Create summary data
+    summary_items := make([dynamic]string)
+    defer delete(summary_items)
+    
+    append(&summary_items, fmt.tprintf("Total modules found: %d", summary.total_modules))
+    append(&summary_items, fmt.tprintf("Valid modules: %d", summary.valid_modules))
+    append(&summary_items, fmt.tprintf("Invalid modules: %d", summary.invalid_modules))
     
     if summary.total_modules == 0 {
+        errors.print_formatted_info("VALIDATION SUMMARY", "No modules found")
         fmt.println("")
-        fmt.println("No modules found. Use 'zephyr init <module-name>' to create your first module.")
+        fmt.println("Use 'zephyr init <module-name>' to create your first module.")
         return
     }
     
@@ -359,23 +390,27 @@ provide_validation_summary :: proc(summary: ^ValidationSummary) {
     }
     
     if modules_with_dep_errors > 0 {
-        fmt.eprintfln("Modules with dependency issues: %d", modules_with_dep_errors)
+        append(&summary_items, fmt.tprintf("Modules with dependency issues: %d", modules_with_dep_errors))
     }
     
     if summary.circular_deps {
-        fmt.println("Circular dependencies detected: YES")
+        append(&summary_items, "Circular dependencies detected: YES")
     }
     
+    // Format and display summary
+    formatted_summary := errors.format_summary("VALIDATION SUMMARY", summary_items[:], 
+        summary.valid_modules, summary.invalid_modules + modules_with_dep_errors)
+    fmt.print(formatted_summary)
     fmt.println("")
     
     // Determine overall validation status
     overall_valid := summary.invalid_modules == 0 && modules_with_dep_errors == 0 && !summary.circular_deps
     
     if overall_valid {
-        fmt.println("✓ All modules are valid and ready to load!")
+        errors.print_formatted_success("All modules are valid and ready to load!")
         fmt.println("Use 'zephyr list' to see the load order.")
     } else {
-        fmt.println("✗ Validation failed. Please fix the errors above.")
+        errors.print_formatted_error("Validation failed", "Please fix the errors above")
         fmt.println("Use 'zephyr validate' again after making changes.")
         os.exit(1)
     }
