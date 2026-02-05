@@ -9,39 +9,16 @@ import "core:time"
 import "../src/loader"
 import "../src/manifest"
 
-// Helper function to remove directory recursively
-remove_directory_recursive :: proc(path: string) {
-    if !os.exists(path) do return
-    
-    if os.remove(path) == os.ERROR_NONE do return
-    
-    handle, err := os.open(path)
-    if err != os.ERROR_NONE do return
-    defer os.close(handle)
-    
-    file_infos, read_err := os.read_dir(handle, -1)
-    if read_err != os.ERROR_NONE do return
-    defer delete(file_infos)
-    
-    for info in file_infos {
-        child_path := filepath.join({path, info.name})
-        defer delete(child_path)
-        
-        if info.is_dir {
-            remove_directory_recursive(child_path)
-        } else {
-            os.remove(child_path)
-        }
-    }
-    
-    os.remove(path)
-}
-
-// Helper function to create a test module
-create_test_module :: proc(base_dir: string, module_name: string, priority: int, dependencies: []string) -> bool {
+// Helper function to create a performance test module
+create_performance_test_module :: proc(base_dir: string, module_name: string, priority: int, dependencies: []string) -> bool {
     module_dir := filepath.join({base_dir, module_name})
+    
+    // Debug: Check if directory creation succeeds
     err := os.make_directory(module_dir, 0o755)
-    if err != os.ERROR_NONE do return false
+    if err != os.ERROR_NONE {
+        fmt.printf("Failed to create directory %s: %v\n", module_dir, err)
+        return false
+    }
     
     // Create manifest content
     manifest_builder := strings.builder_make()
@@ -67,16 +44,35 @@ files = ["%s.zsh"]
         strings.write_string(&manifest_builder, "]\n")
     }
     
-    manifest_content := strings.to_string(manifest_builder)
+    // Clone the string before the builder is destroyed
+    manifest_content := strings.clone(strings.to_string(manifest_builder))
+    defer delete(manifest_content)
+    
     manifest_path := filepath.join({module_dir, "module.toml"})
     
-    if !os.write_entire_file(manifest_path, transmute([]u8)manifest_content) do return false
+    // Debug: Check if file write succeeds
+    if !os.write_entire_file(manifest_path, transmute([]u8)manifest_content) {
+        fmt.printf("Failed to write manifest file %s\n", manifest_path)
+        return false
+    }
     
     // Create shell file
     shell_content := fmt.tprintf("# Shell file for %s\necho 'Loading %s'", module_name, module_name)
-    shell_path := filepath.join({module_dir, fmt.tprintf("%s.zsh", module_name)})
+    defer delete(shell_content) // Clean up shell content
     
-    return os.write_entire_file(shell_path, transmute([]u8)shell_content)
+    shell_filename := fmt.tprintf("%s.zsh", module_name)
+    defer delete(shell_filename) // Clean up filename
+    
+    shell_path := filepath.join({module_dir, shell_filename})
+    defer delete(shell_path) // Clean up the path
+    
+    // Debug: Check if shell file write succeeds
+    if !os.write_entire_file(shell_path, transmute([]u8)shell_content) {
+        fmt.printf("Failed to write shell file %s\n", shell_path)
+        return false
+    }
+    
+    return true
 }
 
 @(test)
@@ -95,7 +91,7 @@ test_large_module_set_discovery :: proc(t: ^testing.T) {
     
     for i in 0..<module_count {
         module_name := fmt.tprintf("module_%03d", i)
-        success := create_test_module(temp_dir, module_name, i * 10, {})
+        success := create_performance_test_module(temp_dir, module_name, i * 10, {})
         testing.expect(t, success, fmt.tprintf("Should create module %s", module_name))
     }
     
@@ -157,7 +153,7 @@ test_large_dependency_resolution :: proc(t: ^testing.T) {
             }
             
             priority := layer * 100 + module_in_layer
-            success := create_test_module(temp_dir, module_name, priority, dependencies[:])
+            success := create_performance_test_module(temp_dir, module_name, priority, dependencies[:])
             testing.expect(t, success, fmt.tprintf("Should create module %s", module_name))
         }
     }
@@ -340,7 +336,7 @@ test_memory_usage_with_large_sets :: proc(t: ^testing.T) {
             }
         }
         
-        success := create_test_module(temp_dir, module_name, i * 10, dependencies[:])
+        success := create_performance_test_module(temp_dir, module_name, i * 10, dependencies[:])
         testing.expect(t, success, fmt.tprintf("Should create module %s", module_name))
     }
     
@@ -401,7 +397,7 @@ test_deep_dependency_chains :: proc(t: ^testing.T) {
             append(&dependencies, prev_name)
         }
         
-        success := create_test_module(temp_dir, module_name, i, dependencies[:])
+        success := create_performance_test_module(temp_dir, module_name, i, dependencies[:])
         testing.expect(t, success, fmt.tprintf("Should create chain module %s", module_name))
     }
     
@@ -443,86 +439,180 @@ test_deep_dependency_chains :: proc(t: ^testing.T) {
                                max_chain_resolution_time, resolution_time))
 }
 
-// Test performance requirement: system SHALL load and process modules in under 100ms for typical configurations (< 50 modules)
 @(test)
-test_performance_requirement_compliance :: proc(t: ^testing.T) {
-    // Test the specific performance requirement from requirements.md: 4.1.1
-    temp_dir := "test_temp_requirement_compliance"
+test_performance_requirements_with_optimizations :: proc(t: ^testing.T) {
+    // Test the optimized performance with all improvements
+    temp_dir := "test_temp_optimized_performance"
     defer remove_directory_recursive(temp_dir)
     
     os.make_directory(temp_dir, 0o755)
     
-    // Create exactly 49 modules (< 50 as per requirement)
+    // Create exactly 49 modules (< 50 as per requirement 4.1.1)
     module_count := 49
     
-    fmt.printf("Testing performance requirement with %d modules (< 50)...\n", module_count)
+    fmt.printf("Testing optimized performance with %d modules (< 50)...\n", module_count)
     
-    // Create modules with realistic complexity
+    // Create modules with realistic complexity and dependencies
     for i in 0..<module_count {
-        module_name := fmt.tprintf("req_module_%02d", i)
+        module_name := fmt.tprintf("opt_module_%02d", i)
         
-        // Create realistic dependency patterns
         dependencies := make([dynamic]string)
         defer delete(dependencies)
         
-        // Some modules have dependencies on earlier modules
-        if i > 0 && i % 3 == 0 {
-            // Every 3rd module depends on 1-2 previous modules
-            dep_count := min(i, 2)
+        // Create realistic dependency patterns
+        if i > 0 && i % 4 == 0 {
+            dep_count := min(i, 3)
             for j in 0..<dep_count {
-                dep_name := fmt.tprintf("req_module_%02d", (i - j - 1) % i)
+                dep_name := fmt.tprintf("opt_module_%02d", (i - j - 1) % i)
                 append(&dependencies, dep_name)
             }
         }
         
-        priority := (i % 10) * 10  // Varied priorities
-        success := create_test_module(temp_dir, module_name, priority, dependencies[:])
-        testing.expect(t, success, fmt.tprintf("Should create requirement test module %s", module_name))
+        priority := (i % 10) * 10
+        success := create_performance_test_module(temp_dir, module_name, priority, dependencies[:])
+        testing.expect(t, success, fmt.tprintf("Should create optimized test module %s", module_name))
     }
     
-    // Test the complete load and process cycle (discovery + resolution + emission)
-    fmt.printf("Starting complete load and process cycle for %d modules...\n", module_count)
+    // Run comprehensive benchmark
+    fmt.printf("Running comprehensive performance benchmark...\n")
     
-    // Measure the complete cycle as specified in requirement 4.1.1
-    cycle_start := time.now()
+    // Test multiple cycles to verify consistency
+    cycle_times := make([dynamic]time.Duration, 0, 5)
+    defer delete(cycle_times)
     
-    // Discovery phase
-    modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
+    for cycle in 0..<5 {
+        cycle_start := time.now()
+        
+        // Complete load cycle with optimizations
+        modules := loader.discover(temp_dir)
+        defer {
+            manifest.cleanup_modules(modules[:])
+            delete(modules)
+        }
+        
+        testing.expect(t, len(modules) == module_count, 
+                       fmt.tprintf("Cycle %d: Should discover all %d modules", cycle + 1, module_count))
+        
+        resolved_modules, err := loader.resolve(modules)
+        defer {
+            if resolved_modules != nil {
+                delete(resolved_modules)
+            }
+        }
+        
+        testing.expect(t, err == "", fmt.tprintf("Cycle %d: Should resolve successfully", cycle + 1))
+        testing.expect(t, len(resolved_modules) == module_count, 
+                       fmt.tprintf("Cycle %d: Should resolve all modules", cycle + 1))
+        
+        cycle_time := time.since(cycle_start)
+        append(&cycle_times, cycle_time)
+        
+        fmt.printf("Cycle %d: %v\n", cycle + 1, cycle_time)
     }
     
-    testing.expect(t, len(modules) == module_count, 
-                   fmt.tprintf("Should discover all %d modules", module_count))
+    // Analyze performance
+    total_time := time.Duration(0)
+    min_time := cycle_times[0]
+    max_time := cycle_times[0]
     
-    // Resolution phase
-    resolved_modules, err := loader.resolve(modules)
-    defer {
-        if resolved_modules != nil {
-            delete(resolved_modules)
+    for cycle_time in cycle_times {
+        total_time += cycle_time
+        if cycle_time < min_time {
+            min_time = cycle_time
+        }
+        if cycle_time > max_time {
+            max_time = cycle_time
         }
     }
     
-    testing.expect(t, err == "", "Should resolve modules successfully for requirement test")
-    testing.expect(t, len(resolved_modules) == module_count, "Should resolve all modules")
+    avg_time := total_time / time.Duration(len(cycle_times))
     
-    // Emission phase (simulated - we don't actually emit to avoid stdout pollution)
-    // In real usage, this would call loader.emit(resolved_modules)
-    
-    total_cycle_time := time.since(cycle_start)
-    fmt.printf("Complete load and process cycle took: %v\n", total_cycle_time)
+    fmt.printf("Performance Analysis:\n")
+    fmt.printf("  Average: %v\n", avg_time)
+    fmt.printf("  Minimum: %v\n", min_time)
+    fmt.printf("  Maximum: %v\n", max_time)
+    fmt.printf("  Variance: %v\n", max_time - min_time)
     
     // CRITICAL: Test the performance requirement 4.1.1
     max_allowed_time := time.Millisecond * 100
-    testing.expect(t, total_cycle_time < max_allowed_time, 
-                   fmt.tprintf("REQUIREMENT 4.1.1 VIOLATION: System must load and process modules in under 100ms for typical configurations (< 50 modules). Actual time: %v", total_cycle_time))
     
-    if total_cycle_time < max_allowed_time {
-        fmt.printf("✓ REQUIREMENT 4.1.1 SATISFIED: Processing completed in %v (< 100ms)\n", total_cycle_time)
-    } else {
-        fmt.printf("✗ REQUIREMENT 4.1.1 FAILED: Processing took %v (>= 100ms)\n", total_cycle_time)
+    // All cycles should meet the requirement
+    requirement_met := true
+    for i, cycle_time in cycle_times {
+        cycle_duration := time.Duration(cycle_time) * time.Millisecond
+        if cycle_duration >= max_allowed_time {
+            fmt.printf("✗ Cycle %d failed requirement: %v >= 100ms\n", i + 1, cycle_duration)
+            requirement_met = false
+        } else {
+            fmt.printf("✓ Cycle %d met requirement: %v < 100ms\n", i + 1, cycle_duration)
+        }
     }
+    
+    testing.expect(t, requirement_met, 
+                   fmt.tprintf("REQUIREMENT 4.1.1: All cycles must complete in under 100ms. Average: %v", avg_time))
+    
+    // Test cache effectiveness (second run should be faster)
+    if len(cycle_times) >= 2 {
+        first_run := cycle_times[0]
+        second_run := cycle_times[1]
+        
+        if second_run < first_run {
+            speedup := time.duration_seconds(first_run) / time.duration_seconds(second_run)
+            fmt.printf("✓ Cache speedup detected: %.2fx faster on second run\n", speedup)
+        } else {
+            fmt.printf("⚠ No cache speedup detected (first: %v, second: %v)\n", first_run, second_run)
+        }
+    }
+    
+    if requirement_met {
+        fmt.printf("✓ OPTIMIZED PERFORMANCE REQUIREMENT 4.1.1 SATISFIED\n")
+        fmt.printf("  All optimizations working correctly\n")
+        fmt.printf("  Average processing time: %v (< 100ms)\n", avg_time)
+    } else {
+        fmt.printf("✗ OPTIMIZED PERFORMANCE REQUIREMENT 4.1.1 FAILED\n")
+        fmt.printf("  Optimizations may need further tuning\n")
+        fmt.printf("  Average processing time: %v (>= 100ms)\n", avg_time)
+    }
+}
+
+@(test)
+test_benchmark_suite_integration :: proc(t: ^testing.T) {
+    // Test the benchmark suite with a small test dataset
+    temp_dir := "test_temp_benchmark_suite"
+    
+    // Clean up any existing directory first
+    remove_directory_recursive(temp_dir)
+    defer remove_directory_recursive(temp_dir)
+    
+    os.make_directory(temp_dir, 0o755)
+    
+    // Create a small set of test modules
+    module_count := 10
+    
+    for i in 0..<module_count {
+        module_name := fmt.tprintf("bench_module_%02d", i)
+        
+        dependencies := make([dynamic]string)
+        defer delete(dependencies)
+        
+        if i > 0 && i % 3 == 0 {
+            dep_name := fmt.tprintf("bench_module_%02d", i - 1)
+            append(&dependencies, dep_name)
+        }
+        
+        success := create_performance_test_module(temp_dir, module_name, i * 10, dependencies[:])
+        testing.expect(t, success, fmt.tprintf("Should create benchmark test module %s", module_name))
+    }
+    
+    // Run the benchmark suite
+    fmt.printf("Running benchmark suite integration test...\n")
+    
+    benchmark_passed := loader.run_performance_requirements_benchmark(temp_dir)
+    
+    // The benchmark should pass for this small dataset
+    testing.expect(t, benchmark_passed, "Benchmark suite should pass for small test dataset")
+    
+    fmt.printf("Benchmark suite integration test completed\n")
 }
 
 @(test)
@@ -562,7 +652,7 @@ test_scalability_beyond_requirement :: proc(t: ^testing.T) {
                 }
             }
             
-            success := create_test_module(temp_dir, module_name, i % 100, dependencies[:])
+            success := create_performance_test_module(temp_dir, module_name, i % 100, dependencies[:])
             if !success {
                 fmt.printf("Failed to create module %s\n", module_name)
                 break
@@ -690,7 +780,7 @@ test_stress_with_complex_dependencies :: proc(t: ^testing.T) {
         }
         
         priority := (i * 13) % 100  // Pseudo-random priorities
-        success := create_test_module(temp_dir, module_name, priority, dependencies[:])
+        success := create_performance_test_module(temp_dir, module_name, priority, dependencies[:])
         testing.expect(t, success, fmt.tprintf("Should create stress test module %s", module_name))
     }
     

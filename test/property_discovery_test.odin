@@ -49,7 +49,7 @@ optional = []`, name, version, priority)
 }
 
 // Create a test shell file
-create_test_shell_file :: proc(dir_path: string, filename: string) -> bool {
+create_property_test_shell_file :: proc(dir_path: string, filename: string) -> bool {
     file_path := filepath.join({dir_path, filename})
     defer delete(file_path)
     
@@ -58,7 +58,7 @@ create_test_shell_file :: proc(dir_path: string, filename: string) -> bool {
 }
 
 // Clean up test directory recursively
-cleanup_test_directory :: proc(dir_path: string) {
+cleanup_property_test_directory :: proc(dir_path: string) {
     if os.exists(dir_path) {
         // Use a simple approach to remove directory
         os.remove(dir_path)
@@ -78,7 +78,7 @@ create_complete_test_module :: proc(base_path: string, module_name: string, prio
         return ""
     }
     
-    if !create_test_shell_file(module_path, "init.zsh") {
+    if !create_property_test_shell_file(module_path, "init.zsh") {
         return ""
     }
     
@@ -106,7 +106,7 @@ test_property_discovery_completeness :: proc(t: ^testing.T) {
     for test_case in test_cases {
         for iteration in 0..<3 { // 3 iterations per test case
             test_dir := generate_test_dir()
-            defer cleanup_test_directory(test_dir)
+            defer cleanup_property_test_directory(test_dir)
             
             if !create_test_directory(test_dir) {
                 testing.expect(t, false, fmt.tprintf("Failed to create test directory %s", test_dir))
@@ -191,7 +191,7 @@ test_property_discovery_nested_directories :: proc(t: ^testing.T) {
     for nesting_level in nesting_levels {
         for iteration in 0..<2 { // 2 iterations per nesting level
             test_dir := generate_test_dir()
-            defer cleanup_test_directory(test_dir)
+            defer cleanup_property_test_directory(test_dir)
             
             if !create_test_directory(test_dir) {
                 testing.expect(t, false, fmt.tprintf("Failed to create test directory %s", test_dir))
@@ -309,7 +309,7 @@ test_property_discovery_error_handling :: proc(t: ^testing.T) {
     for error_case in error_cases {
         for iteration in 0..<2 { // 2 iterations per error case
             test_dir := generate_test_dir()
-            defer cleanup_test_directory(test_dir)
+            defer cleanup_property_test_directory(test_dir)
             
             // Setup the error condition
             setup_ok := error_case.setup_func(test_dir)
@@ -372,7 +372,7 @@ test_property_discovery_module_validation :: proc(t: ^testing.T) {
                 defer delete(module_path)
                 
                 if !create_test_directory(module_path) do return false
-                return create_test_shell_file(module_path, "init.zsh")
+                return create_property_test_shell_file(module_path, "init.zsh")
             },
             false, // Should not discover without manifest
         },
@@ -381,7 +381,7 @@ test_property_discovery_module_validation :: proc(t: ^testing.T) {
     for validation_case in validation_cases {
         for iteration in 0..<2 { // 2 iterations per validation case
             test_dir := generate_test_dir()
-            defer cleanup_test_directory(test_dir)
+            defer cleanup_property_test_directory(test_dir)
             
             if !create_test_directory(test_dir) {
                 testing.expect(t, false, fmt.tprintf("Failed to create test directory %s", test_dir))

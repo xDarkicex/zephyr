@@ -22,6 +22,8 @@ Thumbs.db
 
 # Test artifacts
 test_results/
+test_*/
+benchmark_modules/
 *.log
 
 # Temporary files

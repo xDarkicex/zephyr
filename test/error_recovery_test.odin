@@ -8,34 +8,6 @@ import "core:testing"
 import "../src/loader"
 import "../src/manifest"
 
-// Helper function to remove directory recursively
-remove_directory_recursive :: proc(path: string) {
-    if !os.exists(path) do return
-    
-    if os.remove(path) == os.ERROR_NONE do return
-    
-    handle, err := os.open(path)
-    if err != os.ERROR_NONE do return
-    defer os.close(handle)
-    
-    file_infos, read_err := os.read_dir(handle, -1)
-    if read_err != os.ERROR_NONE do return
-    defer delete(file_infos)
-    
-    for info in file_infos {
-        child_path := filepath.join({path, info.name})
-        defer delete(child_path)
-        
-        if info.is_dir {
-            remove_directory_recursive(child_path)
-        } else {
-            os.remove(child_path)
-        }
-    }
-    
-    os.remove(path)
-}
-
 @(test)
 test_corrupted_manifest_recovery :: proc(t: ^testing.T) {
     // Test recovery from corrupted TOML manifests

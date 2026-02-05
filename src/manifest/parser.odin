@@ -51,7 +51,7 @@ parse_detailed :: proc(file_path: string) -> ParseResult {
     
     // Initialize module with defaults
     result.module = Module{
-        version = "0.0.0",
+        version = strings.clone("0.0.0"),  // ✅ CRITICAL FIX: Clone string literals
         priority = 100, // Default priority
         required = make([dynamic]string),
         optional = make([dynamic]string),

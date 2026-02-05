@@ -223,41 +223,6 @@ files = ["nested.zsh"]`
     testing.expect(t, write_ok3, "Failed to write nested manifest")
 }
 
-// Helper function to cleanup test directory
-cleanup_test_directory :: proc(dir: string) {
-    if os.exists(dir) {
-        // Remove all files and subdirectories recursively
-        remove_directory_recursive(dir)
-    }
-}
-
-// Helper function to recursively remove directory
-remove_directory_recursive :: proc(dir: string) {
-    handle, err := os.open(dir)
-    if err != os.ERROR_NONE {
-        return
-    }
-    defer os.close(handle)
-    
-    entries, read_err := os.read_dir(handle, -1)
-    if read_err != os.ERROR_NONE {
-        return
-    }
-    defer os.file_info_slice_delete(entries)
-    
-    for entry in entries {
-        entry_path := filepath.join({dir, entry.name})
-        if entry.is_dir {
-            remove_directory_recursive(entry_path)
-            os.remove(entry_path)
-        } else {
-            os.remove(entry_path)
-        }
-    }
-    
-    os.remove(dir)
-}
-
 // **Validates: Requirements 3.2.4**
 @(test)
 test_discovery_empty_directory :: proc(t: ^testing.T) {

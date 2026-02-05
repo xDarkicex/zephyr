@@ -8,38 +8,6 @@ import "core:testing"
 import "../src/loader"
 import "../src/manifest"
 
-// Helper function to remove directory recursively
-remove_directory_recursive :: proc(path: string) {
-    // Simple recursive directory removal
-    if !os.exists(path) do return
-    
-    // Try to remove as file first
-    if os.remove(path) == os.ERROR_NONE do return
-    
-    // If that fails, it's probably a directory, so remove contents first
-    handle, err := os.open(path)
-    if err != os.ERROR_NONE do return
-    defer os.close(handle)
-    
-    file_infos, read_err := os.read_dir(handle, -1)
-    if read_err != os.ERROR_NONE do return
-    defer delete(file_infos)
-    
-    for info in file_infos {
-        child_path := filepath.join({path, info.name})
-        defer delete(child_path)
-        
-        if info.is_dir {
-            remove_directory_recursive(child_path)
-        } else {
-            os.remove(child_path)
-        }
-    }
-    
-    // Finally remove the directory itself
-    os.remove(path)
-}
-
 // Integration tests for Zephyr Shell Loader
 // These tests use real module directory structures and test the complete workflow
 
@@ -207,7 +175,7 @@ files = ["test.zsh"]
 }
 
 @(test)
-test_circular_dependency_detection :: proc(t: ^testing.T) {
+test_integration_circular_dependency_detection :: proc(t: ^testing.T) {
     // Create a temporary module structure with circular dependencies
     temp_dir := "test_temp_circular"
     defer remove_directory_recursive(temp_dir)

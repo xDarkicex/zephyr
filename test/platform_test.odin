@@ -2,6 +2,7 @@ package test
 
 import "core:testing"
 import "core:fmt"
+import "core:strings"
 import "../src/loader"
 import "../src/manifest"
 
@@ -78,7 +79,7 @@ test_version_compatibility :: proc(t: ^testing.T) {
 test_platform_compatibility_no_filters :: proc(t: ^testing.T) {
     // Create a module with no platform filters
     module := manifest.Module{
-        name = "test-module",
+        name = strings.clone("test-module"),
         platforms = manifest.Platform_Filter{
             os = make([dynamic]string),
             arch = make([dynamic]string),
@@ -102,7 +103,7 @@ test_platform_compatibility_no_filters :: proc(t: ^testing.T) {
 test_platform_compatibility_os_filter :: proc(t: ^testing.T) {
     // Create a module that only supports Linux and macOS
     module := manifest.Module{
-        name = "test-module",
+        name = strings.clone("test-module"),
         platforms = manifest.Platform_Filter{
             os = make([dynamic]string),
             arch = make([dynamic]string),
@@ -150,7 +151,7 @@ test_platform_compatibility_os_filter :: proc(t: ^testing.T) {
 test_platform_compatibility_arch_filter :: proc(t: ^testing.T) {
     // Create a module that only supports x86_64
     module := manifest.Module{
-        name = "test-module",
+        name = strings.clone("test-module"),
         platforms = manifest.Platform_Filter{
             os = make([dynamic]string),
             arch = make([dynamic]string),
@@ -187,7 +188,7 @@ test_platform_compatibility_arch_filter :: proc(t: ^testing.T) {
 test_platform_compatibility_shell_filter :: proc(t: ^testing.T) {
     // Create a module that only supports zsh
     module := manifest.Module{
-        name = "test-module",
+        name = strings.clone("test-module"),
         platforms = manifest.Platform_Filter{
             os = make([dynamic]string),
             arch = make([dynamic]string),
@@ -223,7 +224,7 @@ test_platform_compatibility_shell_filter :: proc(t: ^testing.T) {
 test_platform_compatibility_version_filter :: proc(t: ^testing.T) {
     // Create a module that requires zsh 5.8 or higher
     module := manifest.Module{
-        name = "test-module",
+        name = strings.clone("test-module"),
         platforms = manifest.Platform_Filter{
             os = make([dynamic]string),
             arch = make([dynamic]string),
@@ -278,7 +279,7 @@ test_filter_compatible_modules :: proc(t: ^testing.T) {
     
     // Module 1: No platform restrictions (should always be included)
     module1 := manifest.Module{
-        name = "universal-module",
+        name = strings.clone("universal-module"),
         platforms = manifest.Platform_Filter{
             os = make([dynamic]string),
             arch = make([dynamic]string),
@@ -288,7 +289,7 @@ test_filter_compatible_modules :: proc(t: ^testing.T) {
     
     // Module 2: Linux only
     module2 := manifest.Module{
-        name = "linux-module",
+        name = strings.clone("linux-module"),
         platforms = manifest.Platform_Filter{
             os = make([dynamic]string),
             arch = make([dynamic]string),
@@ -299,7 +300,7 @@ test_filter_compatible_modules :: proc(t: ^testing.T) {
     
     // Module 3: Windows only (should be filtered out on non-Windows)
     module3 := manifest.Module{
-        name = "windows-module",
+        name = strings.clone("windows-module"),
         platforms = manifest.Platform_Filter{
             os = make([dynamic]string),
             arch = make([dynamic]string),
