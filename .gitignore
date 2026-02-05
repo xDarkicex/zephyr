@@ -1,6 +1,8 @@
 .kiro
 # Odin build artifacts
 zephyr
+acceptance_test
+test_runner
 *.bin
 *.exe
 

@@ -909,6 +909,16 @@ make benchmark-scale
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+### Testing Your Changes
+
+Before submitting a PR, run the acceptance tests:
+
+```bash
+./run-acceptance-tests.sh
+```
+
+All acceptance tests must pass for the PR to be accepted.
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
