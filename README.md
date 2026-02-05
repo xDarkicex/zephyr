@@ -44,8 +44,11 @@ Zephyr is a shell module loader system that manages dependencies, load order, an
 git clone https://github.com/xDarkicex/zephyr.git
 cd zephyr
 
-# Build and install
-./install.sh
+# Build and install (recommended)
+make install
+
+# Or build only
+make build
 ```
 
 This will:
@@ -53,6 +56,16 @@ This will:
 2. Install it to `$HOME/.zsh/bin/zephyr`
 3. Create the modules directory at `$HOME/.zsh/modules`
 4. Set up a basic `core` module
+
+**Available make targets:**
+```bash
+make help           # Show all available commands
+make build          # Build the binary
+make install        # Build and install
+make test           # Run test suite
+make benchmark      # Run performance benchmark
+make clean          # Remove build artifacts
+```
 
 ### Shell Integration
 
@@ -874,15 +887,15 @@ Zephyr is designed for minimal startup overhead and efficient module processing.
 
 ```bash
 # Run standard benchmark (49 modules, 10 cycles)
-./benchmark.sh
+make benchmark
 
 # Quick validation (25 modules, 5 cycles)
-./benchmark.sh --quick
+make benchmark-quick
 
 # Test scalability (50, 75, 100 modules)
-./benchmark.sh --scalability
+make benchmark-scale
 
-# Show help
+# Or use the script directly
 ./benchmark.sh --help
 ```
 
