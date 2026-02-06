@@ -218,13 +218,14 @@ generate_json_output :: proc(
     
     // Build output structure
     output := JSON_Output{
-        schema_version = "1.0",
+        schema_version = strings.clone("1.0"),
         generated_at = strings.clone(timestamp),
         environment = env,
         summary = summary,
         modules = modules_info,
         incompatible_modules = incompatible_info,
     }
+    defer delete(output.schema_version)
     defer delete(output.generated_at)
     
     // Marshal BEFORE cleanup (this is the key!)
@@ -441,7 +442,7 @@ create_empty_json_output :: proc(modules_dir: string, pretty: bool) -> ([]u8, js
     // NOTE: timestamp is temp-allocated by fmt.tprintf, don't delete it!
     
     output := JSON_Output{
-        schema_version = "1.0",
+        schema_version = strings.clone("1.0"),
         generated_at = strings.clone(timestamp),
         environment = Environment_Info{
             zephyr_version = "1.0.0",
@@ -461,6 +462,7 @@ create_empty_json_output :: proc(modules_dir: string, pretty: bool) -> ([]u8, js
     }
     
     defer {
+        delete(output.schema_version)
         delete(output.generated_at)
         delete(output.environment.modules_dir)
         delete(output.environment.os)
@@ -505,6 +507,10 @@ cleanup_json_output :: proc(output: ^JSON_Output) {
     if output == nil do return
     
     // Clean up top-level strings
+    if output.schema_version != "" {
+        delete(output.schema_version)
+        output.schema_version = ""
+    }
     if output.generated_at != "" {
         delete(output.generated_at)
         output.generated_at = ""

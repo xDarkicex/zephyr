@@ -65,16 +65,22 @@ init_debug :: proc() {
             debug_config.level = .Info
         }
     }
+    delete(debug_env)
+    delete(verbose_env)
     
     // Check for timestamp option
-    if os.get_env("ZEPHYR_DEBUG_TIMESTAMPS") != "" {
+    timestamps_env := os.get_env("ZEPHYR_DEBUG_TIMESTAMPS")
+    if timestamps_env != "" {
         debug_config.show_timestamps = true
     }
+    delete(timestamps_env)
     
     // Check for location option
-    if os.get_env("ZEPHYR_DEBUG_LOCATION") != "" {
+    location_env := os.get_env("ZEPHYR_DEBUG_LOCATION")
+    if location_env != "" {
         debug_config.show_location = true
     }
+    delete(location_env)
 }
 
 // set_debug_level sets the debug level programmatically

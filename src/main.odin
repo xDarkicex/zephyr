@@ -68,6 +68,12 @@ main :: proc() {
 		run_validate()
 	case "init":
 		run_init()
+	case "install":
+		run_install()
+	case "update":
+		run_update()
+	case "uninstall":
+		run_uninstall()
 	case "help", "--help", "-h":
 		print_usage()
 	case:
@@ -115,6 +121,18 @@ run_init :: proc() {
 
 	debug.debug_info("Creating module: %s", module_name)
 	cli.init_module(module_name)
+}
+
+run_install :: proc() {
+	cli.install_command()
+}
+
+run_update :: proc() {
+	cli.update_command()
+}
+
+run_uninstall :: proc() {
+	cli.uninstall_command()
 }
 
 // run_load implements the default load behavior
@@ -230,11 +248,12 @@ get_modules_directory :: proc() -> string {
 	// Check for ZSH_MODULES_DIR environment variable first
 	modules_dir := os.get_env("ZSH_MODULES_DIR")
 	debug.debug_env_var("ZSH_MODULES_DIR", modules_dir)
-
+	
 	if modules_dir != "" {
 		debug.debug_info("Using ZSH_MODULES_DIR: %s", modules_dir)
 		return modules_dir
 	}
+	delete(modules_dir)
 
 	// Use the loader package's get_modules_dir function for consistency
 	result := loader.get_modules_dir()
@@ -261,6 +280,9 @@ print_usage :: proc() {
 	fmt.println("    list        List discovered modules and their load order")
 	fmt.println("    validate    Validate all module manifests for errors")
 	fmt.println("    init        Create a new module skeleton")
+	fmt.println("    install     Install a module from a git repository")
+	fmt.println("    update      Update installed modules")
+	fmt.println("    uninstall   Remove an installed module")
 	fmt.println("    help        Show this help message")
 	fmt.println("")
 	fmt.println("EXAMPLES:")
@@ -269,6 +291,10 @@ print_usage :: proc() {
 	fmt.println("    zephyr --debug list       # Show modules with debug information")
 	fmt.println("    zephyr validate           # Check manifests for errors")
 	fmt.println("    zephyr init my-module     # Create new module 'my-module'")
+	fmt.println("    zephyr install <git-url>  # Install a module from git")
+	fmt.println("    zephyr update             # Update all modules")
+	fmt.println("    zephyr update my-module   # Update a single module")
+	fmt.println("    zephyr uninstall my-module # Remove a module")
 	fmt.println("")
 	fmt.println("ENVIRONMENT:")
 	fmt.println(

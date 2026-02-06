@@ -512,12 +512,8 @@ test_discovery_environment_variable :: proc(t: ^testing.T) {
     original_zsh_dir := os.get_env("ZSH_MODULES_DIR")
     original_home := os.get_env("HOME")
     defer {
-        if original_zsh_dir != "" {
-            delete(original_zsh_dir)
-        }
-        if original_home != "" {
-            delete(original_home)
-        }
+        delete(original_zsh_dir)
+        delete(original_home)
     }
     
     // This test validates the get_modules_dir function logic

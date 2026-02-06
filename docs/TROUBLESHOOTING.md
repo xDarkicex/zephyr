@@ -6,6 +6,7 @@ This guide helps you diagnose and fix common issues with Zephyr Shell Loader.
 
 - [Quick Diagnostics](#quick-diagnostics)
 - [Installation Issues](#installation-issues)
+- [Git Module Management](#git-module-management)
 - [Module Loading Problems](#module-loading-problems)
 - [Dependency Issues](#dependency-issues)
 - [Performance Problems](#performance-problems)
@@ -128,6 +129,81 @@ mkdir: cannot create directory '/Users/john/.zsh': Permission denied
    # Set custom installation directory
    export ZSH_DIR="/path/to/custom/location"
    ./install.sh
+   ```
+
+## Git Module Management
+
+### Problem: Git commands are unavailable
+
+**Symptoms:**
+```bash
+Git support is not available in this build
+```
+
+**Causes & Solutions:**
+
+1. **libgit2 not installed**
+   ```bash
+   # macOS (Homebrew)
+   brew install libgit2 pkg-config
+
+   # Ubuntu/Debian
+   sudo apt-get install -y libgit2-dev pkg-config
+   ```
+
+2. **pkg-config cannot find libgit2**
+   ```bash
+   # Verify libgit2 detection
+   pkg-config --libs libgit2
+
+   # If empty, check PKG_CONFIG_PATH
+   echo $PKG_CONFIG_PATH
+   ```
+
+   If your system installs libgit2 in a non-standard location, set `PKG_CONFIG_PATH`
+   or install a pkg-config file for libgit2.
+
+### Problem: Clone or fetch fails
+
+**Symptoms:**
+```bash
+Install failed: clone failed
+Update failed: fetch failed
+```
+
+**Solutions:**
+
+1. **Verify the URL**
+   ```bash
+   # Try the URL in git directly
+   git clone https://github.com/user/repo
+   ```
+
+2. **Check authentication**
+   - For SSH URLs, confirm your SSH keys are loaded and authorized.
+   - For HTTPS, verify access to private repos.
+
+3. **Network issues**
+   - Confirm DNS and proxy settings.
+   - Retry with a different protocol (HTTPS vs SSH).
+
+### Problem: Local install fails
+
+**Symptoms:**
+```bash
+Invalid install source
+```
+
+**Solutions:**
+
+1. **Use the `--local` flag**
+   ```bash
+   zephyr install --local /path/to/module-repo
+   ```
+
+2. **Ensure module.toml exists**
+   ```bash
+   ls /path/to/module-repo/module.toml
    ```
 
 ## Module Loading Problems

@@ -11,6 +11,17 @@ echo "Installing Zephyr Shell Loader..."
 echo "Creating directories..."
 mkdir -p "$BIN_DIR" "$MODULES_DIR"
 
+# Check for libgit2 (required for git-based module management)
+if command -v pkg-config &> /dev/null; then
+    if pkg-config --exists libgit2; then
+        echo "✓ libgit2 detected"
+    else
+        echo "Warning: libgit2 not detected. Git module commands will not work until libgit2 is installed."
+    fi
+else
+    echo "Warning: pkg-config not found. Unable to auto-detect libgit2."
+fi
+
 # Build binary
 echo "Building Zephyr..."
 if [ ! -f "./build.sh" ]; then

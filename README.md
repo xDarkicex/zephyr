@@ -35,6 +35,8 @@ Zephyr is a shell module loader system that manages dependencies, load order, an
 ### Prerequisites
 
 - [Odin compiler](https://odin-lang.org/docs/install/) (for building from source)
+- libgit2 (required for git-based module management)
+- pkg-config (recommended for auto-detection of libgit2)
 - ZSH shell
 - macOS or Linux
 
@@ -44,6 +46,12 @@ Zephyr is a shell module loader system that manages dependencies, load order, an
 # Clone the repository
 git clone https://github.com/xDarkicex/zephyr.git
 cd zephyr
+
+# Install libgit2 (examples)
+# macOS (Homebrew)
+brew install libgit2 pkg-config
+# Ubuntu/Debian
+sudo apt-get install -y libgit2-dev pkg-config
 
 # Build and install (recommended)
 make install
@@ -67,6 +75,9 @@ make test           # Run test suite
 make benchmark      # Run performance benchmark
 make clean          # Remove build artifacts
 ```
+
+Note: `make build` and `make test` will automatically link libgit2 if it is
+available via `pkg-config`.
 
 ### Shell Integration
 
@@ -412,6 +423,61 @@ Total: 2 | Success: 0 | Errors: 2
 ✗ Validation failed. Please fix the errors above.
 Use 'zephyr validate' again after making changes.
 ```
+
+### `zephyr install <source>`
+
+Installs a module from a git repository and validates it before moving it into your modules directory.
+
+Supported source formats:
+- HTTPS or SSH git URL
+- GitHub shorthand: `user/repo`
+- Local path (requires `--local`)
+
+```bash
+# Install from HTTPS
+zephyr install https://github.com/user/zephyr-git-helpers
+
+# Install from GitHub shorthand
+zephyr install user/zephyr-git-helpers
+
+# Install from a local repo path
+zephyr install --local /path/to/module-repo
+
+# Reinstall an existing module
+zephyr install --force https://github.com/user/zephyr-git-helpers
+```
+
+**Notes:**
+- Git commands require libgit2 to be installed and discoverable at build time.
+- The module name is derived from the repo name (with `zephyr-module-` and `zephyr-` prefixes stripped).
+
+### `zephyr update [module-name]`
+
+Updates modules by fetching and pulling from their origin remotes.
+
+```bash
+# Update all modules
+zephyr update
+
+# Update a single module
+zephyr update git-helpers
+```
+
+If a validation check fails after pulling, Zephyr attempts to roll back the module to the previous commit.
+
+### `zephyr uninstall <module-name>`
+
+Removes an installed module from your modules directory.
+
+```bash
+# Uninstall a module
+zephyr uninstall git-helpers
+
+# Uninstall with confirmation when dependents are detected
+zephyr uninstall git-helpers --confirm
+```
+
+For more details on install/update workflows, see `docs/MODULE_INSTALLATION.md`.
 
 ### `zephyr init <name>`
 

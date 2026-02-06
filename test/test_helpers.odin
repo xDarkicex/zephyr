@@ -117,11 +117,13 @@ cleanup_error_message :: proc(err: string) {
 require_long_tests :: proc() -> bool {
     value := os.get_env("ZEPHYR_RUN_LONG_TESTS")
     if value == "" {
+        delete(value)
         return false
     }
-
+    
     lower := strings.to_lower(value)
     defer delete(lower)
-
+    delete(value)
+    
     return lower != "0" && lower != "false" && lower != "no" && lower != "off"
 }

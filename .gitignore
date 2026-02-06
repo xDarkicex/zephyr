@@ -1,6 +1,7 @@
 .kiro
 # Memory debugging memo (internal development notes)
 MEMORY_DEBUGGING_MEMO.md
+SECURITY_SPEC.md
 
 # Odin build artifacts
 zephyr
@@ -36,6 +37,7 @@ zephyr-test
 zephyr-test.dSYM/
 test_minimal.odin
 test/property_json_schema_test.odin.bak*
+tmp_*
 
 # Internal docs (not for distribution)
 CACHE_CLEANUP_ANALYSIS.md

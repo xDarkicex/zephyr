@@ -36,7 +36,7 @@ is_stdlib_allocation :: proc(loc: runtime.Source_Code_Location) -> bool {
     if strings.contains(loc.file_path, "os_darwin.odin") && loc.line == 1044 {
         return true
     }
-    if strings.contains(loc.file_path, "path.odin") && loc.line == 548 {
+    if strings.contains(loc.file_path, "path.odin") && (loc.line == 548 || loc.line == 579 || loc.line == 584) {
         return true
     }
     return false

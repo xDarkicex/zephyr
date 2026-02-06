@@ -48,8 +48,12 @@ format_error :: proc(title: string, message: string, ctx: ErrorContext = {}) -> 
     if ctx.module_name != "" {
         fmt.sbprintf(&builder, "  %s %s\n", colors.dim("Module:"), ctx.module_name)
     }
+
+    if ctx.suggestion != "" {
+        fmt.sbprintf(&builder, "  %s %s\n", colors.dim("Suggested fix:"), ctx.suggestion)
+    }
     
-    return strings.to_string(builder)
+    return strings.clone(strings.to_string(builder))
 }
 
 // format_warning creates a well-formatted warning message
@@ -83,7 +87,7 @@ format_warning :: proc(title: string, message: string, ctx: ErrorContext = {}) -
         fmt.sbprintf(&builder, "  %s %s\n", colors.dim("Module:"), ctx.module_name)
     }
     
-    return strings.to_string(builder)
+    return strings.clone(strings.to_string(builder))
 }
 
 // format_success creates a well-formatted success message
@@ -99,7 +103,7 @@ format_success :: proc(title: string, message: string = "") -> string {
         fmt.sbprintf(&builder, "\n  %s", message)
     }
     
-    return strings.to_string(builder)
+    return strings.clone(strings.to_string(builder))
 }
 
 // format_info creates a well-formatted info message
@@ -115,7 +119,7 @@ format_info :: proc(title: string, message: string = "") -> string {
         fmt.sbprintf(&builder, "\n  %s", message)
     }
     
-    return strings.to_string(builder)
+    return strings.clone(strings.to_string(builder))
 }
 
 // format_validation_error creates a formatted validation error for manifests
@@ -147,8 +151,12 @@ format_dependency_error :: proc(module_name: string, dependency: string, error_t
     case:
         message = fmt.tprintf("Dependency error with '%s': %s", dependency, error_type)
     }
-    
-    return format_error("Dependency Error", message, ctx)
+
+    formatted := format_error("Dependency Error", message, ctx)
+    if message != "" {
+        delete(message)
+    }
+    return formatted
 }
 
 // format_file_error creates a formatted file operation error
@@ -160,8 +168,15 @@ format_file_error :: proc(operation: string, file_path: string, system_error: st
     
     message := fmt.tprintf("System error: %s", system_error)
     title := fmt.tprintf("File %s failed", operation)
-    
-    return format_error(title, message, ctx)
+
+    formatted := format_error(title, message, ctx)
+    if message != "" {
+        delete(message)
+    }
+    if title != "" {
+        delete(title)
+    }
+    return formatted
 }
 
 // format_platform_error creates a formatted platform compatibility error
@@ -171,10 +186,14 @@ format_platform_error :: proc(module_name: string, current_platform: string, req
         operation = "Platform compatibility check",
     }
     
-    message := fmt.tprintf("Current platform '%s' not supported. Required: %v", 
+    message := fmt.tprintf("Current platform '%s' not supported. Required: %v",
         current_platform, required_platforms)
-    
-    return format_error("Platform Incompatible", message, ctx)
+
+    formatted := format_error("Platform Incompatible", message, ctx)
+    if message != "" {
+        delete(message)
+    }
+    return formatted
 }
 
 // format_summary creates a formatted summary section
@@ -184,7 +203,10 @@ format_summary :: proc(title: string, items: []string, success_count: int = 0, e
     
     // Summary header
     fmt.sbprintf(&builder, "%s\n", colors.bold(title))
-    fmt.sbprintf(&builder, "%s\n", strings.repeat("=", len(title)))
+    for _ in 0..<len(title) {
+        fmt.sbprintf(&builder, "=")
+    }
+    fmt.sbprintf(&builder, "\n")
     
     // Summary statistics if provided
     if success_count > 0 || error_count > 0 {
@@ -207,16 +229,20 @@ format_summary :: proc(title: string, items: []string, success_count: int = 0, e
         fmt.sbprintf(&builder, "  %s\n", item)
     }
     
-    return strings.to_string(builder)
+    return strings.clone(strings.to_string(builder))
 }
 
 // format_progress creates a formatted progress indicator
 format_progress :: proc(current: int, total: int, operation: string) -> string {
     percentage := (current * 100) / total
     progress_bar := create_progress_bar(percentage, 20)
-    
-    return fmt.tprintf("%s [%s] %d/%d (%d%%)", 
+
+    formatted := fmt.tprintf("%s [%s] %d/%d (%d%%)",
         operation, progress_bar, current, total, percentage)
+    if progress_bar != "" {
+        delete(progress_bar)
+    }
+    return formatted
 }
 
 // create_progress_bar creates a visual progress bar

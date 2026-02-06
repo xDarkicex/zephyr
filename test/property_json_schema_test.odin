@@ -282,18 +282,19 @@ test_property_incompatible_module_information :: proc(t: ^testing.T) {
     
     // Create a simple incompatible module info directly
     incompatible_info := cli.Incompatible_Module_Info{
-        name = "incompatible-module",
-        version = "1.0.0",
-        description = "Test incompatible module",
-        path = "/test/incompatible/path",
-        reason = "OS mismatch",
+        name = strings.clone("incompatible-module"),
+        version = strings.clone("1.0.0"),
+        description = strings.clone("Test incompatible module"),
+        path = strings.clone("/test/incompatible/path"),
+        reason = strings.clone("OS mismatch"),
         platforms = cli.Platform_Info_JSON{
             os = make_dynamic_string_array("windows"),
             arch = make_dynamic_string_array("x86_64"),
-            shell = "zsh",
-            min_version = "5.8",
+            shell = strings.clone("zsh"),
+            min_version = strings.clone("5.8"),
         },
     }
+    defer cli.cleanup_incompatible_module_info(&incompatible_info)
     
     // Marshal to JSON
     json_bytes, marshal_err := json.marshal(incompatible_info)
@@ -1914,6 +1915,7 @@ test_property_limited_file_reading :: proc(t: ^testing.T) {
             files = make([dynamic]string, 1),
             settings = {},
         }
+        defer delete(module.files)
         module.files[0] = "init.sh"
         
         // The discover_exports function should only attempt to read "init.sh"
@@ -1940,6 +1942,7 @@ test_property_limited_file_reading :: proc(t: ^testing.T) {
             files = make([dynamic]string, 3),
             settings = {},
         }
+        defer delete(module.files)
         module.files[0] = "init.sh"
         module.files[1] = "functions.sh"
         module.files[2] = "aliases.sh"
@@ -1972,6 +1975,7 @@ test_property_limited_file_reading :: proc(t: ^testing.T) {
             files = make([dynamic]string, 0),
             settings = {},
         }
+        defer delete(module.files)
         
         // Property: The number of files should be exactly 0
         file_count := len(module.files)
@@ -2016,6 +2020,7 @@ test_property_limited_file_reading :: proc(t: ^testing.T) {
                 files = make([dynamic]string, 1),
                 settings = {},
             }
+            defer delete(module.files)
             module.files[0] = "specified.sh"
             
             // Discover exports
@@ -2054,6 +2059,7 @@ test_property_limited_file_reading :: proc(t: ^testing.T) {
             files = make([dynamic]string, 2),
             settings = {},
         }
+        defer delete(module.files)
         module.files[0] = "file1.sh"
         module.files[1] = "file2.sh"
         

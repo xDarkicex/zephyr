@@ -341,7 +341,12 @@ test_property_discovery_module_validation :: proc(t: ^testing.T) {
         {
             "valid_complete_module",
             proc(dir_path: string, module_name: string) -> bool {
-                return len(create_complete_test_module(dir_path, module_name, 50)) > 0
+                module_path := create_complete_test_module(dir_path, module_name, 50)
+                ok := len(module_path) > 0
+                if module_path != "" {
+                    delete(module_path)
+                }
+                return ok
             },
             true,
         },

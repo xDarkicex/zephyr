@@ -9,6 +9,9 @@ This document provides comprehensive usage examples for all Zephyr commands with
 - [zephyr list](#zephyr-list)
   - [JSON Output](#json-output)
 - [zephyr validate](#zephyr-validate)
+- [zephyr install](#zephyr-install)
+- [zephyr update](#zephyr-update)
+- [zephyr uninstall](#zephyr-uninstall)
 - [zephyr init](#zephyr-init)
 - [Environment Variables](#environment-variables)
 - [Integration Examples](#integration-examples)
@@ -16,13 +19,16 @@ This document provides comprehensive usage examples for all Zephyr commands with
 
 ## Command Overview
 
-Zephyr provides four main commands:
+Zephyr provides several main commands:
 
 | Command | Purpose | Usage |
 |---------|---------|-------|
 | `load` | Generate shell code for loading modules (default) | `zephyr load` |
 | `list` | Show discovered modules and load order | `zephyr list` |
 | `validate` | Validate module manifests | `zephyr validate` |
+| `install` | Install a module from git | `zephyr install <source>` |
+| `update` | Update installed modules | `zephyr update [module-name]` |
+| `uninstall` | Remove an installed module | `zephyr uninstall <module-name>` |
 | `init` | Create new module skeleton | `zephyr init <name>` |
 
 ## zephyr load
@@ -659,6 +665,74 @@ Validating git-helpers:
 
 Validating broken-module:
   ✗ TOML parse error: expected '=' after key at line 3
+```
+
+## zephyr install
+
+Install a module from a git repository. The source can be a full URL, GitHub shorthand, or a local path with `--local`.
+
+```bash
+# HTTPS URL
+zephyr install https://github.com/user/zephyr-git-helpers
+
+# GitHub shorthand (user/repo)
+zephyr install user/zephyr-git-helpers
+
+# Local path install
+zephyr install --local /path/to/module-repo
+
+# Force reinstall
+zephyr install --force https://github.com/user/zephyr-git-helpers
+```
+
+**Typical output:**
+```
+Preparing installation: https://github.com/user/zephyr-git-helpers
+Cloning module: https://github.com/user/zephyr-git-helpers
+Installing module: git-helpers
+✓ Installation complete
+  Module 'git-helpers' installed successfully.
+  Next steps: run 'zephyr load'
+```
+
+## zephyr update
+
+Update all modules or a single module. Updates are validated after pull; on failure, Zephyr attempts rollback.
+
+```bash
+# Update all modules
+zephyr update
+
+# Update a single module
+zephyr update git-helpers
+```
+
+**Typical output:**
+```
+Updating module: git-helpers
+Fetching updates: git-helpers
+Pulling updates: git-helpers
+✓ Update complete
+  Module 'git-helpers' updated successfully.
+```
+
+## zephyr uninstall
+
+Remove a module from the modules directory. If dependency checks are enabled, confirmation may be required.
+
+```bash
+# Uninstall a module
+zephyr uninstall git-helpers
+
+# Confirm when dependents are detected
+zephyr uninstall git-helpers --confirm
+```
+
+**Typical output:**
+```
+Removing module: git-helpers
+✓ Uninstall complete
+  Module 'git-helpers' uninstalled successfully.
 ```
 
 ## zephyr init

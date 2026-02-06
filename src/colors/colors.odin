@@ -44,12 +44,14 @@ init_colors :: proc() {
     if no_color != "" {
         colored_output_enabled = false
     }
+    delete(no_color)
     
     // Also check TERM environment variable
     term := os.get_env("TERM")
     if term == "dumb" || term == "" {
         colored_output_enabled = false
     }
+    delete(term)
 }
 
 // colorize wraps text with the specified color

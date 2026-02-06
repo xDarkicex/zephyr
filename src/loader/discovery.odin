@@ -89,6 +89,7 @@ get_modules_dir :: proc() -> string {
 	if modules_dir != "" {
 		return modules_dir
 	}
+	delete(modules_dir)
 
 	// Default to $HOME/.zsh/modules
 	home := os.get_env("HOME")
