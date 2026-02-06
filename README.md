@@ -17,6 +17,7 @@ Zephyr is a shell module loader system that manages dependencies, load order, an
 - 🛠️ **Developer Friendly**: Simple TOML configuration
 - 🐛 **Excellent Debugging**: Verbose output, colored errors, and helpful suggestions
 - 🎨 **Beautiful Output**: Colored terminal output with clear formatting
+- 🤖 **Machine Readable**: JSON export for AI assistants and automation tools
 
 ## Table of Contents
 
@@ -243,6 +244,93 @@ MODULE DISCOVERY RESULTS
   Path: /Users/user/.zsh/modules/core
 
 ✓ Summary: 4 modules ready to load
+```
+
+#### JSON Output
+
+Get machine-readable JSON output for programmatic access:
+
+```bash
+# Output module information as JSON
+zephyr list --json
+
+# Pretty-printed JSON with indentation
+zephyr list --json --pretty
+
+# Filter modules by name pattern (case-insensitive)
+zephyr list --json --filter=git
+
+# Combine with other flags
+zephyr -v list --json --pretty --filter=core
+```
+
+**JSON Output Structure:**
+```json
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-02-06T10:30:45Z",
+  "environment": {
+    "zephyr_version": "1.0.0",
+    "modules_directory": "/Users/user/.zsh/modules",
+    "platform": {
+      "os": "darwin",
+      "arch": "arm64",
+      "shell": "zsh",
+      "shell_version": "5.9"
+    }
+  },
+  "summary": {
+    "total_modules": 4,
+    "compatible_modules": 3,
+    "incompatible_modules": 1
+  },
+  "modules": [
+    {
+      "name": "core",
+      "version": "1.0.0",
+      "description": "Core shell utilities",
+      "load_order": 1,
+      "priority": 10,
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
+      "exports": {
+        "functions": ["mkcd", "extract"],
+        "aliases": ["ll", "la"],
+        "environment_variables": ["ZSH_MODULE_CORE_THEME"]
+      }
+    }
+  ],
+  "incompatible_modules": [
+    {
+      "name": "linux-only",
+      "version": "1.0.0",
+      "reason": "OS mismatch: requires linux, current: darwin"
+    }
+  ]
+}
+```
+
+**Use Cases:**
+- **AI Assistants**: Discover available shell functions and aliases
+- **Scripts**: Parse module information programmatically
+- **Tools**: Integrate with external tools using `jq` or similar
+- **Monitoring**: Track module configuration across systems
+
+**Example with jq:**
+```bash
+# List all module names
+zephyr list --json | jq -r '.modules[].name'
+
+# Get modules with dependencies
+zephyr list --json | jq '.modules[] | select(.dependencies.required | length > 0)'
+
+# Count total exported functions
+zephyr list --json | jq '[.modules[].exports.functions[]] | length'
+
+# Find modules exporting a specific function
+zephyr list --json | jq -r '.modules[] | select(.exports.functions[] | contains("mkcd")) | .name'
 ```
 
 ### `zephyr validate`

@@ -219,3 +219,202 @@ zephyr load | zsh -n
 ```
 
 For more information, see the main README.md file.
+
+## JSON Integration for Tools and Scripts
+
+Zephyr provides JSON output for programmatic access to module information, making it easy to integrate with external tools, scripts, and AI assistants.
+
+### Basic JSON Usage
+
+```bash
+# Get JSON output
+zephyr list --json
+
+# Pretty-printed JSON
+zephyr list --json --pretty
+
+# Filter modules
+zephyr list --json --filter=git
+```
+
+### Integration with jq
+
+**Extract module names:**
+```bash
+zephyr list --json | jq -r '.modules[].name'
+```
+
+**Get modules with dependencies:**
+```bash
+zephyr list --json | jq '.modules[] | select(.dependencies.required | length > 0)'
+```
+
+**List all exported functions:**
+```bash
+zephyr list --json | jq -r '.modules[].exports.functions[]'
+```
+
+### Script Integration Examples
+
+**Check if a module exists:**
+```bash
+#!/bin/bash
+MODULE="git-helpers"
+
+if zephyr list --json | jq -e ".modules[] | select(.name == \"$MODULE\")" > /dev/null; then
+    echo "✓ Module $MODULE is available"
+    exit 0
+else
+    echo "✗ Module $MODULE not found"
+    exit 1
+fi
+```
+
+**Generate module documentation:**
+```bash
+#!/bin/bash
+# Generate markdown docs from JSON
+
+echo "# Available Modules"
+echo ""
+
+zephyr list --json | jq -r '.modules[] | 
+  "## \(.name) v\(.version)\n\n" +
+  "\(.description)\n\n" +
+  "**Functions:** \(.exports.functions | join(", "))\n" +
+  "**Aliases:** \(.exports.aliases | join(", "))\n"'
+```
+
+**Monitor module configuration:**
+```bash
+#!/bin/bash
+# Save module state for comparison
+
+SNAPSHOT_DIR="$HOME/.zsh/snapshots"
+mkdir -p "$SNAPSHOT_DIR"
+
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+zephyr list --json > "$SNAPSHOT_DIR/modules_$TIMESTAMP.json"
+
+echo "Snapshot saved: $SNAPSHOT_DIR/modules_$TIMESTAMP.json"
+```
+
+### AI Assistant Integration
+
+AI assistants can use JSON output to discover available shell functionality:
+
+```bash
+# Discover all available functions
+zephyr list --json | jq '.modules[].exports.functions[]'
+
+# Find modules by capability
+zephyr list --json | jq -r '.modules[] | select(.exports.functions[] | contains("git")) | .name'
+
+# Get module metadata for context
+zephyr list --json | jq '.modules[] | {name, description, exports: .exports.functions}'
+```
+
+### Python Integration Example
+
+```python
+#!/usr/bin/env python3
+import json
+import subprocess
+
+def get_zephyr_modules():
+    """Get Zephyr module information as Python dict."""
+    result = subprocess.run(
+        ['zephyr', 'list', '--json'],
+        capture_output=True,
+        text=True
+    )
+    return json.loads(result.stdout)
+
+def find_module(name):
+    """Find a specific module by name."""
+    data = get_zephyr_modules()
+    for module in data['modules']:
+        if module['name'] == name:
+            return module
+    return None
+
+# Usage
+if __name__ == '__main__':
+    modules = get_zephyr_modules()
+    print(f"Total modules: {modules['summary']['total_modules']}")
+    
+    for module in modules['modules']:
+        print(f"- {module['name']} v{module['version']}")
+        print(f"  Functions: {', '.join(module['exports']['functions'])}")
+```
+
+### Node.js Integration Example
+
+```javascript
+#!/usr/bin/env node
+const { execSync } = require('child_process');
+
+function getZephyrModules() {
+  const output = execSync('zephyr list --json', { encoding: 'utf-8' });
+  return JSON.parse(output);
+}
+
+function findModulesWithFunction(functionName) {
+  const data = getZephyrModules();
+  return data.modules.filter(module =>
+    module.exports.functions.includes(functionName)
+  );
+}
+
+// Usage
+const modules = getZephyrModules();
+console.log(`Total modules: ${modules.summary.total_modules}`);
+
+const gitModules = findModulesWithFunction('git_status_short');
+console.log('Modules with git_status_short:', gitModules.map(m => m.name));
+```
+
+### Continuous Integration
+
+Use JSON output in CI/CD pipelines to validate module configuration:
+
+```yaml
+# .github/workflows/validate-modules.yml
+name: Validate Zephyr Modules
+
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Install Zephyr
+        run: |
+          make build
+          sudo make install
+      
+      - name: Validate modules
+        run: zephyr validate
+      
+      - name: Check module count
+        run: |
+          MODULE_COUNT=$(zephyr list --json | jq '.summary.total_modules')
+          echo "Found $MODULE_COUNT modules"
+          if [ "$MODULE_COUNT" -lt 1 ]; then
+            echo "Error: No modules found"
+            exit 1
+          fi
+      
+      - name: Export module inventory
+        run: zephyr list --json --pretty > module-inventory.json
+      
+      - name: Upload inventory
+        uses: actions/upload-artifact@v2
+        with:
+          name: module-inventory
+          path: module-inventory.json
+```
+
+For more JSON examples, see [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md#json-output).

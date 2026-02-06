@@ -7,6 +7,7 @@ This document provides comprehensive usage examples for all Zephyr commands with
 - [Command Overview](#command-overview)
 - [zephyr load](#zephyr-load)
 - [zephyr list](#zephyr-list)
+  - [JSON Output](#json-output)
 - [zephyr validate](#zephyr-validate)
 - [zephyr init](#zephyr-init)
 - [Environment Variables](#environment-variables)
@@ -273,6 +274,354 @@ Warnings:
 ✓ All modules are loadable despite warnings
 
 Summary: 4 modules valid, 3 warnings
+```
+
+### JSON Output
+
+Get machine-readable JSON output for programmatic access and tool integration.
+
+#### Basic JSON Output
+
+```bash
+# Output as JSON
+zephyr list --json
+
+# Pretty-printed JSON
+zephyr list --json --pretty
+```
+
+**Example Output (compact):**
+```bash
+$ zephyr list --json
+{"schema_version":"1.0","generated_at":"2026-02-06T10:30:45Z","environment":{"zephyr_version":"1.0.0","modules_directory":"/Users/john/.zsh/modules","platform":{"os":"darwin","arch":"arm64","shell":"zsh","shell_version":"5.9"}},"summary":{"total_modules":4,"compatible_modules":4,"incompatible_modules":0},"modules":[{"name":"core","version":"1.0.0","description":"Core shell utilities","author":"","license":"MIT","path":"/Users/john/.zsh/modules/core","load_order":1,"priority":10,"dependencies":{"required":[],"optional":[],"missing_optional":[]},"platforms":{"os":[],"arch":[],"shell":"","min_version":""},"load":{"files":["exports.zsh","functions.zsh"]},"hooks":{"pre_load":"","post_load":""},"settings":{"theme":"default","auto_update":"true"},"exports":{"functions":["mkcd","extract"],"aliases":["ll","la"],"environment_variables":["ZSH_MODULE_CORE_THEME","ZSH_MODULE_CORE_AUTO_UPDATE"]}}],"incompatible_modules":[]}
+```
+
+**Example Output (pretty):**
+```bash
+$ zephyr list --json --pretty
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-02-06T10:30:45Z",
+  "environment": {
+    "zephyr_version": "1.0.0",
+    "modules_directory": "/Users/john/.zsh/modules",
+    "platform": {
+      "os": "darwin",
+      "arch": "arm64",
+      "shell": "zsh",
+      "shell_version": "5.9"
+    }
+  },
+  "summary": {
+    "total_modules": 4,
+    "compatible_modules": 4,
+    "incompatible_modules": 0
+  },
+  "modules": [
+    {
+      "name": "core",
+      "version": "1.0.0",
+      "description": "Core shell utilities and functions",
+      "author": "John Doe",
+      "license": "MIT",
+      "path": "/Users/john/.zsh/modules/core",
+      "load_order": 1,
+      "priority": 10,
+      "dependencies": {
+        "required": [],
+        "optional": [],
+        "missing_optional": []
+      },
+      "platforms": {
+        "os": [],
+        "arch": [],
+        "shell": "",
+        "min_version": ""
+      },
+      "load": {
+        "files": ["exports.zsh", "functions.zsh"]
+      },
+      "hooks": {
+        "pre_load": "",
+        "post_load": ""
+      },
+      "settings": {
+        "theme": "default",
+        "auto_update": "true"
+      },
+      "exports": {
+        "functions": ["mkcd", "extract", "backup"],
+        "aliases": ["ll", "la", "l"],
+        "environment_variables": [
+          "ZSH_MODULE_CORE_THEME",
+          "ZSH_MODULE_CORE_AUTO_UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "git-helpers",
+      "version": "2.0.1",
+      "description": "Git workflow utilities",
+      "author": "Jane Smith",
+      "license": "MIT",
+      "path": "/Users/john/.zsh/modules/git-helpers",
+      "load_order": 2,
+      "priority": 50,
+      "dependencies": {
+        "required": ["core"],
+        "optional": ["fzf-integration"],
+        "missing_optional": ["fzf-integration"]
+      },
+      "platforms": {
+        "os": [],
+        "arch": [],
+        "shell": "zsh",
+        "min_version": "5.8"
+      },
+      "load": {
+        "files": ["git-aliases.zsh", "git-functions.zsh"]
+      },
+      "hooks": {
+        "pre_load": "git_check_version",
+        "post_load": "git_setup_completion"
+      },
+      "settings": {
+        "default_branch": "main",
+        "auto_fetch": "true"
+      },
+      "exports": {
+        "functions": ["gcp", "gf", "git_status_short"],
+        "aliases": ["gs", "ga", "gc", "gp", "gl"],
+        "environment_variables": [
+          "ZSH_MODULE_GIT_HELPERS_DEFAULT_BRANCH",
+          "ZSH_MODULE_GIT_HELPERS_AUTO_FETCH"
+        ]
+      }
+    }
+  ],
+  "incompatible_modules": []
+}
+```
+
+#### Filtering JSON Output
+
+```bash
+# Filter by module name (case-insensitive)
+zephyr list --json --filter=git
+
+# Filter with pretty printing
+zephyr list --json --pretty --filter=core
+```
+
+**Example with filter:**
+```bash
+$ zephyr list --json --pretty --filter=git
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-02-06T10:35:12Z",
+  "environment": { ... },
+  "summary": {
+    "total_modules": 1,
+    "compatible_modules": 1,
+    "incompatible_modules": 0
+  },
+  "modules": [
+    {
+      "name": "git-helpers",
+      "version": "2.0.1",
+      ...
+    }
+  ],
+  "incompatible_modules": []
+}
+```
+
+#### Using JSON with jq
+
+**List all module names:**
+```bash
+$ zephyr list --json | jq -r '.modules[].name'
+core
+colors
+git-helpers
+my-aliases
+```
+
+**Get modules with dependencies:**
+```bash
+$ zephyr list --json | jq '.modules[] | select(.dependencies.required | length > 0)'
+{
+  "name": "colors",
+  "dependencies": {
+    "required": ["core"],
+    ...
+  }
+}
+{
+  "name": "git-helpers",
+  "dependencies": {
+    "required": ["core", "colors"],
+    ...
+  }
+}
+```
+
+**Count total exported functions:**
+```bash
+$ zephyr list --json | jq '[.modules[].exports.functions[]] | length'
+15
+```
+
+**Find modules exporting a specific function:**
+```bash
+$ zephyr list --json | jq -r '.modules[] | select(.exports.functions[] | contains("mkcd")) | .name'
+core
+```
+
+**Get all aliases across all modules:**
+```bash
+$ zephyr list --json | jq -r '.modules[].exports.aliases[]' | sort -u
+ga
+gc
+gcp
+gf
+gl
+gp
+gs
+l
+la
+ll
+```
+
+**Check for missing optional dependencies:**
+```bash
+$ zephyr list --json | jq '.modules[] | select(.dependencies.missing_optional | length > 0) | {name, missing: .dependencies.missing_optional}'
+{
+  "name": "git-helpers",
+  "missing": ["fzf-integration"]
+}
+```
+
+**Get module load order:**
+```bash
+$ zephyr list --json | jq -r '.modules[] | "\(.load_order). \(.name) (priority: \(.priority))"'
+1. core (priority: 10)
+2. colors (priority: 20)
+3. git-helpers (priority: 50)
+4. my-aliases (priority: 100)
+```
+
+**Extract environment variables:**
+```bash
+$ zephyr list --json | jq -r '.modules[].exports.environment_variables[]' | sort -u
+ZSH_MODULE_COLORS_SCHEME
+ZSH_MODULE_CORE_AUTO_UPDATE
+ZSH_MODULE_CORE_THEME
+ZSH_MODULE_GIT_HELPERS_AUTO_FETCH
+ZSH_MODULE_GIT_HELPERS_DEFAULT_BRANCH
+```
+
+**Get incompatible modules with reasons:**
+```bash
+$ zephyr list --json | jq '.incompatible_modules[] | {name, reason}'
+{
+  "name": "linux-only",
+  "reason": "OS mismatch: requires linux, current: darwin"
+}
+```
+
+**Generate module dependency graph:**
+```bash
+$ zephyr list --json | jq -r '.modules[] | "\(.name) -> \(.dependencies.required | join(", "))"'
+core -> 
+colors -> core
+git-helpers -> core, colors
+my-aliases -> 
+```
+
+#### Integration with Scripts
+
+**Check if a module is loaded:**
+```bash
+#!/bin/bash
+MODULE_NAME="git-helpers"
+
+if zephyr list --json | jq -e ".modules[] | select(.name == \"$MODULE_NAME\")" > /dev/null; then
+    echo "✓ Module $MODULE_NAME is loaded"
+else
+    echo "✗ Module $MODULE_NAME is not loaded"
+fi
+```
+
+**Verify all required dependencies are met:**
+```bash
+#!/bin/bash
+MISSING=$(zephyr list --json | jq -r '.modules[] | select(.dependencies.missing_optional | length > 0) | .name')
+
+if [ -z "$MISSING" ]; then
+    echo "✓ All dependencies satisfied"
+else
+    echo "⚠ Modules with missing optional dependencies:"
+    echo "$MISSING"
+fi
+```
+
+**Generate documentation from JSON:**
+```bash
+#!/bin/bash
+# Generate markdown documentation of all modules
+
+echo "# Zephyr Modules"
+echo ""
+
+zephyr list --json | jq -r '.modules[] | "## \(.name) v\(.version)\n\n\(.description)\n\n**Priority:** \(.priority)\n**Dependencies:** \(.dependencies.required | join(", "))\n**Exports:** \(.exports.functions | length) functions, \(.exports.aliases | length) aliases\n"'
+```
+
+**Monitor module changes:**
+```bash
+#!/bin/bash
+# Save current module state and compare later
+
+zephyr list --json > /tmp/modules-before.json
+
+# ... make changes ...
+
+zephyr list --json > /tmp/modules-after.json
+
+# Compare
+diff <(jq -S . /tmp/modules-before.json) <(jq -S . /tmp/modules-after.json)
+```
+
+#### AI Assistant Integration
+
+**Query available functions:**
+```bash
+# AI can discover what shell functions are available
+$ zephyr list --json | jq '.modules[].exports.functions[]'
+"mkcd"
+"extract"
+"backup"
+"gcp"
+"gf"
+"git_status_short"
+```
+
+**Find modules by capability:**
+```bash
+# Find modules that export git-related functions
+$ zephyr list --json | jq -r '.modules[] | select(.exports.functions[] | contains("git")) | .name'
+git-helpers
+```
+
+**Get module metadata for context:**
+```bash
+# AI can understand module purpose and usage
+$ zephyr list --json | jq '.modules[] | {name, description, exports: .exports.functions}'
+{
+  "name": "core",
+  "description": "Core shell utilities and functions",
+  "exports": ["mkcd", "extract", "backup"]
+}
 ```
 
 ### Detailed Validation
