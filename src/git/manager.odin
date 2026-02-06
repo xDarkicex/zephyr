@@ -10,6 +10,7 @@ import "../debug"
 import "../errors"
 import "../loader"
 import "../manifest"
+import "../security"
 
 // Manager_Options controls user-facing behavior for git operations.
 Manager_Options :: struct {
@@ -18,6 +19,7 @@ Manager_Options :: struct {
 	confirm: bool,
 	allow_local: bool,
 	check_dependencies: bool,
+	unsafe: bool,
 }
 
 // Module_Manager_Error enumerates high-level operation failures.
@@ -157,6 +159,36 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 	defer cleanup_temp_install_result(&install_result)
 	if !install_result.success {
 		return false, format_manager_error(.Clone_Failed, install_result.error_message, module_name, "git clone")
+	}
+
+	colors.print_info("Scanning for security issues: %s", module_name)
+	scan_options := security.Scan_Options{
+		unsafe_mode = options.unsafe,
+		verbose = options.verbose,
+	}
+	scan_result := security.scan_module(install_result.temp_path, scan_options)
+	defer security.cleanup_scan_result(&scan_result)
+	if !scan_result.success {
+		cleanup_temp(install_result.temp_path)
+		return false, format_manager_error(.Validation_Failed, scan_result.error_message, module_name, "security scan")
+	}
+	if scan_result.critical_count > 0 || scan_result.warning_count > 0 {
+		report := security.format_scan_report(&scan_result, module_name)
+		fmt.println(report)
+		delete(report)
+	}
+	if security.should_block_install(&scan_result, options.unsafe) {
+		cleanup_temp(install_result.temp_path)
+		return false, format_manager_error(.Validation_Failed, "Critical security issues detected. Use --unsafe to override.", module_name, "security scan")
+	}
+	if scan_result.warning_count > 0 && !options.unsafe {
+		if !security.prompt_user_for_warnings(&scan_result, module_name) {
+			cleanup_temp(install_result.temp_path)
+			return false, format_manager_error(.Validation_Failed, "Installation cancelled by user", module_name, "security scan")
+		}
+	}
+	if options.unsafe && (scan_result.critical_count > 0 || scan_result.warning_count > 0) {
+		colors.print_warning("Unsafe mode enabled: security checks bypassed")
 	}
 
 	if options.verbose {
@@ -456,6 +488,39 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 			result.summary = strings.clone(fmt.tprintf("%s %s: pull failed", colors.error_symbol(), module_name))
 			return result
 		}
+
+	colors.print_info("Scanning for security issues: %s", module_name)
+	scan_options := security.Scan_Options{
+		unsafe_mode = options.unsafe,
+		verbose = options.verbose,
+	}
+	scan_result := security.scan_module(module_path, scan_options)
+	defer security.cleanup_scan_result(&scan_result)
+	if !scan_result.success {
+		result.message = format_manager_error(.Validation_Failed, scan_result.error_message, module_name, "security scan")
+		result.summary = strings.clone(fmt.tprintf("%s %s: security scan failed", colors.error_symbol(), module_name))
+		return result
+	}
+	if scan_result.critical_count > 0 || scan_result.warning_count > 0 {
+		report := security.format_scan_report(&scan_result, module_name)
+		fmt.println(report)
+		delete(report)
+	}
+	if security.should_block_install(&scan_result, options.unsafe) {
+		result.message = format_manager_error(.Validation_Failed, "Critical security issues detected. Use --unsafe to override.", module_name, "security scan")
+		result.summary = strings.clone(fmt.tprintf("%s %s: security scan blocked", colors.error_symbol(), module_name))
+		return result
+	}
+	if scan_result.warning_count > 0 && !options.unsafe {
+		if !security.prompt_user_for_warnings(&scan_result, module_name) {
+			result.message = format_manager_error(.Validation_Failed, "Update cancelled by user", module_name, "security scan")
+			result.summary = strings.clone(fmt.tprintf("%s %s: update cancelled", colors.error_symbol(), module_name))
+			return result
+		}
+	}
+	if options.unsafe && (scan_result.critical_count > 0 || scan_result.warning_count > 0) {
+		colors.print_warning("Unsafe mode enabled: security checks bypassed")
+	}
 
 	if options.verbose {
 		colors.print_info("Validating module: %s", module_name)

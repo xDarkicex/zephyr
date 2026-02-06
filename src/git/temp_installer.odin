@@ -6,6 +6,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:time"
 
+import "../security"
 // Temporary installation pipeline for cloning and moving modules atomically.
 // Ownership: Temp_Install_Result strings are owned by the caller.
 
@@ -69,6 +70,48 @@ install_to_temp :: proc(url: string, expected_name: string) -> Temp_Install_Resu
 
 	result.success = true
 	return result
+}
+
+scan_source :: proc(url: string) -> (security.Scan_Result, string, string) {
+	result := security.Scan_Result{success = false}
+	if url == "" {
+		result.error_message = strings.clone("empty URL")
+		return result, "", ""
+	}
+
+	temp_dir := create_temp_install_dir("zephyr-scan")
+	if temp_dir == "" {
+		result.error_message = strings.clone("failed to create scan directory")
+		return result, "", ""
+	}
+
+	clone_result := clone_repository(url, temp_dir)
+	defer cleanup_git_result(&clone_result)
+	if !clone_result.success {
+		if clone_result.message != "" {
+			result.error_message = strings.clone(clone_result.message)
+		} else {
+			result.error_message = strings.clone("clone failed")
+		}
+		cleanup_temp(temp_dir)
+		delete(temp_dir)
+		return result, "", ""
+	}
+
+	commit := ""
+	hash, hash_result := get_head_commit_hash(temp_dir)
+	defer cleanup_git_result(&hash_result)
+	if hash_result.success && hash != "" {
+		commit = hash
+	} else {
+		if hash != "" {
+			delete(hash)
+		}
+	}
+
+	scan_options := security.Scan_Options{}
+	scan_result := security.scan_module(temp_dir, scan_options)
+	return scan_result, temp_dir, commit
 }
 
 // move_to_final moves a temp install into the modules directory.

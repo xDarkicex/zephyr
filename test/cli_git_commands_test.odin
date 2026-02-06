@@ -83,3 +83,19 @@ test_cli_git_commands_end_to_end :: proc(t: ^testing.T) {
 	}
 	delete(installed_path)
 }
+
+// **Validates: Requirement 5.1**
+@(test)
+test_cli_git_install_unsafe_flag_parsing :: proc(t: ^testing.T) {
+	set_test_timeout(t)
+	reset_test_state(t)
+
+	original_args := os.args
+	defer os.args = original_args
+
+	os.args = []string{"zephyr", "install", "--unsafe", "https://example.com/test.git"}
+	options := cli.parse_install_options()
+
+	testing.expect(t, options.unsafe, "--unsafe flag should set options.unsafe")
+	testing.expect(t, options.manager_opts.unsafe, "--unsafe flag should set manager_opts.unsafe")
+}

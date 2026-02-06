@@ -35,6 +35,9 @@ color_codes := map[Color]string{
 // Global flag to control colored output
 colored_output_enabled := true
 
+Warning_Hook :: proc(message: string)
+warning_hook: Warning_Hook
+
 // init_colors initializes the colors module and detects terminal capabilities
 init_colors :: proc() {
     // Check if we're in a terminal that supports colors
@@ -98,6 +101,9 @@ print_error :: proc(format: string, args: ..any) {
 
 print_warning :: proc(format: string, args: ..any) {
     colored_text := warning(fmt.tprintf(format, ..args))
+    if warning_hook != nil {
+        warning_hook(colored_text)
+    }
     fmt.println(colored_text)
 }
 
@@ -141,4 +147,14 @@ enable_colors :: proc() {
 // Check if colors are enabled
 colors_enabled :: proc() -> bool {
     return colored_output_enabled
+}
+
+// set_warning_hook installs an optional test hook for warning messages.
+set_warning_hook :: proc(hook: Warning_Hook) {
+    warning_hook = hook
+}
+
+// clear_warning_hook removes the warning hook.
+clear_warning_hook :: proc() {
+    warning_hook = nil
 }

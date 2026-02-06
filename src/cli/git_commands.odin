@@ -12,6 +12,7 @@ import "../git"
 Install_Options :: struct {
 	url:          string,
 	allow_local:  bool,
+	unsafe:       bool,
 	manager_opts: git.Manager_Options,
 }
 
@@ -49,6 +50,11 @@ parse_install_options :: proc() -> Install_Options {
 		if arg == "--local" {
 			options.allow_local = true
 			options.manager_opts.allow_local = true
+			continue
+		}
+		if arg == "--unsafe" {
+			options.unsafe = true
+			options.manager_opts.unsafe = true
 			continue
 		}
 		if strings.has_prefix(arg, "-") {
@@ -124,7 +130,7 @@ install_command :: proc() {
 	options := parse_install_options()
 	if options.url == "" {
 		colors.print_error("Install source required")
-		fmt.eprintln("Usage: zephyr install <git-url> [--force] [--local]")
+		fmt.eprintln("Usage: zephyr install <git-url> [--force] [--local] [--unsafe]")
 		os.exit(1)
 	}
 

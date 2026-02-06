@@ -68,6 +68,8 @@ main :: proc() {
 		run_validate()
 	case "init":
 		run_init()
+	case "scan":
+		run_scan()
 	case "install":
 		run_install()
 	case "update":
@@ -121,6 +123,10 @@ run_init :: proc() {
 
 	debug.debug_info("Creating module: %s", module_name)
 	cli.init_module(module_name)
+}
+
+run_scan :: proc() {
+	cli.scan_command()
 }
 
 run_install :: proc() {
@@ -280,6 +286,7 @@ print_usage :: proc() {
 	fmt.println("    list        List discovered modules and their load order")
 	fmt.println("    validate    Validate all module manifests for errors")
 	fmt.println("    init        Create a new module skeleton")
+	fmt.println("    scan        Scan a module source for security findings")
 	fmt.println("    install     Install a module from a git repository")
 	fmt.println("    update      Update installed modules")
 	fmt.println("    uninstall   Remove an installed module")
@@ -291,7 +298,10 @@ print_usage :: proc() {
 	fmt.println("    zephyr --debug list       # Show modules with debug information")
 	fmt.println("    zephyr validate           # Check manifests for errors")
 	fmt.println("    zephyr init my-module     # Create new module 'my-module'")
+	fmt.println("    zephyr scan <git-url>     # Scan a module for security findings")
+	fmt.println("    zephyr scan <git-url> --json  # Emit JSON scan report (agent-friendly)")
 	fmt.println("    zephyr install <git-url>  # Install a module from git")
+	fmt.println("    zephyr install --unsafe <git-url>  # Install despite security findings")
 	fmt.println("    zephyr update             # Update all modules")
 	fmt.println("    zephyr update my-module   # Update a single module")
 	fmt.println("    zephyr uninstall my-module # Remove a module")

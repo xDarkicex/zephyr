@@ -17,7 +17,7 @@ Zephyr is a shell module loader system that manages dependencies, load order, an
 - 🛠️ **Developer Friendly**: Simple TOML configuration
 - 🐛 **Excellent Debugging**: Verbose output, colored errors, and helpful suggestions
 - 🎨 **Beautiful Output**: Colored terminal output with clear formatting
-- 🤖 **Machine Readable**: JSON export for AI assistants and automation tools
+- 🤖 **Machine Readable**: JSON security scan output for AI assistants and automation tools
 
 ## Table of Contents
 
@@ -445,11 +445,42 @@ zephyr install --local /path/to/module-repo
 
 # Reinstall an existing module
 zephyr install --force https://github.com/user/zephyr-git-helpers
+
+# Install despite critical security findings (bypass scan)
+zephyr install --unsafe https://github.com/user/zephyr-git-helpers
 ```
+
+**Flags:**
+- `--force`: Reinstall if the module already exists
+- `--local`: Treat the source as a local path
+- `--unsafe`: Bypass security scan blocking (still prints findings)
 
 **Notes:**
 - Git commands require libgit2 to be installed and discoverable at build time.
 - The module name is derived from the repo name (with `zephyr-module-` and `zephyr-` prefixes stripped).
+- Install runs a security scan after clone; critical findings block install and warnings require confirmation unless `--unsafe` is used.
+
+### `zephyr scan <source>`
+
+Scans a module source for security findings **without** installing it. This is the recommended entry point for
+agent frameworks or CI workflows that need machine-readable security signals.
+
+```bash
+# Human-friendly scan report
+zephyr scan https://github.com/user/zephyr-git-helpers
+
+# Machine-readable scan report
+zephyr scan https://github.com/user/zephyr-git-helpers --json
+```
+
+**JSON output (stable schema):**
+- `schema_version`: current schema version (string, currently `1.0`)
+- `scan_summary`: counts and timing (files, lines, duration, finding counts)
+- `findings`: list of findings with severity, file, line, snippet, and bypass hint
+- `policy_recommendation`: `allow`, `warn`, or `block`
+- `exit_code_hint`: `0` (clean), `1` (warnings), `2` (critical)
+
+See `docs/SECURITY_SCAN.md` for the full schema and exit code contract.
 
 ### `zephyr update [module-name]`
 
@@ -464,6 +495,7 @@ zephyr update git-helpers
 ```
 
 If a validation check fails after pulling, Zephyr attempts to roll back the module to the previous commit.
+Updates also run the security scan; critical findings block the update and warnings require confirmation.
 
 ### `zephyr uninstall <module-name>`
 
