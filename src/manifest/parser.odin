@@ -24,6 +24,10 @@ ParseResult :: struct {
 // Note: This is a simplified implementation until core:encoding/toml is available
 parse :: proc(file_path: string) -> (Module, bool) {
     result := parse_detailed(file_path)
+    if result.message != "" {
+        delete(result.message)
+        result.message = ""
+    }
     return result.module, result.error == .None
 }
 
@@ -36,7 +40,7 @@ parse_detailed :: proc(file_path: string) -> ParseResult {
     // Check if file exists
     if !os.exists(file_path) {
         result.error = .FileNotFound
-        result.message = fmt.tprintf("Manifest file not found: %s", file_path)
+        result.message = strings.clone("Manifest file not found")  // ✅ CRITICAL FIX: No fmt.tprintf
         return result
     }
     
@@ -44,14 +48,14 @@ parse_detailed :: proc(file_path: string) -> ParseResult {
     data, read_ok := os.read_entire_file(file_path)
     if !read_ok {
         result.error = .FileReadError
-        result.message = fmt.tprintf("Failed to read manifest file: %s", file_path)
+        result.message = strings.clone("Failed to read manifest file")  // ✅ CRITICAL FIX: No fmt.tprintf
         return result
     }
     defer delete(data)
     
     // Initialize module with defaults
     result.module = Module{
-        version = strings.clone("0.0.0"),  // ✅ CRITICAL FIX: Clone string literals
+        version = "",  // ✅ CRITICAL FIX: Start with empty string, set during parsing
         priority = 100, // Default priority
         required = make([dynamic]string),
         optional = make([dynamic]string),
@@ -103,7 +107,7 @@ parse_detailed :: proc(file_path: string) -> ParseResult {
                     case "name":
                         if len(value) == 0 {
                             result.error = .InvalidSchema
-                            result.message = fmt.tprintf("Invalid or empty 'name' field in [module] section of %s", file_path)
+                            result.message = strings.clone(fmt.tprintf("Invalid or empty 'name' field in [module] section of %s", file_path))
                             // Clean up partially initialized module before returning
                             cleanup_module(&result.module)
                             return result
@@ -269,7 +273,7 @@ parse_detailed :: proc(file_path: string) -> ParseResult {
                         }
                     }
                 case "settings":
-                    result.module.settings[strings.clone(key)] = strings.clone(value)
+                    AddSetting(&result.module, key, value)
                 }
             }
         }
@@ -278,10 +282,15 @@ parse_detailed :: proc(file_path: string) -> ParseResult {
     // Validate that we have at least a module name
     if len(result.module.name) == 0 {
         result.error = .InvalidSchema
-        result.message = fmt.tprintf("Missing required 'name' field in [module] section of %s", file_path)
+        result.message = strings.clone("Missing required 'name' field in [module] section")  // ✅ CRITICAL FIX: No fmt.tprintf
         // Clean up partially initialized module before returning
         cleanup_module(&result.module)
         return result
+    }
+    
+    // Set default version if none was provided
+    if result.module.version == "" {
+        result.module.version = strings.clone("0.0.0")
     }
     
     return result

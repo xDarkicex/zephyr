@@ -69,6 +69,8 @@ version = "%s"`, name, version)
 // **Validates: Requirements 3.1.1, 3.1.2**
 @(test)
 test_property_manifest_parsing_roundtrip :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: A valid TOML manifest should parse successfully and contain expected data
     // Property: All parsed fields should match the input values
     
@@ -202,6 +204,8 @@ version = "1.0.0"`
 // **Validates: Requirements 4.2.1**
 @(test)
 test_property_manifest_parsing_error_handling :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Invalid TOML should be handled gracefully
     // Property: Error conditions should be detected and reported
     
@@ -236,6 +240,8 @@ test_property_manifest_parsing_error_handling :: proc(t: ^testing.T) {
 // **Validates: Requirements 4.2.2**
 @(test)
 test_property_manifest_parsing_nonexistent_file :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Non-existent files should be handled gracefully
     
     nonexistent_files := []string{
@@ -286,6 +292,8 @@ version = "1.0.0"`
 // **Validates: Requirements 3.1.1, 3.1.2**
 @(test)
 test_property_manifest_parsing_field_combinations :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Various combinations of optional fields should parse correctly
     
     field_combinations := []struct{

@@ -11,6 +11,8 @@ import "../src/manifest"
 // **Validates: Requirements 3.3.1, 3.3.5**
 @(test)
 test_dependency_resolution_acyclicity :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Resolved module order must never contain cycles
     // Property: All modules with satisfied dependencies must be included
     
@@ -73,6 +75,7 @@ test_dependency_resolution_acyclicity :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should succeed
     testing.expect(t, len(err) == 0, fmt.tprintf("Resolution should succeed, got error: %s", err))
@@ -83,6 +86,7 @@ test_dependency_resolution_acyclicity :: proc(t: ^testing.T) {
         
         // Property: Dependencies must be satisfied (C before B, B before A)
         module_positions := make(map[string]int)
+        defer delete(module_positions)
         
         for module, idx in resolved {
             module_positions[module.name] = idx
@@ -102,11 +106,15 @@ test_dependency_resolution_acyclicity :: proc(t: ^testing.T) {
         testing.expect_value(t, resolved[1].name, "module-b")
         testing.expect_value(t, resolved[2].name, "module-a")
     }
+
+    cleanup_resolved_and_cache(resolved)
 }
 
 // **Validates: Requirements 3.3.2**
 @(test)
 test_circular_dependency_detection :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Circular dependencies must be detected and reported
     
     // Create test modules with circular dependency: A -> B -> A
@@ -152,6 +160,7 @@ test_circular_dependency_detection :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should fail with circular dependency error
     testing.expect(t, len(err) > 0, "Should detect circular dependency")
@@ -161,11 +170,15 @@ test_circular_dependency_detection :: proc(t: ^testing.T) {
     // Property: No modules should be resolved when there's a cycle
     testing.expect(t, resolved == nil || len(resolved) == 0, 
         "No modules should be resolved when circular dependency exists")
+
+    cleanup_resolved_and_cache(resolved)
 }
 
 // **Validates: Requirements 3.3.3**
 @(test)
 test_missing_dependency_detection :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Missing required dependencies must be detected and reported
     
     // Create test module with missing dependency
@@ -194,6 +207,7 @@ test_missing_dependency_detection :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should fail with missing dependency error
     testing.expect(t, len(err) > 0, "Should detect missing dependency")
@@ -201,11 +215,15 @@ test_missing_dependency_detection :: proc(t: ^testing.T) {
         fmt.tprintf("Error should mention missing dependency, got: %s", err))
     testing.expect(t, strings.contains(err, "nonexistent-module"), 
         fmt.tprintf("Error should mention the missing module name, got: %s", err))
+
+    cleanup_resolved_and_cache(resolved)
 }
 
 // **Validates: Requirements 3.3.4**
 @(test)
 test_priority_ordering_within_constraints :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Modules should be sorted by priority within dependency constraints
     
     // Create test modules with same dependencies but different priorities
@@ -267,6 +285,7 @@ test_priority_ordering_within_constraints :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should succeed
     testing.expect(t, len(err) == 0, fmt.tprintf("Resolution should succeed, got error: %s", err))
@@ -283,11 +302,15 @@ test_priority_ordering_within_constraints :: proc(t: ^testing.T) {
         testing.expect_value(t, resolved[1].name, "high-priority")
         testing.expect_value(t, resolved[2].name, "low-priority")
     }
+
+    cleanup_resolved_and_cache(resolved)
 }
 
 // **Validates: Requirements 3.3.5**
 @(test)
 test_no_dependencies_handling :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Modules with no dependencies should be handled correctly
     
     // Create test modules with no dependencies
@@ -331,6 +354,7 @@ test_no_dependencies_handling :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should succeed
     testing.expect(t, len(err) == 0, fmt.tprintf("Resolution should succeed, got error: %s", err))
@@ -343,11 +367,15 @@ test_no_dependencies_handling :: proc(t: ^testing.T) {
         testing.expect_value(t, resolved[0].name, "module-a") // priority 10
         testing.expect_value(t, resolved[1].name, "module-b") // priority 20
     }
+
+    cleanup_resolved_and_cache(resolved)
 }
 
 // **Validates: Requirements 3.3.1**
 @(test)
 test_complex_dependency_graph :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Complex dependency graphs should resolve correctly
     
     // Create a complex dependency graph:
@@ -451,6 +479,7 @@ test_complex_dependency_graph :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should succeed
     testing.expect(t, len(err) == 0, fmt.tprintf("Resolution should succeed, got error: %s", err))
@@ -461,6 +490,7 @@ test_complex_dependency_graph :: proc(t: ^testing.T) {
         
         // Property: Dependencies must be satisfied
         module_positions := make(map[string]int)
+        defer delete(module_positions)
         
         for module, idx in resolved {
             module_positions[module.name] = idx
@@ -483,11 +513,15 @@ test_complex_dependency_graph :: proc(t: ^testing.T) {
         // A should be last
         testing.expect_value(t, resolved[len(resolved)-1].name, "module-a")
     }
+
+    cleanup_resolved_and_cache(resolved)
 }
 
 // **Validates: Requirements 3.3.1, 3.3.4**
 @(test)
 test_diamond_dependency_pattern :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Diamond dependency patterns should resolve correctly
     // Pattern: A depends on B and C, both B and C depend on D
     //     A
@@ -572,6 +606,7 @@ test_diamond_dependency_pattern :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should succeed
     testing.expect(t, len(err) == 0, fmt.tprintf("Resolution should succeed, got error: %s", err))
@@ -585,6 +620,7 @@ test_diamond_dependency_pattern :: proc(t: ^testing.T) {
         
         // Property: B and C should come before A
         module_positions := make(map[string]int)
+        defer delete(module_positions)
         for module, idx in resolved {
             module_positions[module.name] = idx
         }
@@ -601,11 +637,15 @@ test_diamond_dependency_pattern :: proc(t: ^testing.T) {
         // Property: A should be last
         testing.expect_value(t, resolved[len(resolved)-1].name, "module-a")
     }
+
+    cleanup_resolved_and_cache(resolved)
 }
 
 // **Validates: Requirements 3.3.2**
 @(test)
 test_self_dependency_detection :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Self-dependencies should be detected as circular
     
     modules := make([dynamic]manifest.Module)
@@ -633,16 +673,21 @@ test_self_dependency_detection :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should fail with circular dependency error
     testing.expect(t, len(err) > 0, "Should detect self-dependency as circular")
     testing.expect(t, strings.contains(err, "Circular dependency"), 
         fmt.tprintf("Error should mention circular dependency, got: %s", err))
+
+    cleanup_resolved_and_cache(resolved)
 }
 
 // **Validates: Requirements 3.3.2**
 @(test)
 test_three_way_circular_dependency :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Three-way circular dependencies should be detected
     // Pattern: A -> B -> C -> A
     
@@ -705,16 +750,21 @@ test_three_way_circular_dependency :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should fail with circular dependency error
     testing.expect(t, len(err) > 0, "Should detect three-way circular dependency")
     testing.expect(t, strings.contains(err, "Circular dependency"), 
         fmt.tprintf("Error should mention circular dependency, got: %s", err))
+
+    cleanup_resolved_and_cache(resolved)
 }
 
 // **Validates: Requirements 3.3.3**
 @(test)
 test_multiple_missing_dependencies :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Multiple missing dependencies should be reported
     
     modules := make([dynamic]manifest.Module)
@@ -743,6 +793,7 @@ test_multiple_missing_dependencies :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should fail with missing dependency error
     testing.expect(t, len(err) > 0, "Should detect missing dependencies")
@@ -752,11 +803,15 @@ test_multiple_missing_dependencies :: proc(t: ^testing.T) {
     // Property: Error should mention the first missing dependency found
     testing.expect(t, strings.contains(err, "nonexistent-1") || strings.contains(err, "nonexistent-2"), 
         fmt.tprintf("Error should mention one of the missing dependencies, got: %s", err))
+
+    cleanup_resolved_and_cache(resolved)
 }
 
 // **Validates: Requirements 3.3.1**
 @(test)
 test_large_dependency_graph :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Large dependency graphs should resolve efficiently
     
     modules := make([dynamic]manifest.Module)
@@ -812,16 +867,18 @@ test_large_dependency_graph :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should succeed
     testing.expect(t, len(err) == 0, fmt.tprintf("Resolution should succeed for large graph, got error: %s", err))
     
-    if len(err) == 0 {
-        // Property: All modules should be included
-        testing.expect_value(t, len(resolved), len(module_names))
+	if len(err) == 0 {
+		// Property: All modules should be included
+		testing.expect_value(t, len(resolved), len(module_names))
         
         // Property: Dependencies must be satisfied
         module_positions := make(map[string]int)
+        defer delete(module_positions)
         for module, idx in resolved {
             module_positions[module.name] = idx
         }
@@ -838,15 +895,19 @@ test_large_dependency_graph :: proc(t: ^testing.T) {
         testing.expect(t, module_positions["level3b"] < module_positions["top"], 
             "level3b should come before top")
         
-        // Property: Base should be first, top should be last
-        testing.expect_value(t, resolved[0].name, "base")
-        testing.expect_value(t, resolved[len(resolved)-1].name, "top")
-    }
+		// Property: Base should be first, top should be last
+		testing.expect_value(t, resolved[0].name, "base")
+		testing.expect_value(t, resolved[len(resolved)-1].name, "top")
+	}
+
+	cleanup_resolved_and_cache(resolved)
 }
 
 // **Validates: Requirements 3.3.4**
 @(test)
 test_priority_with_optional_dependencies :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Optional dependencies should not affect resolution order
     // but priority should still be respected among modules with satisfied dependencies
     
@@ -909,6 +970,7 @@ test_priority_with_optional_dependencies :: proc(t: ^testing.T) {
     
     // Resolve dependencies
     resolved, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     
     // Property: Resolution should succeed despite optional missing dependency
     testing.expect(t, len(err) == 0, fmt.tprintf("Resolution should succeed with optional missing deps, got error: %s", err))
@@ -924,4 +986,6 @@ test_priority_with_optional_dependencies :: proc(t: ^testing.T) {
         testing.expect_value(t, resolved[1].name, "high-priority")
         testing.expect_value(t, resolved[2].name, "low-priority")
     }
+
+    cleanup_resolved_and_cache(resolved)
 }

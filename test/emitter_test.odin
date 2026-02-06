@@ -12,6 +12,8 @@ import "../src/manifest"
 // **Validates: Requirements 3.4.1, 3.4.2, 3.4.3, 3.4.4, 3.4.5, 3.4.6**
 @(test)
 test_shell_code_syntax_validity :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Generated shell code must be syntactically valid ZSH
     // Property: All exported variables must follow ZSH_MODULE_* convention
     // Property: All file paths must be properly quoted and validated
@@ -49,8 +51,8 @@ test_shell_code_syntax_validity :: proc(t: ^testing.T) {
     // Add some files and settings
     append(&test_module.files, strings.clone("init.zsh"))
     append(&test_module.files, strings.clone("functions.zsh"))
-    test_module.settings["debug"] = strings.clone("true")
-    test_module.settings["timeout"] = strings.clone("30")
+    manifest.AddSetting(&test_module, "debug", "true")
+    manifest.AddSetting(&test_module, "timeout", "30")
     
     append(&modules, test_module)
     
@@ -81,6 +83,8 @@ test_shell_code_syntax_validity :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.4.2**
 @(test)
 test_environment_variable_naming :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Environment variables should follow ZSH_MODULE_* convention
     
     modules := make([dynamic]manifest.Module)
@@ -106,10 +110,10 @@ test_environment_variable_naming :: proc(t: ^testing.T) {
     }
     
     // Add settings with various key formats
-    test_module.settings["debug"] = strings.clone("true")
-    test_module.settings["log_level"] = strings.clone("info")
-    test_module.settings["max-retries"] = strings.clone("5")
-    test_module.settings["timeout_ms"] = strings.clone("1000")
+    manifest.AddSetting(&test_module, "debug", "true")
+    manifest.AddSetting(&test_module, "log_level", "info")
+    manifest.AddSetting(&test_module, "max-retries", "5")
+    manifest.AddSetting(&test_module, "timeout_ms", "1000")
     
     append(&modules, test_module)
     
@@ -127,6 +131,8 @@ test_environment_variable_naming :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.4.3, 3.4.5**
 @(test)
 test_hook_safety_checks :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Hooks should include safety checks for function existence
     
     modules := make([dynamic]manifest.Module)
@@ -168,6 +174,8 @@ test_hook_safety_checks :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.4.3, 3.4.5**
 @(test)
 test_unsafe_hook_names :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Unsafe hook names should be rejected
     
     modules := make([dynamic]manifest.Module)
@@ -209,6 +217,8 @@ test_unsafe_hook_names :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.4.4**
 @(test)
 test_file_path_quoting :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: File paths should be properly quoted for shell safety
     
     modules := make([dynamic]manifest.Module)
@@ -253,6 +263,8 @@ test_file_path_quoting :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.4.6**
 @(test)
 test_metadata_comments :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Generated code should include metadata comments
     
     modules := make([dynamic]manifest.Module)
@@ -296,6 +308,8 @@ test_metadata_comments :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.4.1**
 @(test)
 test_multiple_modules_emission :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Multiple modules should be emitted in correct order
     
     modules := make([dynamic]manifest.Module)
@@ -322,7 +336,8 @@ test_multiple_modules_emission :: proc(t: ^testing.T) {
         }
         
         append(&module.files, strings.clone("init.zsh"))
-        module.settings["index"] = strings.clone(fmt.tprintf("%d", i))
+        index_value := fmt.tprintf("%d", i)
+        manifest.AddSetting(&module, "index", index_value)
         
         append(&modules, module)
     }
@@ -338,13 +353,16 @@ test_multiple_modules_emission :: proc(t: ^testing.T) {
         testing.expect_value(t, module.name, expected_name)
         testing.expect_value(t, len(module.files), 1)
         testing.expect_value(t, module.files[0], "init.zsh")
-        testing.expect_value(t, module.settings["index"], fmt.tprintf("%d", idx))
+        expected_index := fmt.tprintf("%d", idx)
+        testing.expect_value(t, module.settings["index"], expected_index)
     }
 }
 
 // **Validates: Requirements 3.4.2**
 @(test)
 test_settings_value_escaping :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Settings values should be properly escaped for shell
     
     modules := make([dynamic]manifest.Module)
@@ -370,10 +388,10 @@ test_settings_value_escaping :: proc(t: ^testing.T) {
     }
     
     // Add settings with special characters that need escaping
-    test_module.settings["quoted"] = strings.clone("value with \"quotes\"")
-    test_module.settings["dollar"] = strings.clone("value with $variables")
-    test_module.settings["backtick"] = strings.clone("value with `commands`")
-    test_module.settings["backslash"] = strings.clone("value with \\backslashes")
+    manifest.AddSetting(&test_module, "quoted", "value with \"quotes\"")
+    manifest.AddSetting(&test_module, "dollar", "value with $variables")
+    manifest.AddSetting(&test_module, "backtick", "value with `commands`")
+    manifest.AddSetting(&test_module, "backslash", "value with \\backslashes")
     
     append(&modules, test_module)
     

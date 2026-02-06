@@ -21,6 +21,7 @@ init_module :: proc(module_name: string) {
     
     // Get modules directory
     modules_dir := loader.get_modules_dir()
+    defer delete(modules_dir)
     
     // Create the module directory path
     module_dir := filepath.join({modules_dir, module_name})

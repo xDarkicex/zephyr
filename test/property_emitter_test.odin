@@ -44,9 +44,9 @@ generate_shell_test_module :: proc(name: string, priority: int, has_hooks: bool,
     }
     
     if has_settings {
-        module.settings["debug"] = strings.clone("true")
-        module.settings["timeout"] = strings.clone("30")
-        module.settings["log_level"] = strings.clone("info")
+        manifest.AddSetting(&module, "debug", "true")
+        manifest.AddSetting(&module, "timeout", "30")
+        manifest.AddSetting(&module, "log_level", "info")
     }
     
     if has_files {
@@ -80,9 +80,9 @@ generate_special_char_module :: proc(base_name: string, special_suffix: string) 
     append(&module.files, strings.clone("file$with$dollars.zsh"))
     
     // Add settings with special characters
-    module.settings["key-with-dashes"] = strings.clone("value with spaces")
-    module.settings["key_with_underscores"] = strings.clone("value\"with\"quotes")
-    module.settings["key$with$dollars"] = strings.clone("value$with$dollars")
+    manifest.AddSetting(&module, "key-with-dashes", "value with spaces")
+    manifest.AddSetting(&module, "key_with_underscores", "value\"with\"quotes")
+    manifest.AddSetting(&module, "key$with$dollars", "value$with$dollars")
     
     return module
 }
@@ -154,6 +154,8 @@ check_hook_safety :: proc(t: ^testing.T, output: string, test_name: string) {
 // **Validates: Requirements 3.4.1, 3.4.2, 3.4.6**
 @(test)
 test_property_shell_code_syntax_validity :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Generated shell code must be syntactically valid ZSH
     // Property: All exported variables must follow ZSH_MODULE_* convention
     // Property: Generated code must include proper metadata comments
@@ -225,6 +227,8 @@ test_property_shell_code_syntax_validity :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.4.2, 3.4.4**
 @(test)
 test_property_shell_code_special_characters :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Shell code generation should handle special characters safely
     // Property: File paths should be properly quoted for shell safety
     // Property: Environment variable names should be sanitized
@@ -274,6 +278,8 @@ test_property_shell_code_special_characters :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.4.3, 3.4.5**
 @(test)
 test_property_shell_code_hook_safety :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Hook execution must include safety checks
     // Property: Hooks must be checked for existence before execution
     
@@ -334,6 +340,8 @@ test_property_shell_code_hook_safety :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.4.1**
 @(test)
 test_property_shell_code_multiple_modules :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Multiple modules should be emitted in correct order
     // Property: Each module should be properly separated in output
     
@@ -366,7 +374,8 @@ test_property_shell_code_multiple_modules :: proc(t: ^testing.T) {
                 
                 // Add some content to each module
                 append(&module.files, strings.clone("init.zsh"))
-                module.settings["module_id"] = strings.clone(fmt.tprintf("%d", i))
+                module_id := fmt.tprintf("%d", i)
+                manifest.AddSetting(&module, "module_id", module_id)
                 
                 append(&modules, module)
             }
@@ -386,7 +395,8 @@ test_property_shell_code_multiple_modules :: proc(t: ^testing.T) {
                 expected_name := fmt.tprintf("multi-module-%d-%d", iteration, idx)
                 testing.expect_value(t, module.name, expected_name)
                 testing.expect_value(t, len(module.files), 1)
-                testing.expect_value(t, module.settings["module_id"], fmt.tprintf("%d", idx))
+                expected_id := fmt.tprintf("%d", idx)
+                testing.expect_value(t, module.settings["module_id"], expected_id)
             }
         }
     }

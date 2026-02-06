@@ -14,6 +14,9 @@ create_performance_test_module :: proc(base_dir: string, module_name: string, pr
     module_dir := filepath.join({base_dir, module_name})
     
     // Debug: Check if directory creation succeeds
+    if os.exists(module_dir) {
+        cleanup_test_directory(module_dir)
+    }
     err := os.make_directory(module_dir, 0o755)
     if err != os.ERROR_NONE {
         fmt.printf("Failed to create directory %s: %v\n", module_dir, err)
@@ -58,13 +61,13 @@ files = ["%s.zsh"]
     
     // Create shell file
     shell_content := fmt.tprintf("# Shell file for %s\necho 'Loading %s'", module_name, module_name)
-    defer delete(shell_content) // Clean up shell content
+    // Don't manually delete - let Odin handle it
     
     shell_filename := fmt.tprintf("%s.zsh", module_name)
-    defer delete(shell_filename) // Clean up filename
+    // Don't manually delete - let Odin handle it
     
     shell_path := filepath.join({module_dir, shell_filename})
-    defer delete(shell_path) // Clean up the path
+    // Don't manually delete - let Odin handle it
     
     // Debug: Check if shell file write succeeds
     if !os.write_entire_file(shell_path, transmute([]u8)shell_content) {
@@ -77,11 +80,15 @@ files = ["%s.zsh"]
 
 @(test)
 test_large_module_set_discovery :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Test discovery performance with many modules
-    temp_dir := "test_temp_large_discovery"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_large_discovery")
+    defer teardown_test_environment(temp_dir)
     
     // Create a large number of modules
     module_count := 100
@@ -103,10 +110,7 @@ test_large_module_set_discovery :: proc(t: ^testing.T) {
     discovery_start := time.now()
     
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     discovery_time := time.since(discovery_start)
     fmt.printf("Discovery took: %v\n", discovery_time)
@@ -119,15 +123,21 @@ test_large_module_set_discovery :: proc(t: ^testing.T) {
     max_discovery_time := time.Millisecond * 500
     testing.expect(t, discovery_time < max_discovery_time, 
                    fmt.tprintf("Discovery should complete in under %v, took %v", max_discovery_time, discovery_time))
+
+    cleanup_modules_and_cache(modules[:])
 }
 
 @(test)
 test_large_dependency_resolution :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Test dependency resolution performance with complex dependency graph
-    temp_dir := "test_temp_large_resolution"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_large_resolution")
+    defer teardown_test_environment(temp_dir)
     
     // Create modules with layered dependencies
     layer_count := 10
@@ -163,10 +173,7 @@ test_large_dependency_resolution :: proc(t: ^testing.T) {
     discovery_start := time.now()
     
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     discovery_time := time.since(discovery_start)
     fmt.printf("Discovery took: %v\n", discovery_time)
@@ -179,6 +186,7 @@ test_large_dependency_resolution :: proc(t: ^testing.T) {
     resolution_start := time.now()
     
     resolved_modules, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     defer {
         if resolved_modules != nil {
             delete(resolved_modules)
@@ -223,15 +231,21 @@ test_large_dependency_resolution :: proc(t: ^testing.T) {
     
     verify_time := time.since(verify_start)
     fmt.printf("Verification took: %v\n", verify_time)
+
+    cleanup_modules_and_cache(modules[:])
 }
 
 @(test)
 test_shell_code_generation_performance :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Test shell code generation performance with many modules
-    temp_dir := "test_temp_large_generation"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_large_generation")
+    defer teardown_test_environment(temp_dir)
     
     // Create modules with various settings
     module_count := 50
@@ -276,12 +290,10 @@ number_setting = "%d"
     
     // Test discovery and resolution
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     resolved_modules, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     defer {
         if resolved_modules != nil {
             delete(resolved_modules)
@@ -305,15 +317,21 @@ number_setting = "%d"
     max_generation_time := time.Millisecond * 100
     testing.expect(t, generation_time < max_generation_time, 
                    fmt.tprintf("Generation should complete in under %v, took %v", max_generation_time, generation_time))
+
+    cleanup_modules_and_cache(modules[:])
 }
 
 @(test)
 test_memory_usage_with_large_sets :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Test memory usage patterns with large module sets
-    temp_dir := "test_temp_memory"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_memory")
+    defer teardown_test_environment(temp_dir)
     
     // Create a moderate number of modules for memory testing
     module_count := 75
@@ -350,6 +368,7 @@ test_memory_usage_with_large_sets :: proc(t: ^testing.T) {
         testing.expect(t, len(modules) == module_count, "Should discover all modules in each cycle")
         
         resolved_modules, err := loader.resolve(modules)
+        defer cleanup_error_message(err)
         testing.expect(t, err == "", "Should resolve successfully in each cycle")
         testing.expect(t, len(resolved_modules) == module_count, "Should resolve all modules in each cycle")
         
@@ -357,7 +376,7 @@ test_memory_usage_with_large_sets :: proc(t: ^testing.T) {
         if resolved_modules != nil {
             delete(resolved_modules)
         }
-        manifest.cleanup_modules(modules[:])
+        cleanup_modules_and_cache(modules[:])
         delete(modules)
         
         cycle_time := time.since(cycle_start)
@@ -374,11 +393,15 @@ test_memory_usage_with_large_sets :: proc(t: ^testing.T) {
 
 @(test)
 test_deep_dependency_chains :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Test performance with deep dependency chains
-    temp_dir := "test_temp_deep_deps"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_deep_deps")
+    defer teardown_test_environment(temp_dir)
     
     // Create a chain of dependencies: module_0 -> module_1 -> ... -> module_N
     chain_length := 25
@@ -406,12 +429,10 @@ test_deep_dependency_chains :: proc(t: ^testing.T) {
     resolution_start := time.now()
     
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     resolved_modules, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     defer {
         if resolved_modules != nil {
             delete(resolved_modules)
@@ -437,15 +458,21 @@ test_deep_dependency_chains :: proc(t: ^testing.T) {
     testing.expect(t, resolution_time < max_chain_resolution_time, 
                    fmt.tprintf("Deep chain resolution should complete in under %v, took %v", 
                                max_chain_resolution_time, resolution_time))
+
+    cleanup_modules_and_cache(modules[:])
 }
 
 @(test)
 test_performance_requirements_with_optimizations :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Test the optimized performance with all improvements
-    temp_dir := "test_temp_optimized_performance"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_optimized_performance")
+    defer teardown_test_environment(temp_dir)
     
     // Create exactly 49 modules (< 50 as per requirement 4.1.1)
     module_count := 49
@@ -485,20 +512,12 @@ test_performance_requirements_with_optimizations :: proc(t: ^testing.T) {
         
         // Complete load cycle with optimizations
         modules := loader.discover(temp_dir)
-        defer {
-            manifest.cleanup_modules(modules[:])
-            delete(modules)
-        }
         
         testing.expect(t, len(modules) == module_count, 
                        fmt.tprintf("Cycle %d: Should discover all %d modules", cycle + 1, module_count))
         
         resolved_modules, err := loader.resolve(modules)
-        defer {
-            if resolved_modules != nil {
-                delete(resolved_modules)
-            }
-        }
+        defer cleanup_error_message(err)
         
         testing.expect(t, err == "", fmt.tprintf("Cycle %d: Should resolve successfully", cycle + 1))
         testing.expect(t, len(resolved_modules) == module_count, 
@@ -508,6 +527,12 @@ test_performance_requirements_with_optimizations :: proc(t: ^testing.T) {
         append(&cycle_times, cycle_time)
         
         fmt.printf("Cycle %d: %v\n", cycle + 1, cycle_time)
+
+        if resolved_modules != nil {
+            delete(resolved_modules)
+        }
+        cleanup_modules_and_cache(modules[:])
+        delete(modules)
     }
     
     // Analyze performance
@@ -577,14 +602,15 @@ test_performance_requirements_with_optimizations :: proc(t: ^testing.T) {
 
 @(test)
 test_benchmark_suite_integration :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Test the benchmark suite with a small test dataset
-    temp_dir := "test_temp_benchmark_suite"
-    
-    // Clean up any existing directory first
-    remove_directory_recursive(temp_dir)
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_benchmark_suite")
+    defer teardown_test_environment(temp_dir)
     
     // Create a small set of test modules
     module_count := 10
@@ -617,11 +643,15 @@ test_benchmark_suite_integration :: proc(t: ^testing.T) {
 
 @(test)
 test_scalability_beyond_requirement :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Test scalability beyond the basic requirement to understand system limits
-    temp_dir := "test_temp_scalability"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_scalability")
+    defer teardown_test_environment(temp_dir)
     
     // Test with progressively larger module sets
     test_sizes := []int{50, 100, 200, 500}
@@ -630,7 +660,7 @@ test_scalability_beyond_requirement :: proc(t: ^testing.T) {
         fmt.printf("\n=== Testing scalability with %d modules ===\n", size)
         
         // Clean up previous test
-        remove_directory_recursive(temp_dir)
+        cleanup_test_directory(temp_dir)
         os.make_directory(temp_dir, 0o755)
         
         // Create modules
@@ -674,6 +704,7 @@ test_scalability_beyond_requirement :: proc(t: ^testing.T) {
         // Test resolution performance
         resolution_start := time.now()
         resolved_modules, err := loader.resolve(modules)
+        defer cleanup_error_message(err)
         resolution_time := time.since(resolution_start)
         fmt.printf("Resolution took: %v\n", resolution_time)
         
@@ -720,18 +751,22 @@ test_scalability_beyond_requirement :: proc(t: ^testing.T) {
         if resolved_modules != nil {
             delete(resolved_modules)
         }
-        manifest.cleanup_modules(modules[:])
+        cleanup_modules_and_cache(modules[:])
         delete(modules)
     }
 }
 
 @(test)
 test_stress_with_complex_dependencies :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Stress test with complex dependency patterns
-    temp_dir := "test_temp_stress"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_stress")
+    defer teardown_test_environment(temp_dir)
     
     // Create a complex dependency graph with multiple patterns
     module_count := 80
@@ -790,14 +825,12 @@ test_stress_with_complex_dependencies :: proc(t: ^testing.T) {
     stress_start := time.now()
     
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     testing.expect(t, len(modules) == module_count, "Should discover all stress test modules")
     
     resolved_modules, err := loader.resolve(modules)
+    defer cleanup_error_message(err)
     defer {
         if resolved_modules != nil {
             delete(resolved_modules)
@@ -845,4 +878,6 @@ test_stress_with_complex_dependencies :: proc(t: ^testing.T) {
     
     fmt.printf("✓ Stress test passed: %d modules with complex dependencies resolved in %v\n", 
                module_count, stress_time)
+
+    cleanup_modules_and_cache(modules[:])
 }

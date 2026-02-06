@@ -10,15 +10,17 @@ import "../src/manifest"
 
 @(test)
 test_path_handling_cross_platform :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Test that path handling works correctly across different path styles
-    temp_dir := "test_temp_cross_platform"
-    defer remove_directory_recursive(temp_dir)
+    temp_dir := setup_test_environment("test_temp_cross_platform")
+    defer teardown_test_environment(temp_dir)
     
     // Create nested directory structure with various path separators
-    os.make_directory(temp_dir)
     
     // Test Unix-style paths
     unix_module_dir := filepath.join({temp_dir, "unix-module"})
+    defer delete(unix_module_dir)
     os.make_directory(unix_module_dir)
     
     // Create module with Unix-style file paths
@@ -33,12 +35,15 @@ files = ["scripts/init.zsh", "config/settings.zsh"]
 `
     
     manifest_path := filepath.join({unix_module_dir, "module.toml"})
+    defer delete(manifest_path)
     write_ok := os.write_entire_file(manifest_path, transmute([]u8)unix_manifest)
     testing.expect(t, write_ok, "Should create Unix module manifest")
     
     // Create the referenced files
     scripts_dir := filepath.join({unix_module_dir, "scripts"})
+    defer delete(scripts_dir)
     config_dir := filepath.join({unix_module_dir, "config"})
+    defer delete(config_dir)
     os.make_directory(scripts_dir)
     os.make_directory(config_dir)
     
@@ -46,26 +51,22 @@ files = ["scripts/init.zsh", "config/settings.zsh"]
     settings_content := "# Unix settings\nexport UNIX_VAR='unix_value'"
     
     init_path := filepath.join({scripts_dir, "init.zsh"})
+    defer delete(init_path)
     settings_path := filepath.join({config_dir, "settings.zsh"})
+    defer delete(settings_path)
     
     os.write_entire_file(init_path, transmute([]u8)init_content)
     os.write_entire_file(settings_path, transmute([]u8)settings_content)
     
     // Test discovery and resolution
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     testing.expect(t, len(modules) == 1, "Should discover Unix-style module")
     
     resolved_modules, err := loader.resolve(modules)
-    defer {
-        if resolved_modules != nil {
-            delete(resolved_modules)
-        }
-    }
+    defer cleanup_error_message(err)
+    defer cleanup_resolved(resolved_modules)
     
     testing.expect(t, err == "", "Should resolve Unix-style module")
     
@@ -74,19 +75,22 @@ files = ["scripts/init.zsh", "config/settings.zsh"]
     testing.expect(t, len(module.files) == 2, "Should have 2 files")
     testing.expect(t, module.files[0] == "scripts/init.zsh", "First file path should be correct")
     testing.expect(t, module.files[1] == "config/settings.zsh", "Second file path should be correct")
+
+    cleanup_modules_and_cache(modules[:])
 }
 
 @(test)
 test_platform_filtering_simulation :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Test platform filtering by creating modules with platform constraints
     // Note: Since platform filtering isn't fully implemented, we test the manifest parsing
-    temp_dir := "test_temp_platform_filter"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir)
+    temp_dir := setup_test_environment("test_temp_platform_filter")
+    defer teardown_test_environment(temp_dir)
     
     // Create module with platform filters
     platform_module_dir := filepath.join({temp_dir, "platform-module"})
+    defer delete(platform_module_dir)
     os.make_directory(platform_module_dir)
     
     platform_manifest := `[module]
@@ -106,20 +110,19 @@ min_version = "5.0"
 `
     
     manifest_path := filepath.join({platform_module_dir, "module.toml"})
+    defer delete(manifest_path)
     write_ok := os.write_entire_file(manifest_path, transmute([]u8)platform_manifest)
     testing.expect(t, write_ok, "Should create platform module manifest")
     
     // Create the shell file
     shell_content := "# Platform-specific script\necho 'Platform module loaded'"
     shell_path := filepath.join({platform_module_dir, "platform.zsh"})
+    defer delete(shell_path)
     os.write_entire_file(shell_path, transmute([]u8)shell_content)
     
     // Test discovery
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     testing.expect(t, len(modules) == 1, "Should discover platform module")
     
@@ -149,18 +152,21 @@ min_version = "5.0"
     }
     testing.expect(t, found_x86_64, "Should find x86_64 in arch filters")
     testing.expect(t, found_arm64, "Should find arm64 in arch filters")
+
+    cleanup_modules_and_cache(modules[:])
 }
 
 @(test)
 test_file_encoding_handling :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Test that the system handles different file encodings gracefully
-    temp_dir := "test_temp_encoding"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir)
+    temp_dir := setup_test_environment("test_temp_encoding")
+    defer teardown_test_environment(temp_dir)
     
     // Create module with various content types
     encoding_module_dir := filepath.join({temp_dir, "encoding-module"})
+    defer delete(encoding_module_dir)
     os.make_directory(encoding_module_dir)
     
     encoding_manifest := `[module]
@@ -178,6 +184,7 @@ special_chars = "!@#$%^&*()"
 `
     
     manifest_path := filepath.join({encoding_module_dir, "module.toml"})
+    defer delete(manifest_path)
     write_ok := os.write_entire_file(manifest_path, transmute([]u8)encoding_manifest)
     testing.expect(t, write_ok, "Should create encoding module manifest")
     
@@ -187,8 +194,11 @@ special_chars = "!@#$%^&*()"
     special_content := "# Special characters\necho 'Special: !@#$%^&*()'"
     
     ascii_path := filepath.join({encoding_module_dir, "ascii.zsh"})
+    defer delete(ascii_path)
     utf8_path := filepath.join({encoding_module_dir, "utf8.zsh"})
+    defer delete(utf8_path)
     special_path := filepath.join({encoding_module_dir, "special.zsh"})
+    defer delete(special_path)
     
     os.write_entire_file(ascii_path, transmute([]u8)ascii_content)
     os.write_entire_file(utf8_path, transmute([]u8)utf8_content)
@@ -196,10 +206,7 @@ special_chars = "!@#$%^&*()"
     
     // Test discovery and parsing
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     testing.expect(t, len(modules) == 1, "Should discover encoding module")
     
@@ -210,26 +217,26 @@ special_chars = "!@#$%^&*()"
     
     // Test resolution
     resolved_modules, err := loader.resolve(modules)
-    defer {
-        if resolved_modules != nil {
-            delete(resolved_modules)
-        }
-    }
+    defer cleanup_error_message(err)
+    defer cleanup_resolved(resolved_modules)
     
     testing.expect(t, err == "", "Should resolve encoding module")
     testing.expect(t, len(resolved_modules[0].files) == 3, "Should have all 3 files")
+
+    cleanup_modules_and_cache(modules[:])
 }
 
 @(test)
 test_directory_structure_variations :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Test different directory structure patterns that might exist on different platforms
-    temp_dir := "test_temp_dir_structure"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir)
+    temp_dir := setup_test_environment("test_temp_dir_structure")
+    defer teardown_test_environment(temp_dir)
     
     // Test 1: Flat structure (common on Windows)
     flat_dir := filepath.join({temp_dir, "flat-module"})
+    defer delete(flat_dir)
     os.make_directory(flat_dir)
     
     flat_manifest := `[module]
@@ -243,6 +250,7 @@ files = ["init.zsh", "config.zsh", "utils.zsh"]
 `
     
     flat_manifest_path := filepath.join({flat_dir, "module.toml"})
+    defer delete(flat_manifest_path)
     os.write_entire_file(flat_manifest_path, transmute([]u8)flat_manifest)
     
     // Create flat files
@@ -250,12 +258,19 @@ files = ["init.zsh", "config.zsh", "utils.zsh"]
     flat_config_content := "# Flat config"
     flat_utils_content := "# Flat utils"
     
-    os.write_entire_file(filepath.join({flat_dir, "init.zsh"}), transmute([]u8)flat_init_content)
-    os.write_entire_file(filepath.join({flat_dir, "config.zsh"}), transmute([]u8)flat_config_content)
-    os.write_entire_file(filepath.join({flat_dir, "utils.zsh"}), transmute([]u8)flat_utils_content)
+    flat_init_path := filepath.join({flat_dir, "init.zsh"})
+    defer delete(flat_init_path)
+    flat_config_path := filepath.join({flat_dir, "config.zsh"})
+    defer delete(flat_config_path)
+    flat_utils_path := filepath.join({flat_dir, "utils.zsh"})
+    defer delete(flat_utils_path)
+    os.write_entire_file(flat_init_path, transmute([]u8)flat_init_content)
+    os.write_entire_file(flat_config_path, transmute([]u8)flat_config_content)
+    os.write_entire_file(flat_utils_path, transmute([]u8)flat_utils_content)
     
     // Test 2: Deep nested structure (common on Unix)
     nested_dir := filepath.join({temp_dir, "nested-module"})
+    defer delete(nested_dir)
     os.make_directory(nested_dir)
     
     nested_manifest := `[module]
@@ -269,44 +284,54 @@ files = ["src/core/init.zsh", "config/env/settings.zsh", "lib/utils/helpers.zsh"
 `
     
     nested_manifest_path := filepath.join({nested_dir, "module.toml"})
+    defer delete(nested_manifest_path)
     os.write_entire_file(nested_manifest_path, transmute([]u8)nested_manifest)
     
     // Create nested directories and files
     src_core_dir := filepath.join({nested_dir, "src", "core"})
+    defer delete(src_core_dir)
     config_env_dir := filepath.join({nested_dir, "config", "env"})
+    defer delete(config_env_dir)
     lib_utils_dir := filepath.join({nested_dir, "lib", "utils"})
+    defer delete(lib_utils_dir)
     
-    os.make_directory(filepath.join({nested_dir, "src"}))
+    nested_src_dir := filepath.join({nested_dir, "src"})
+    defer delete(nested_src_dir)
+    os.make_directory(nested_src_dir)
     os.make_directory(src_core_dir)
-    os.make_directory(filepath.join({nested_dir, "config"}))
+    nested_config_dir := filepath.join({nested_dir, "config"})
+    defer delete(nested_config_dir)
+    os.make_directory(nested_config_dir)
     os.make_directory(config_env_dir)
-    os.make_directory(filepath.join({nested_dir, "lib"}))
+    nested_lib_dir := filepath.join({nested_dir, "lib"})
+    defer delete(nested_lib_dir)
+    os.make_directory(nested_lib_dir)
     os.make_directory(lib_utils_dir)
     
     nested_init_content := "# Nested init"
     nested_settings_content := "# Nested settings"
     nested_helpers_content := "# Nested helpers"
     
-    os.write_entire_file(filepath.join({src_core_dir, "init.zsh"}), transmute([]u8)nested_init_content)
-    os.write_entire_file(filepath.join({config_env_dir, "settings.zsh"}), transmute([]u8)nested_settings_content)
-    os.write_entire_file(filepath.join({lib_utils_dir, "helpers.zsh"}), transmute([]u8)nested_helpers_content)
+    nested_init_path := filepath.join({src_core_dir, "init.zsh"})
+    defer delete(nested_init_path)
+    nested_settings_path := filepath.join({config_env_dir, "settings.zsh"})
+    defer delete(nested_settings_path)
+    nested_helpers_path := filepath.join({lib_utils_dir, "helpers.zsh"})
+    defer delete(nested_helpers_path)
+    os.write_entire_file(nested_init_path, transmute([]u8)nested_init_content)
+    os.write_entire_file(nested_settings_path, transmute([]u8)nested_settings_content)
+    os.write_entire_file(nested_helpers_path, transmute([]u8)nested_helpers_content)
     
     // Test discovery
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     testing.expect(t, len(modules) == 2, "Should discover both flat and nested modules")
     
     // Test resolution
     resolved_modules, err := loader.resolve(modules)
-    defer {
-        if resolved_modules != nil {
-            delete(resolved_modules)
-        }
-    }
+    defer cleanup_error_message(err)
+    defer cleanup_resolved(resolved_modules)
     
     testing.expect(t, err == "", "Should resolve both modules")
     testing.expect(t, len(resolved_modules) == 2, "Should resolve both modules")
@@ -316,18 +341,21 @@ files = ["src/core/init.zsh", "config/env/settings.zsh", "lib/utils/helpers.zsh"
         testing.expect(t, len(module.files) == 3, 
                        fmt.tprintf("Module %s should have 3 files", module.name))
     }
+
+    cleanup_modules_and_cache(modules[:])
 }
 
 @(test)
 test_case_sensitivity_handling :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Test handling of case sensitivity (important for cross-platform compatibility)
-    temp_dir := "test_temp_case_sensitivity"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir)
+    temp_dir := setup_test_environment("test_temp_case_sensitivity")
+    defer teardown_test_environment(temp_dir)
     
     // Create module with mixed case names
     case_module_dir := filepath.join({temp_dir, "Case-Sensitive-Module"})
+    defer delete(case_module_dir)
     os.make_directory(case_module_dir)
     
     case_manifest := `[module]
@@ -346,6 +374,7 @@ lowercase = "value3"
 `
     
     manifest_path := filepath.join({case_module_dir, "module.toml"})
+    defer delete(manifest_path)
     write_ok := os.write_entire_file(manifest_path, transmute([]u8)case_manifest)
     testing.expect(t, write_ok, "Should create case-sensitive module manifest")
     
@@ -354,16 +383,19 @@ lowercase = "value3"
     config_file_content := "# Config file"
     utilities_file_content := "# Utilities file"
     
-    os.write_entire_file(filepath.join({case_module_dir, "Init.zsh"}), transmute([]u8)init_file_content)
-    os.write_entire_file(filepath.join({case_module_dir, "CONFIG.zsh"}), transmute([]u8)config_file_content)
-    os.write_entire_file(filepath.join({case_module_dir, "utilities.ZSH"}), transmute([]u8)utilities_file_content)
+    init_file_path := filepath.join({case_module_dir, "Init.zsh"})
+    defer delete(init_file_path)
+    config_file_path := filepath.join({case_module_dir, "CONFIG.zsh"})
+    defer delete(config_file_path)
+    utilities_file_path := filepath.join({case_module_dir, "utilities.ZSH"})
+    defer delete(utilities_file_path)
+    os.write_entire_file(init_file_path, transmute([]u8)init_file_content)
+    os.write_entire_file(config_file_path, transmute([]u8)config_file_content)
+    os.write_entire_file(utilities_file_path, transmute([]u8)utilities_file_content)
     
     // Test discovery
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     testing.expect(t, len(modules) == 1, "Should discover case-sensitive module")
     
@@ -378,4 +410,6 @@ lowercase = "value3"
     testing.expect(t, module.files[0] == "Init.zsh", "Init.zsh case should be preserved")
     testing.expect(t, module.files[1] == "CONFIG.zsh", "CONFIG.zsh case should be preserved")
     testing.expect(t, module.files[2] == "utilities.ZSH", "utilities.ZSH case should be preserved")
+
+    cleanup_modules_and_cache(modules[:])
 }

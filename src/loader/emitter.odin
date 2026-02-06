@@ -173,8 +173,14 @@ build_source_file_code :: proc(module_path, file: string) -> string {
     full_path := filepath.join({module_path, file})
     quoted_path := quote_shell_path(full_path)
     
-    return fmt.tprintf("if [[ -f %s ]]; then\n    source %s\nelse\n    echo \"Warning: Module file not found: %s\" >&2\nfi\n", 
-                      quoted_path, quoted_path, quoted_path)
+    result := fmt.tprintf("if [[ -f %s ]]; then\n    source %s\nelse\n    echo \"Warning: Module file not found: %s\" >&2\nfi\n", 
+                         quoted_path, quoted_path, quoted_path)
+
+    if full_path != "" {
+        delete(full_path)
+    }
+
+    return result
 }
 
 // emit_header generates header comments with metadata
@@ -340,6 +346,10 @@ emit_module_files :: proc(module: manifest.Module) {
         fmt.printf("else\n")
         fmt.printf("    echo \"Warning: Module file not found: %s\" >&2\n", quoted_path)
         fmt.printf("fi\n")
+
+        if full_path != "" {
+            delete(full_path)
+        }
     }
     
     fmt.println()

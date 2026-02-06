@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ODIN_TEST_THREADS: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Odin
+        run: |
+          set -euo pipefail
+          curl -L -o odin.zip https://github.com/odin-lang/Odin/releases/latest/download/odin-linux-amd64.zip
+          unzip -q odin.zip
+          echo "$(pwd)/odin" >> "$GITHUB_PATH"
+
+      - name: Run Tests (Memory Tracking)
+        run: |
+          set -euo pipefail
+          if ! timeout 5m odin test ./test 2>&1 | tee /tmp/odin-test.log; then
+            echo "Test suite failed or timed out."
+            echo "Last 200 lines of output:"
+            tail -n 200 /tmp/odin-test.log || true
+            exit 1
+          fi
+
+      - name: Memory Safety Summary
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          log_path = "/tmp/odin-test.log"
+          leaks = []
+          bad_frees = []
+          with open(log_path, "r", errors="ignore") as f:
+              for line in f:
+                  if "+++ leak" in line:
+                      m = re.search(r"\\+\\+\\+ leak\\s+([0-9.]+)([KMG]?i?B)", line)
+                      if m:
+                          val = float(m.group(1))
+                          unit = m.group(2)
+                          leaks.append((val, unit, line.strip()))
+                  if "+++ bad free" in line:
+                      bad_frees.append(line.strip())
+          unit_mul = {"B":1, "KiB":1024, "MiB":1024**2, "GiB":1024**3}
+          max_leak = None
+          for val, unit, line in leaks:
+              b = unit_mul.get(unit, 1) * val
+              if max_leak is None or b > max_leak[0]:
+                  max_leak = (b, val, unit, line)
+          over_1k = [l for l in leaks if unit_mul.get(l[1],1)*l[0] > 1024]
+          summary_lines = []
+          summary_lines.append("## Memory Safety Summary")
+          summary_lines.append(f"- Leak entries: {len(leaks)}")
+          summary_lines.append(f"- Bad frees: {len(bad_frees)}")
+          if max_leak:
+              summary_lines.append(f"- Max leak: {int(max_leak[0])}B")
+              summary_lines.append(f"  - Example: `{max_leak[3]}`")
+          summary_lines.append(f"- Leaks > 1KB: {len(over_1k)}")
+          with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null"), "a") as out:
+              out.write("\\n".join(summary_lines) + "\\n")
+          if bad_frees:
+              raise SystemExit("Bad frees detected in memory tracking output.")
+          PY

@@ -1,4 +1,7 @@
 .kiro
+# Memory debugging memo (internal development notes)
+MEMORY_DEBUGGING_MEMO.md
+
 # Odin build artifacts
 zephyr
 acceptance_test
@@ -27,6 +30,20 @@ test_results/
 test_*/
 benchmark_modules/
 *.log
+zephyr_test_*/
+zephyr_discovery_test_*/
+zephyr-test
+zephyr-test.dSYM/
+test_minimal.odin
+test/property_json_schema_test.odin.bak*
+
+# Internal docs (not for distribution)
+CACHE_CLEANUP_ANALYSIS.md
+CODEBASE_HEALTH_ASSESSMENT.md
+docs/MEMORY_MANAGEMENT.md
+
+# Garbage temp files accidentally created
+odule_*
 
 # Temporary files
 *.tmp

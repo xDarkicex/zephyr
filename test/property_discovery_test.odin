@@ -10,13 +10,9 @@ import "core:path/filepath"
 import "../src/loader"
 import "../src/manifest"
 
-// Simple counter for generating unique test directories
-discovery_test_counter := 0
-
 // Generate a unique test directory name
 generate_test_dir :: proc() -> string {
-    discovery_test_counter += 1
-    return fmt.tprintf("/tmp/zephyr_discovery_test_%d", discovery_test_counter)
+    return setup_test_environment("zephyr_discovery_test")
 }
 
 // Create a test directory structure
@@ -59,10 +55,7 @@ create_property_test_shell_file :: proc(dir_path: string, filename: string) -> b
 
 // Clean up test directory recursively
 cleanup_property_test_directory :: proc(dir_path: string) {
-    if os.exists(dir_path) {
-        // Use a simple approach to remove directory
-        os.remove(dir_path)
-    }
+    teardown_test_environment(dir_path)
 }
 
 // Create a complete test module directory
@@ -88,6 +81,8 @@ create_complete_test_module :: proc(base_path: string, module_name: string, prio
 // **Validates: Requirements 3.2.1, 3.2.2**
 @(test)
 test_property_discovery_completeness :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: All valid modules in a directory should be discovered
     // Property: Discovery should find modules at the correct depth
     // Property: Invalid modules should be ignored gracefully
@@ -108,10 +103,7 @@ test_property_discovery_completeness :: proc(t: ^testing.T) {
             test_dir := generate_test_dir()
             defer cleanup_property_test_directory(test_dir)
             
-            if !create_test_directory(test_dir) {
-                testing.expect(t, false, fmt.tprintf("Failed to create test directory %s", test_dir))
-                continue
-            }
+            // Base directory is created by setup_test_environment
             
             created_modules := make([dynamic]string)
             defer {
@@ -153,10 +145,6 @@ test_property_discovery_completeness :: proc(t: ^testing.T) {
             
             // Discover modules
             discovered := loader.discover(test_dir)
-            defer {
-                manifest.cleanup_modules(discovered[:])
-                delete(discovered)
-            }
             
             // Property: Should discover exactly the number of valid modules
             testing.expect_value(t, len(discovered), test_case.module_count)
@@ -176,6 +164,9 @@ test_property_discovery_completeness :: proc(t: ^testing.T) {
                 testing.expect(t, strings.contains(module.name, "test-module"), 
                     fmt.tprintf("Module name %s should contain 'test-module'", module.name))
             }
+
+            cleanup_modules_and_cache(discovered[:])
+            delete(discovered)
         }
     }
 }
@@ -183,6 +174,8 @@ test_property_discovery_completeness :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.2.3**
 @(test)
 test_property_discovery_nested_directories :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Discovery should handle nested directory structures
     // Property: Discovery should respect depth limits
     
@@ -193,10 +186,7 @@ test_property_discovery_nested_directories :: proc(t: ^testing.T) {
             test_dir := generate_test_dir()
             defer cleanup_property_test_directory(test_dir)
             
-            if !create_test_directory(test_dir) {
-                testing.expect(t, false, fmt.tprintf("Failed to create test directory %s", test_dir))
-                continue
-            }
+            // Base directory is created by setup_test_environment
             
             created_paths := make([dynamic]string)
             defer {
@@ -236,10 +226,6 @@ test_property_discovery_nested_directories :: proc(t: ^testing.T) {
             
             // Discover modules
             discovered := loader.discover(test_dir)
-            defer {
-                manifest.cleanup_modules(discovered[:])
-                delete(discovered)
-            }
             
             // Property: Should discover the nested module (assuming reasonable depth limit)
             if nesting_level <= 2 { // Assuming discovery has a reasonable depth limit
@@ -258,6 +244,9 @@ test_property_discovery_nested_directories :: proc(t: ^testing.T) {
                         fmt.tprintf("Should find the specific nested module %s", module_name))
                 }
             }
+
+            cleanup_modules_and_cache(discovered[:])
+            delete(discovered)
         }
     }
 }
@@ -265,6 +254,8 @@ test_property_discovery_nested_directories :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.2.4**
 @(test)
 test_property_discovery_error_handling :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Discovery should handle various error conditions gracefully
     // Property: Invalid directories should not crash the discovery process
     
@@ -275,21 +266,20 @@ test_property_discovery_error_handling :: proc(t: ^testing.T) {
         {
             "nonexistent_directory",
             proc(test_dir: string) -> bool {
-                // Don't create the directory
+                cleanup_test_directory(test_dir)
                 return true
             },
         },
         {
             "empty_directory",
             proc(test_dir: string) -> bool {
-                return create_test_directory(test_dir)
+                _ = test_dir
+                return true
             },
         },
         {
             "directory_with_files_only",
             proc(test_dir: string) -> bool {
-                if !create_test_directory(test_dir) do return false
-                
                 // Create some non-module files
                 file1 := filepath.join({test_dir, "readme.txt"})
                 defer delete(file1)
@@ -318,10 +308,6 @@ test_property_discovery_error_handling :: proc(t: ^testing.T) {
             
             // Discover modules (should not crash)
             discovered := loader.discover(test_dir)
-            defer {
-                manifest.cleanup_modules(discovered[:])
-                delete(discovered)
-            }
             
             // Property: Discovery should complete without crashing
             testing.expect(t, true, 
@@ -332,6 +318,9 @@ test_property_discovery_error_handling :: proc(t: ^testing.T) {
                 testing.expect(t, len(module.name) > 0, "Any discovered module should have a valid name")
                 testing.expect(t, len(module.path) > 0, "Any discovered module should have a valid path")
             }
+
+            cleanup_modules_and_cache(discovered[:])
+            delete(discovered)
         }
     }
 }
@@ -339,6 +328,8 @@ test_property_discovery_error_handling :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.2.1**
 @(test)
 test_property_discovery_module_validation :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Discovery should validate module structure
     // Property: Only modules with valid manifests should be included
     
@@ -383,10 +374,7 @@ test_property_discovery_module_validation :: proc(t: ^testing.T) {
             test_dir := generate_test_dir()
             defer cleanup_property_test_directory(test_dir)
             
-            if !create_test_directory(test_dir) {
-                testing.expect(t, false, fmt.tprintf("Failed to create test directory %s", test_dir))
-                continue
-            }
+            // Base directory is created by setup_test_environment
             
             module_name := fmt.tprintf("validation-test-%s-%d", validation_case.description, iteration)
             
@@ -399,10 +387,6 @@ test_property_discovery_module_validation :: proc(t: ^testing.T) {
             
             // Discover modules
             discovered := loader.discover(test_dir)
-            defer {
-                manifest.cleanup_modules(discovered[:])
-                delete(discovered)
-            }
             
             // Property: Discovery result should match expectation
             if validation_case.should_discover {
@@ -429,6 +413,9 @@ test_property_discovery_module_validation :: proc(t: ^testing.T) {
                         fmt.tprintf("Should not discover invalid module %s", module_name))
                 }
             }
+
+            cleanup_modules_and_cache(discovered[:])
+            delete(discovered)
         }
     }
 }

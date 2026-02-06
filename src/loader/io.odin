@@ -29,30 +29,41 @@ create_file_cache :: proc(max_size_bytes: int = 1024 * 1024) -> FileCache { // 1
     }
 }
 
-// destroy_file_cache cleans up the file cache
+// destroy_file_cache cleans up the file cache.
+// Cleanup pattern: nil check, free owned contents, delete container, set to nil/empty.
 destroy_file_cache :: proc(cache: ^FileCache) {
     if cache == nil do return
-    
-    for path, &cached_file in cache.cache {
-        if cached_file.content != "" {
-            delete(cached_file.content)
-            cached_file.content = ""
+
+    if cache.cache != nil {
+        for key, cached_file in cache.cache {
+            if cached_file.content != "" {
+                delete(cached_file.content)
+            }
+            if key != "" {
+                delete(key)
+            }
         }
+        delete(cache.cache)
+        cache.cache = nil
     }
-    delete(cache.cache)
+    cache.current_size = 0
 }
 
 // read_file_cached reads a file with caching support
 read_file_cached :: proc(cache: ^FileCache, file_path: string) -> (string, bool) {
+    if cache == nil do return "", false
+
     // Check cache first
-    if cached_file, exists := cache.cache[file_path]; exists {
-        // Update access statistics
-        cached_file.last_accessed += 1
-        cached_file.access_count += 1
-        cache.cache[file_path] = cached_file
-        
-        debug.debug_trace("File cache hit: %s", file_path)
-        return cached_file.content, true
+    if cache.cache != nil {
+        if cached_file, exists := cache.cache[file_path]; exists {
+            // Update access statistics
+            cached_file.last_accessed += 1
+            cached_file.access_count += 1
+            cache.cache[file_path] = cached_file
+            
+            debug.debug_trace("File cache hit: %s", file_path)
+            return cached_file.content, true
+        }
     }
     
     // Read from disk
@@ -64,6 +75,11 @@ read_file_cached :: proc(cache: ^FileCache, file_path: string) -> (string, bool)
     
     content := string(data)
     file_size := len(content)
+
+    if cache.cache == nil {
+        // Caller owns returned content in this path.
+        return content, true
+    }
     
     // Add to cache if there's space
     if cache.current_size + file_size <= cache.max_size {
@@ -76,8 +92,12 @@ read_file_cached :: proc(cache: ^FileCache, file_path: string) -> (string, bool)
         
         cache.cache[strings.clone(file_path)] = cached_file
         cache.current_size += file_size
+
+        // Safe to delete read buffer because cached_file has its own copy.
+        delete(data)
         
         debug.debug_trace("File cached: %s (%d bytes)", file_path, file_size)
+        return cached_file.content, true
     } else {
         // Try to evict least recently used files
         evict_lru_files(cache, file_size)
@@ -93,8 +113,12 @@ read_file_cached :: proc(cache: ^FileCache, file_path: string) -> (string, bool)
             
             cache.cache[strings.clone(file_path)] = cached_file
             cache.current_size += file_size
+
+            // Safe to delete read buffer because cached_file has its own copy.
+            delete(data)
             
             debug.debug_trace("File cached after eviction: %s (%d bytes)", file_path, file_size)
+            return cached_file.content, true
         } else {
             debug.debug_trace("File too large for cache: %s (%d bytes)", file_path, file_size)
         }
@@ -105,7 +129,7 @@ read_file_cached :: proc(cache: ^FileCache, file_path: string) -> (string, bool)
 
 // evict_lru_files evicts least recently used files to make space
 evict_lru_files :: proc(cache: ^FileCache, needed_space: int) {
-    if len(cache.cache) == 0 {
+    if cache == nil || cache.cache == nil || len(cache.cache) == 0 {
         return
     }
     
@@ -146,13 +170,13 @@ evict_lru_files :: proc(cache: ^FileCache, needed_space: int) {
         }
         
         if cached_file, exists := cache.cache[score.path]; exists {
-            if cached_file.content != "" {
-                delete(cached_file.content)
-            }
             delete_key(&cache.cache, score.path)
             cache.current_size -= cached_file.size
             freed_space += cached_file.size
-            
+            if score.path != "" {
+                delete(score.path)
+            }
+
             debug.debug_trace("Evicted from cache: %s (%d bytes)", score.path, cached_file.size)
         }
     }
@@ -174,42 +198,65 @@ create_batch_file_reader :: proc() -> BatchFileReader {
     }
 }
 
-// destroy_batch_file_reader cleans up the batch file reader
+// destroy_batch_file_reader cleans up the batch file reader.
+// Cleanup pattern: nil check, free owned contents, delete container, set to nil/empty.
 destroy_batch_file_reader :: proc(reader: ^BatchFileReader) {
     if reader == nil do return
-    
-    for &file in reader.files {
-        if file != "" {
-            delete(file)
-            file = ""
+
+    if reader.files != nil {
+        for &file in reader.files {
+            if file != "" {
+                delete(file)
+                file = ""
+            }
         }
+        delete(reader.files)
+        reader.files = nil
     }
-    delete(reader.files)
     
-    for path, &content in reader.results {
-        if content != "" {
-            delete(content)
-            content = ""
+    if reader.results != nil {
+        for key, value in reader.results {
+            if value != "" {
+                delete(value)
+            }
+            if key != "" {
+                delete(key)
+            }
         }
+        delete(reader.results)
+        reader.results = nil
     }
-    delete(reader.results)
-    
-    for path, &error in reader.errors {
-        if error != "" {
-            delete(error)
-            error = ""
+
+    if reader.errors != nil {
+        // Values are string literals; only keys are owned.
+        for key in reader.errors {
+            if key != "" {
+                delete(key)
+            }
         }
+        delete(reader.errors)
+        reader.errors = nil
     }
-    delete(reader.errors)
 }
 
 // add_file adds a file to the batch reading queue
 add_file :: proc(reader: ^BatchFileReader, file_path: string) {
+    if reader == nil do return
+
     append(&reader.files, strings.clone(file_path))
 }
 
 // read_all_files reads all queued files in batch
 read_all_files :: proc(reader: ^BatchFileReader) {
+    if reader == nil do return
+
+    if reader.results == nil {
+        reader.results = make(map[string]string)
+    }
+    if reader.errors == nil {
+        reader.errors = make(map[string]string)
+    }
+
     debug.debug_info("Batch reading %d files", len(reader.files))
     
     for file_path in reader.files {
@@ -226,6 +273,10 @@ read_all_files :: proc(reader: ^BatchFileReader) {
 
 // get_file_content gets the content of a file from batch results
 get_file_content :: proc(reader: ^BatchFileReader, file_path: string) -> (string, bool) {
+    if reader == nil || reader.results == nil {
+        return "", false
+    }
+
     if content, exists := reader.results[file_path]; exists {
         return content, true
     }
@@ -251,7 +302,8 @@ create_directory_scanner :: proc(base_path: string, pattern: string = "module.to
     }
 }
 
-// destroy_directory_scanner cleans up the directory scanner
+// destroy_directory_scanner cleans up the directory scanner.
+// Cleanup pattern: nil check, free owned contents, delete container, set to nil/empty.
 destroy_directory_scanner :: proc(scanner: ^DirectoryScanner) {
     if scanner == nil do return
     
@@ -264,17 +316,22 @@ destroy_directory_scanner :: proc(scanner: ^DirectoryScanner) {
         scanner.pattern = ""
     }
     
-    for &result in scanner.results {
-        if result != "" {
-            delete(result)
-            result = ""
+    if scanner.results != nil {
+        for &result in scanner.results {
+            if result != "" {
+                delete(result)
+                result = ""
+            }
         }
+        delete(scanner.results)
+        scanner.results = nil
     }
-    delete(scanner.results)
 }
 
 // scan_directories scans directories for files matching the pattern
 scan_directories :: proc(scanner: ^DirectoryScanner) -> []string {
+    if scanner == nil do return nil
+
     debug.debug_info("Scanning directories from: %s (pattern: %s, max_depth: %d)", 
                      scanner.base_path, scanner.pattern, scanner.max_depth)
     
@@ -286,6 +343,8 @@ scan_directories :: proc(scanner: ^DirectoryScanner) -> []string {
 
 // scan_directory_recursive recursively scans a directory
 scan_directory_recursive :: proc(scanner: ^DirectoryScanner, dir_path: string, depth: int) {
+    if scanner == nil do return
+
     if depth > scanner.max_depth {
         debug.debug_trace("Max depth reached: %s (depth: %d)", dir_path, depth)
         return
@@ -303,11 +362,15 @@ scan_directory_recursive :: proc(scanner: ^DirectoryScanner, dir_path: string, d
     for {
         entries, read_err := os.read_dir(handle, batch_size)
         if read_err != os.ERROR_NONE {
+            if entries != nil {
+                os.file_info_slice_delete(entries)
+            }
             debug.debug_warn("Cannot read directory: %s", dir_path)
             break
         }
         
         if len(entries) == 0 {
+            os.file_info_slice_delete(entries)
             break
         }
         
@@ -321,6 +384,10 @@ scan_directory_recursive :: proc(scanner: ^DirectoryScanner, dir_path: string, d
                 // Found matching file
                 append(&scanner.results, strings.clone(entry_path))
                 debug.debug_trace("Found matching file: %s", entry_path)
+            }
+
+            if entry_path != "" {
+                delete(entry_path)
             }
         }
         
@@ -346,30 +413,53 @@ create_file_existence_cache :: proc(max_entries: int = 1000) -> FileExistenceCac
     }
 }
 
-// destroy_file_existence_cache cleans up the file existence cache
+// destroy_file_existence_cache cleans up the file existence cache.
+// Cleanup pattern: nil check, free owned contents, delete container, set to nil/empty.
 destroy_file_existence_cache :: proc(cache: ^FileExistenceCache) {
-    delete(cache.cache)
+    if cache == nil do return
+
+    if cache.cache != nil {
+        for key in cache.cache {
+            if key != "" {
+                delete(key)
+            }
+        }
+        delete(cache.cache)
+        cache.cache = nil
+    }
 }
 
 // file_exists_cached checks if a file exists with caching
 file_exists_cached :: proc(cache: ^FileExistenceCache, file_path: string) -> bool {
+    if cache == nil do return false
+
     // Check cache first
-    if exists, cached := cache.cache[file_path]; cached {
-        return exists
+    if cache.cache != nil {
+        if exists, cached := cache.cache[file_path]; cached {
+            return exists
+        }
     }
     
     // Check filesystem
     exists := os.exists(file_path)
     
     // Add to cache if there's space
-    if len(cache.cache) < cache.max_entries {
+    if cache.cache != nil && len(cache.cache) < cache.max_entries {
         cache.cache[strings.clone(file_path)] = exists
     }
     
     return exists
 }
 
-// clear_file_existence_cache clears the file existence cache
+// clear_file_existence_cache clears the file existence cache.
+// Frees owned keys and resets the map to empty.
 clear_file_existence_cache :: proc(cache: ^FileExistenceCache) {
+    if cache == nil || cache.cache == nil do return
+
+    for key in cache.cache {
+        if key != "" {
+            delete(key)
+        }
+    }
     clear(&cache.cache)
 }

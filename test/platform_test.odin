@@ -8,7 +8,10 @@ import "../src/manifest"
 
 @(test)
 test_platform_detection :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     platform := loader.get_current_platform()
+    defer loader.cleanup_platform_info(&platform)
     
     // Platform should have valid OS
     testing.expect(t, platform.os != "", "OS should be detected")
@@ -27,6 +30,8 @@ test_platform_detection :: proc(t: ^testing.T) {
 
 @(test)
 test_version_parsing :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Test version parsing
     version_5_8_1 := loader.parse_version("5.8.1")
     defer delete(version_5_8_1)
@@ -48,6 +53,8 @@ test_version_parsing :: proc(t: ^testing.T) {
 
 @(test)
 test_version_compatibility :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Test exact match
     testing.expect(t, loader.is_version_compatible("5.8.1", "5.8.1"), 
                    "Exact version match should be compatible")
@@ -77,6 +84,8 @@ test_version_compatibility :: proc(t: ^testing.T) {
 
 @(test)
 test_platform_compatibility_no_filters :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Create a module with no platform filters
     module := manifest.Module{
         name = strings.clone("test-module"),
@@ -101,6 +110,8 @@ test_platform_compatibility_no_filters :: proc(t: ^testing.T) {
 
 @(test)
 test_platform_compatibility_os_filter :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Create a module that only supports Linux and macOS
     module := manifest.Module{
         name = strings.clone("test-module"),
@@ -111,8 +122,8 @@ test_platform_compatibility_os_filter :: proc(t: ^testing.T) {
     }
     defer manifest.cleanup_module(&module)
     
-    append(&module.platforms.os, "linux")
-    append(&module.platforms.os, "darwin")
+    append(&module.platforms.os, strings.clone("linux"))
+    append(&module.platforms.os, strings.clone("darwin"))
     
     // Test compatible OS
     linux_platform := loader.Platform_Info{
@@ -149,6 +160,8 @@ test_platform_compatibility_os_filter :: proc(t: ^testing.T) {
 
 @(test)
 test_platform_compatibility_arch_filter :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Create a module that only supports x86_64
     module := manifest.Module{
         name = strings.clone("test-module"),
@@ -159,7 +172,7 @@ test_platform_compatibility_arch_filter :: proc(t: ^testing.T) {
     }
     defer manifest.cleanup_module(&module)
     
-    append(&module.platforms.arch, "x86_64")
+    append(&module.platforms.arch, strings.clone("x86_64"))
     
     // Test compatible architecture
     x86_platform := loader.Platform_Info{
@@ -186,13 +199,15 @@ test_platform_compatibility_arch_filter :: proc(t: ^testing.T) {
 
 @(test)
 test_platform_compatibility_shell_filter :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Create a module that only supports zsh
     module := manifest.Module{
         name = strings.clone("test-module"),
         platforms = manifest.Platform_Filter{
             os = make([dynamic]string),
             arch = make([dynamic]string),
-            shell = "zsh",
+            shell = strings.clone("zsh"),
         },
     }
     defer manifest.cleanup_module(&module)
@@ -222,14 +237,16 @@ test_platform_compatibility_shell_filter :: proc(t: ^testing.T) {
 
 @(test)
 test_platform_compatibility_version_filter :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Create a module that requires zsh 5.8 or higher
     module := manifest.Module{
         name = strings.clone("test-module"),
         platforms = manifest.Platform_Filter{
             os = make([dynamic]string),
             arch = make([dynamic]string),
-            shell = "zsh",
-            min_version = "5.8",
+            shell = strings.clone("zsh"),
+            min_version = strings.clone("5.8"),
         },
     }
     defer manifest.cleanup_module(&module)
@@ -270,6 +287,8 @@ test_platform_compatibility_version_filter :: proc(t: ^testing.T) {
 
 @(test)
 test_filter_compatible_modules :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Create test modules with different platform requirements
     modules := make([dynamic]manifest.Module)
     defer {
@@ -295,7 +314,7 @@ test_filter_compatible_modules :: proc(t: ^testing.T) {
             arch = make([dynamic]string),
         },
     }
-    append(&module2.platforms.os, "linux")
+    append(&module2.platforms.os, strings.clone("linux"))
     append(&modules, module2)
     
     // Module 3: Windows only (should be filtered out on non-Windows)
@@ -306,7 +325,7 @@ test_filter_compatible_modules :: proc(t: ^testing.T) {
             arch = make([dynamic]string),
         },
     }
-    append(&module3.platforms.os, "windows")
+    append(&module3.platforms.os, strings.clone("windows"))
     append(&modules, module3)
     
     // Filter modules using indices
@@ -328,6 +347,7 @@ test_filter_compatible_modules :: proc(t: ^testing.T) {
     
     // On non-Windows systems, Windows module should be filtered out
     current_platform := loader.get_current_platform()
+    defer loader.cleanup_platform_info(&current_platform)
     if current_platform.os != "windows" {
         found_windows := false
         for idx in compatible_indices {

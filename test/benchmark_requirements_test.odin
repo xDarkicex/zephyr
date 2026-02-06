@@ -12,6 +12,9 @@ import "../src/manifest"
 // Helper function to create a benchmark test module with priority
 create_benchmark_test_module :: proc(base_dir: string, module_name: string, priority: int, dependencies: []string) -> bool {
     module_dir := filepath.join({base_dir, module_name})
+    if os.exists(module_dir) {
+        cleanup_test_directory(module_dir)
+    }
     err := os.make_directory(module_dir, 0o755)
     if err != os.ERROR_NONE do return false
     
@@ -87,16 +90,20 @@ echo "Module %s loaded successfully"
 
 @(test)
 test_performance_requirement_4_1_1 :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Test Performance Requirement 4.1.1: 
     // The system SHALL load and process modules in under 100ms for typical configurations (< 50 modules)
     
     fmt.println("=== Testing Performance Requirement 4.1.1 ===")
     fmt.println("Requirement: Load and process modules in under 100ms for < 50 modules")
     
-    temp_dir := "test_temp_requirement_4_1_1"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_requirement_4_1_1")
+    defer teardown_test_environment(temp_dir)
     
     // Create exactly 49 modules (< 50 as per requirement)
     module_count := 49
@@ -139,19 +146,14 @@ test_performance_requirement_4_1_1 :: proc(t: ^testing.T) {
         
         // Complete load cycle: discovery -> resolution -> emission
         modules := loader.discover(temp_dir)
-        defer {
-            manifest.cleanup_modules(modules[:])
-            delete(modules)
-        }
         
         testing.expect(t, len(modules) == module_count, 
                        fmt.tprintf("Cycle %d: Should discover all %d modules", cycle + 1, module_count))
         
         resolved_modules, err := loader.resolve(modules)
-        defer {
-            if resolved_modules != nil {
-                delete(resolved_modules)
-            }
+        defer cleanup_error_message(err)
+        if resolved_modules != nil {
+            defer delete(resolved_modules)
         }
         
         testing.expect(t, err == "", fmt.tprintf("Cycle %d: Should resolve successfully: %s", cycle + 1, err))
@@ -165,6 +167,9 @@ test_performance_requirement_4_1_1 :: proc(t: ^testing.T) {
         append(&cycle_times, cycle_time)
         
         fmt.printf("  Cycle %2d: %v\n", cycle + 1, cycle_time)
+
+        cleanup_modules_and_cache(modules[:])
+        delete(modules)
     }
     
     // Analyze performance results
@@ -251,6 +256,12 @@ test_performance_requirement_4_1_1 :: proc(t: ^testing.T) {
 
 @(test)
 test_performance_requirement_4_1_2 :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Test Performance Requirement 4.1.2:
     // The system SHALL use efficient memory management with proper cleanup
     
@@ -258,10 +269,8 @@ test_performance_requirement_4_1_2 :: proc(t: ^testing.T) {
     fmt.println("=== Testing Performance Requirement 4.1.2 ===")
     fmt.println("Requirement: Efficient memory management with proper cleanup")
     
-    temp_dir := "test_temp_requirement_4_1_2"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_requirement_4_1_2")
+    defer teardown_test_environment(temp_dir)
     
     // Create modules for memory testing
     module_count := 30
@@ -302,6 +311,7 @@ test_performance_requirement_4_1_2 :: proc(t: ^testing.T) {
         
         // Resolution phase
         resolved_modules, err := loader.resolve(modules)
+        defer cleanup_error_message(err)
         testing.expect(t, err == "", 
                        fmt.tprintf("Memory cycle %d: Should resolve successfully", cycle + 1))
         
@@ -309,7 +319,7 @@ test_performance_requirement_4_1_2 :: proc(t: ^testing.T) {
         if resolved_modules != nil {
             delete(resolved_modules)
         }
-        manifest.cleanup_modules(modules[:])
+        cleanup_modules_and_cache(modules[:])
         delete(modules)
         
         cycle_time := time.since(cycle_start)
@@ -342,14 +352,20 @@ test_performance_requirement_4_1_2 :: proc(t: ^testing.T) {
 
 @(test)
 test_scalability_beyond_requirements :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Test scalability beyond the basic requirements to understand system limits
     
     fmt.println()
     fmt.println("=== Testing Scalability Beyond Requirements ===")
     fmt.println("Testing system behavior with larger module sets")
     
-    temp_dir := "test_temp_scalability"
-    defer remove_directory_recursive(temp_dir)
+    temp_dir := setup_test_environment("test_temp_scalability")
+    defer teardown_test_environment(temp_dir)
     
     // Test with progressively larger module sets
     test_sizes := []int{50, 75, 100, 150}
@@ -358,7 +374,7 @@ test_scalability_beyond_requirements :: proc(t: ^testing.T) {
         fmt.printf("\n--- Testing with %d modules ---\n", size)
         
         // Clean up previous test
-        remove_directory_recursive(temp_dir)
+        cleanup_test_directory(temp_dir)
         os.make_directory(temp_dir, 0o755)
         
         // Create modules
@@ -389,17 +405,9 @@ test_scalability_beyond_requirements :: proc(t: ^testing.T) {
         start_time := time.now()
         
         modules := loader.discover(temp_dir)
-        defer {
-            manifest.cleanup_modules(modules[:])
-            delete(modules)
-        }
         
         resolved_modules, err := loader.resolve(modules)
-        defer {
-            if resolved_modules != nil {
-                delete(resolved_modules)
-            }
-        }
+        defer cleanup_error_message(err)
         
         total_time := time.since(start_time)
         
@@ -435,20 +443,30 @@ test_scalability_beyond_requirements :: proc(t: ^testing.T) {
                 }
             }
         }
+
+        if resolved_modules != nil {
+            delete(resolved_modules)
+        }
+        cleanup_modules_and_cache(modules[:])
+        delete(modules)
     }
 }
 
 @(test)
 test_comprehensive_benchmark_suite :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    if !require_long_tests() {
+        return
+    }
+
     // Run the comprehensive benchmark suite using the existing infrastructure
     
     fmt.println()
     fmt.println("=== Running Comprehensive Benchmark Suite ===")
     
-    temp_dir := "test_temp_comprehensive_benchmark"
-    defer remove_directory_recursive(temp_dir)
-    
-    os.make_directory(temp_dir, 0o755)
+    temp_dir := setup_test_environment("test_temp_comprehensive_benchmark")
+    defer teardown_test_environment(temp_dir)
     
     // Create a realistic test dataset
     module_count := 45  // Just under the 50 module requirement

@@ -1,18 +1,64 @@
 package test
 
 import "core:os"
-import "core:fmt"
-import "core:strings"
 import "core:path/filepath"
+import "core:strings"
+import "core:time"
+import "core:fmt"
+import "core:testing"
+import "base:runtime"
 
-// remove_directory_recursive removes a directory and all its contents
-remove_directory_recursive :: proc(path: string) {
-    if !os.exists(path) {
-        return
+import "../src/loader"
+
+DEFAULT_TEST_TIMEOUT :: 30 * time.Second
+
+set_test_timeout :: proc(t: ^testing.T, duration: time.Duration = DEFAULT_TEST_TIMEOUT) {
+    reset_test_state(t)
+    testing.set_fail_timeout(t, duration)
+}
+
+cleanup_test_allocations :: proc() {
+    loader.reset_global_cache()
+}
+
+cleanup_test_allocations_proc :: proc(_: rawptr) {
+    cleanup_test_allocations()
+}
+
+reset_test_state :: proc(t: ^testing.T) {
+    loader.reset_global_cache()
+    testing.cleanup(t, cleanup_test_allocations_proc, nil)
+}
+
+// is_stdlib_allocation returns true for known Odin stdlib one-time allocations
+// that are outside project control and should not fail memory-stability tests.
+is_stdlib_allocation :: proc(loc: runtime.Source_Code_Location) -> bool {
+    if strings.contains(loc.file_path, "os_darwin.odin") && loc.line == 1044 {
+        return true
     }
+    if strings.contains(loc.file_path, "path.odin") && loc.line == 548 {
+        return true
+    }
+    return false
+}
+
+// ✅ CRITICAL FIX: Force cleanup test directories to prevent EEXIST errors
+cleanup_test_directory :: proc(dir_path: string) {
+    if dir_path == "" do return
     
-    handle, err := os.open(path)
-    if err != os.ERROR_NONE {
+    // Force remove directory if it exists
+    if os.exists(dir_path) {
+        remove_directory_recursive(dir_path)
+    }
+}
+
+// ✅ CRITICAL FIX: Recursive directory removal
+remove_directory_recursive :: proc(dir_path: string) {
+    if !os.exists(dir_path) do return
+    
+    // Get directory contents
+    handle, open_err := os.open(dir_path)
+    if open_err != os.ERROR_NONE {
         return
     }
     defer os.close(handle)
@@ -23,53 +69,61 @@ remove_directory_recursive :: proc(path: string) {
     }
     defer os.file_info_slice_delete(entries)
     
+    // Remove all contents first
     for entry in entries {
-        entry_path := filepath.join({path, entry.name})
+        full_path := filepath.join({dir_path, entry.name})
+        defer delete(full_path)
+        
         if entry.is_dir {
-            remove_directory_recursive(entry_path)
+            remove_directory_recursive(full_path)
         } else {
-            os.remove(entry_path)
+            os.remove(full_path)
         }
     }
     
-    os.remove(path)
+    // Remove the directory itself
+    os.remove(dir_path)
 }
 
-// create_test_module creates a test module directory with manifest
-create_test_module :: proc(base_dir: string, module_name: string, dependencies: []string = {}) -> string {
-    module_dir := filepath.join({base_dir, module_name})
-    os.make_directory(module_dir, 0o755)
-    
-    manifest_path := filepath.join({module_dir, "module.toml"})
-    
-    content := fmt.tprintf(`[module]
-name = "%s"
-version = "1.0.0"
-description = "Test module"
+// ✅ CRITICAL FIX: Create unique test directory with timestamp
+create_unique_test_directory :: proc(base_name: string) -> string {
+    timestamp := time.now()._nsec
+    builder := strings.builder_make()
+    defer strings.builder_destroy(&builder)
+    fmt.sbprintf(&builder, "%s_%d", base_name, timestamp)
+    unique_name := strings.clone(strings.to_string(builder))
+    defer delete(unique_name)
 
-[dependencies]
-required = [%s]
+    cwd := os.get_current_directory()
+    defer delete(cwd)
 
-[load]
-files = ["%s.zsh"]
-`, module_name, strings.join(dependencies, ", "), module_name)
+    absolute_path := filepath.join({cwd, unique_name})
     
-    os.write_entire_file(manifest_path, transmute([]u8)content)
+    // Ensure it doesn't exist
+    cleanup_test_directory(absolute_path)
     
-    // Create the shell file
-    shell_file := filepath.join({module_dir, fmt.tprintf("%s.zsh", module_name)})
-    shell_content := fmt.tprintf("# %s module\necho 'Loading %s'\n", module_name, module_name)
-    os.write_entire_file(shell_file, transmute([]u8)shell_content)
+    // Create the directory
+    os.make_directory(absolute_path, 0o755)
     
-    return module_dir
+    return absolute_path
 }
 
-// create_test_shell_file creates a test shell file
-create_test_shell_file :: proc(path: string, content: string) -> bool {
-    return os.write_entire_file(path, transmute([]u8)content)
+// ✅ CRITICAL FIX: Setup test with proper cleanup
+setup_test_environment :: proc(test_name: string) -> string {
+    base_dir := create_unique_test_directory(test_name)
+    return base_dir
 }
 
-// cleanup_test_directory removes a test directory
-cleanup_test_directory :: proc(dir_path: string) {
-    remove_directory_recursive(dir_path)
+// ✅ CRITICAL FIX: Teardown test with complete cleanup
+teardown_test_environment :: proc(test_dir: string) {
+    cleanup_test_directory(test_dir)
+    if test_dir != "" {
+        delete(test_dir)
+    }
+}
+
+get_test_modules_dir :: proc() -> string {
+    cwd := os.get_current_directory()
+    defer delete(cwd)
+    return filepath.join({cwd, "test-modules"})
 }

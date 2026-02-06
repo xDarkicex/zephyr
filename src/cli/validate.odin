@@ -33,6 +33,7 @@ ValidationSummary :: struct {
 validate_manifests :: proc() {
     // Get modules directory
     modules_dir := loader.get_modules_dir()
+    defer delete(modules_dir)
     
     // Verify directory exists and is accessible
     if !os.exists(modules_dir) {
@@ -83,23 +84,44 @@ validate_manifests :: proc() {
 
 // cleanup_validation_summary cleans up allocated memory in ValidationSummary
 cleanup_validation_summary :: proc(summary: ^ValidationSummary) {
-    for &result in summary.results {
-        // Clean up all cloned strings in ValidationResult
-        delete(result.module_path)
-        delete(result.module_name)
-        delete(result.parse_error)
-        
-        // Clean up dependency error strings
-        for error in result.dependency_errors {
-            delete(error)
+    if summary == nil do return
+
+    if summary.results != nil {
+        for &result in summary.results {
+            // Clean up all cloned strings in ValidationResult
+            if result.module_path != "" {
+                delete(result.module_path)
+                result.module_path = ""
+            }
+            if result.module_name != "" {
+                delete(result.module_name)
+                result.module_name = ""
+            }
+            if result.parse_error != "" {
+                delete(result.parse_error)
+                result.parse_error = ""
+            }
+            
+            // Clean up dependency error strings
+            if result.dependency_errors != nil {
+                for &error in result.dependency_errors {
+                    if error != "" {
+                        delete(error)
+                        error = ""
+                    }
+                }
+                delete(result.dependency_errors)
+                result.dependency_errors = nil
+            }
         }
-        delete(result.dependency_errors)
+        delete(summary.results)
+        summary.results = nil
     }
-    delete(summary.results)
     
     // Clean up circular error string if it exists
-    if len(summary.circular_error) > 0 {
+    if summary.circular_error != "" {
         delete(summary.circular_error)
+        summary.circular_error = ""
     }
 }
 
@@ -151,7 +173,9 @@ scan_for_manifests :: proc(dir_path: string, summary: ^ValidationSummary) {
         }
         
         module_dir := filepath.join({dir_path, entry.name})
+        defer delete(module_dir)
         manifest_path := filepath.join({module_dir, "module.toml"})
+        defer delete(manifest_path)
         
         // Check if this directory contains a module.toml file
         if os.exists(manifest_path) {
@@ -171,6 +195,12 @@ scan_for_manifests :: proc(dir_path: string, summary: ^ValidationSummary) {
                 result.module_name = strings.clone(entry.name) // Use directory name as fallback
                 result.parse_error = strings.clone(parse_result.message)
             }
+
+            if parse_result.message != "" {
+                delete(parse_result.message)
+                parse_result.message = ""
+            }
+            manifest.cleanup_module(&parse_result.module)
             
             append(&summary.results, result)
         }
@@ -229,16 +259,18 @@ validate_dependency_references :: proc(summary: ^ValidationSummary) {
         
         // Re-parse the module to get dependency information
         manifest_path := filepath.join({result.module_path, "module.toml"})
+        defer delete(manifest_path)
         module, parse_ok := manifest.parse(manifest_path)
         if !parse_ok {
             continue // This shouldn't happen since we already validated parsing
         }
+        defer manifest.cleanup_module(&module)
         
         // Check required dependencies
         for dep in module.required {
             if dep not_in available_modules {
                 error_msg := fmt.tprintf("Missing required dependency: '%s'", dep)
-                append(&result.dependency_errors, strings.clone(error_msg))
+                append(&result.dependency_errors, error_msg)
             }
         }
         
@@ -246,7 +278,7 @@ validate_dependency_references :: proc(summary: ^ValidationSummary) {
         for dep in module.optional {
             if dep not_in available_modules {
                 error_msg := fmt.tprintf("Optional dependency not found: '%s' (warning)", dep)
-                append(&result.dependency_errors, strings.clone(error_msg))
+                append(&result.dependency_errors, error_msg)
             }
         }
     }
@@ -301,7 +333,6 @@ check_circular_dependencies :: proc(summary: ^ValidationSummary) {
     
     // Build a list of valid modules for dependency resolution
     valid_modules := make([dynamic]manifest.Module)
-    defer delete(valid_modules)
     
     for result in summary.results {
         if !result.is_valid {
@@ -310,6 +341,7 @@ check_circular_dependencies :: proc(summary: ^ValidationSummary) {
         
         // Re-parse the module to get full module data
         manifest_path := filepath.join({result.module_path, "module.toml"})
+        defer delete(manifest_path)
         module, parse_ok := manifest.parse(manifest_path)
         if parse_ok {
             module.path = strings.clone(result.module_path)
@@ -321,17 +353,18 @@ check_circular_dependencies :: proc(summary: ^ValidationSummary) {
     resolved_modules, err := loader.resolve(valid_modules)
     if err != "" {
         summary.circular_deps = true
-        summary.circular_error = strings.clone(err)
+        summary.circular_error = err
     }
     
     // Clean up
     if resolved_modules != nil {
-        defer delete(resolved_modules)
+        manifest.cleanup_modules(resolved_modules[:])
+        delete(resolved_modules)
     }
-    
-    for &module in valid_modules {
-        // Module cleanup will be handled by the arena allocator
+    if len(valid_modules) > 0 {
+        manifest.cleanup_modules(valid_modules[:])
     }
+    delete(valid_modules)
 }
 
 // report_circular_dependencies displays circular dependency errors

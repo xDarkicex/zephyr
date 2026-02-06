@@ -69,21 +69,45 @@ create_optimized_allocator :: proc() -> OptimizedAllocator {
 
 // destroy_optimized_allocator cleans up the optimized allocator
 destroy_optimized_allocator :: proc(allocator: ^OptimizedAllocator) {
+    if allocator == nil do return
+
     // Clean up module pool
-    for module_ptr in allocator.module_pool {
-        free(module_ptr)
+    if allocator.module_pool != nil {
+        for &module_ptr in allocator.module_pool {
+            if module_ptr != nil {
+                free(module_ptr)
+                module_ptr = nil
+            }
+        }
+        delete(allocator.module_pool)
+        allocator.module_pool = nil
     }
-    delete(allocator.module_pool)
     
     // Clean up string pool
-    for string_ptr in allocator.string_pool {
-        free(string_ptr)
+    if allocator.string_pool != nil {
+        for &string_ptr in allocator.string_pool {
+            if string_ptr != nil {
+                free(string_ptr)
+                string_ptr = nil
+            }
+        }
+        delete(allocator.string_pool)
+        allocator.string_pool = nil
     }
-    delete(allocator.string_pool)
 }
 
 // allocate_module allocates a module from the pool or creates a new one
 allocate_module :: proc(allocator: ^OptimizedAllocator) -> ^manifest.Module {
+    if allocator == nil {
+        module_ptr := new(manifest.Module)
+        memory_stats.allocations_count += 1
+        memory_stats.current_memory_bytes += size_of(manifest.Module)
+        if memory_stats.current_memory_bytes > memory_stats.peak_memory_bytes {
+            memory_stats.peak_memory_bytes = memory_stats.current_memory_bytes
+        }
+        return module_ptr
+    }
+
     if len(allocator.module_pool) > 0 {
         // Reuse from pool
         module_ptr := allocator.module_pool[len(allocator.module_pool) - 1]
@@ -104,6 +128,8 @@ allocate_module :: proc(allocator: ^OptimizedAllocator) -> ^manifest.Module {
 
 // deallocate_module returns a module to the pool
 deallocate_module :: proc(allocator: ^OptimizedAllocator, module_ptr: ^manifest.Module) {
+    if allocator == nil || module_ptr == nil do return
+
     // Reset module to clean state
     module_ptr^ = manifest.Module{}
     
@@ -131,22 +157,33 @@ create_batch_string_builder :: proc(initial_chunk_size: int = 4096) -> BatchStri
 
 // destroy_batch_string_builder cleans up the batch string builder
 destroy_batch_string_builder :: proc(builder: ^BatchStringBuilder) {
+    if builder == nil do return
+
     // ✅ CRITICAL FIX: Don't delete individual chunks!
     // The chunks are string references that may come from:
     // 1. fmt.tprintf() - uses temp allocator, can't be deleted
     // 2. Other sources that manage their own memory
     // We only need to delete the chunks array container itself
-    delete(builder.chunks)
+    if builder.chunks != nil {
+        delete(builder.chunks)
+        builder.chunks = nil
+    }
+    builder.current_size = 0
+    builder.chunk_size = 0
 }
 
 // batch_write_string adds a string to the batch builder
 batch_write_string :: proc(builder: ^BatchStringBuilder, s: string) {
+    if builder == nil do return
+
     append(&builder.chunks, s)
     builder.current_size += len(s)
 }
 
 // batch_build_string builds the final string from all chunks
 batch_build_string :: proc(builder: ^BatchStringBuilder) -> string {
+    if builder == nil do return ""
+
     if len(builder.chunks) == 0 {
         return ""
     }
@@ -183,31 +220,50 @@ create_preallocated_buffers :: proc() -> PreallocatedBuffers {
 
 // destroy_preallocated_buffers cleans up pre-allocated buffers
 destroy_preallocated_buffers :: proc(buffers: ^PreallocatedBuffers) {
-    for s in buffers.temp_strings {
-        delete(s)
+    if buffers == nil do return
+
+    if buffers.temp_strings != nil {
+        for &s in buffers.temp_strings {
+            if s != "" {
+                delete(s)
+                s = ""
+            }
+        }
+        delete(buffers.temp_strings)
+        buffers.temp_strings = nil
     }
-    delete(buffers.temp_strings)
 }
 
 // get_path_buffer returns a reusable path buffer
 get_path_buffer :: proc(buffers: ^PreallocatedBuffers) -> []u8 {
+    if buffers == nil do return nil
+
     return buffers.path_buffer[:]
 }
 
 // get_line_buffer returns a reusable line buffer
 get_line_buffer :: proc(buffers: ^PreallocatedBuffers) -> []u8 {
+    if buffers == nil do return nil
+
     return buffers.line_buffer[:]
 }
 
 // add_temp_string adds a string to the temporary string pool
 add_temp_string :: proc(buffers: ^PreallocatedBuffers, s: string) {
+    if buffers == nil do return
+
     append(&buffers.temp_strings, s)
 }
 
 // clear_temp_strings clears all temporary strings
 clear_temp_strings :: proc(buffers: ^PreallocatedBuffers) {
-    for s in buffers.temp_strings {
-        delete(s)
+    if buffers == nil do return
+
+    for &s in buffers.temp_strings {
+        if s != "" {
+            delete(s)
+            s = ""
+        }
     }
     clear(&buffers.temp_strings)
 }

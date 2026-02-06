@@ -10,6 +10,8 @@ import "../src/manifest"
 // **Validates: Requirements 3.1.1, 3.1.2**
 @(test)
 test_basic_manifest_parsing :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: A valid TOML manifest should parse successfully and contain expected data
     
     toml_content := `[module]
@@ -68,6 +70,8 @@ timeout = "30"`
 // **Validates: Requirements 3.1.1**
 @(test)
 test_minimal_manifest_parsing :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: A minimal manifest with only required fields should parse successfully
     
     toml_content := `[module]
@@ -102,6 +106,8 @@ version = "1.0.0"`
 // **Validates: Requirements 3.1.8**
 @(test)
 test_settings_parsing :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Settings section should be parsed as key-value pairs
     
     toml_content := `[module]
@@ -139,6 +145,8 @@ log_level = "info"`
 // **Validates: Requirements 3.1.1**
 @(test)
 test_missing_name_error :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Manifest without required name field should fail to parse
     
     toml_content := `[module]
@@ -161,6 +169,8 @@ description = "Missing name field"`
 // **Validates: Requirements 3.1.1**
 @(test)
 test_empty_name_error :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Manifest with empty name field should fail to parse
     
     toml_content := `[module]
@@ -183,6 +193,8 @@ version = "1.0.0"`
 // **Validates: Requirements 3.1.3**
 @(test)
 test_dependencies_parsing :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Dependencies should be parsed correctly from arrays
     
     toml_content := `[module]
@@ -222,6 +234,8 @@ optional = ["fzf", "git-helpers"]`
 // **Validates: Requirements 3.1.4**
 @(test)
 test_platform_filters_parsing :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Platform filters should be parsed correctly
     
     toml_content := `[module]
@@ -266,6 +280,8 @@ min_version = "5.8"`
 // **Validates: Requirements 3.1.5**
 @(test)
 test_priority_parsing :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Priority values should be parsed correctly
     
     toml_content := `[module]
@@ -296,6 +312,8 @@ priority = 25`
 // **Validates: Requirements 3.1.6**
 @(test)
 test_files_parsing :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: File lists should be parsed correctly
     
     toml_content := `[module]
@@ -329,6 +347,8 @@ files = ["init.zsh", "functions.zsh", "aliases.zsh"]`
 // **Validates: Requirements 3.1.7**
 @(test)
 test_hooks_parsing :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Pre-load and post-load hooks should be parsed correctly
     
     toml_content := `[module]
@@ -361,6 +381,8 @@ post_load = "finalize_setup"`
 // **Validates: Requirements 4.2.1**
 @(test)
 test_malformed_toml_error :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Malformed TOML should be handled gracefully
     
     toml_content := `[module
@@ -384,6 +406,8 @@ version = "1.0.0"
 // **Validates: Requirements 4.2.1**
 @(test)
 test_nonexistent_file_error :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Non-existent files should be handled gracefully
     
     nonexistent_file := "/tmp/nonexistent_manifest.toml"
@@ -398,6 +422,8 @@ test_nonexistent_file_error :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.1.1, 3.1.2**
 @(test)
 test_complete_manifest_parsing :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: A complete manifest with all fields should parse correctly
     
     toml_content := `[module]

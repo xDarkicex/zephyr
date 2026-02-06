@@ -18,21 +18,18 @@ module_name_to_env :: proc(name: string) -> string {
 
 @(test)
 test_generated_shell_code_syntax :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Test that generated shell code has valid syntax by checking structure
-    test_dir := "test-modules"
+    test_dir := get_test_modules_dir()
+    defer delete(test_dir)
     
     modules := loader.discover(test_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     resolved_modules, err := loader.resolve(modules)
-    defer {
-        if resolved_modules != nil {
-            delete(resolved_modules)
-        }
-    }
+    defer cleanup_error_message(err)
+    defer cleanup_resolved(resolved_modules)
     
     testing.expect(t, err == "", "Dependency resolution should succeed")
     
@@ -51,17 +48,21 @@ test_generated_shell_code_syntax :: proc(t: ^testing.T) {
         testing.expect(t, strings.contains(shell_content, module_comment), 
                        fmt.tprintf("Should contain comment for module %s", module.name))
     }
+
+    cleanup_modules_and_cache(modules[:])
 }
 
 @(test)
 test_shell_code_with_real_files :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Create a test module with actual shell files and test structure
-    temp_dir := "test_temp_shell_exec"
-    defer remove_directory_recursive(temp_dir)
+    temp_dir := setup_test_environment("test_temp_shell_exec")
+    defer teardown_test_environment(temp_dir)
     
     // Create module directory
     module_dir := filepath.join({temp_dir, "test-shell-module"})
-    os.make_directory(temp_dir)
+    defer delete(module_dir)
     os.make_directory(module_dir)
     
     // Create module manifest
@@ -79,6 +80,7 @@ test_var = "test_value"
 `
     
     manifest_path := filepath.join({module_dir, "module.toml"})
+    defer delete(manifest_path)
     testing.expect(t, create_test_shell_file(manifest_path, manifest_content), 
                    "Should create manifest file")
     
@@ -100,7 +102,9 @@ test_echo() {
 `
     
     exports_path := filepath.join({module_dir, "exports.zsh"})
+    defer delete(exports_path)
     functions_path := filepath.join({module_dir, "functions.zsh"})
+    defer delete(functions_path)
     
     testing.expect(t, create_test_shell_file(exports_path, exports_content), 
                    "Should create exports file")
@@ -109,19 +113,13 @@ test_echo() {
     
     // Test discovery and resolution
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     testing.expect(t, len(modules) == 1, "Should discover test module")
     
     resolved_modules, err := loader.resolve(modules)
-    defer {
-        if resolved_modules != nil {
-            delete(resolved_modules)
-        }
-    }
+    defer cleanup_error_message(err)
+    defer cleanup_resolved(resolved_modules)
     
     testing.expect(t, err == "", "Should resolve test module")
     
@@ -135,20 +133,25 @@ test_echo() {
     // Verify files exist
     for file in module.files {
         file_path := filepath.join({module_dir, file})
+        defer delete(file_path)
         testing.expect(t, os.exists(file_path), 
                        fmt.tprintf("File should exist: %s", file_path))
     }
+
+    cleanup_modules_and_cache(modules[:])
 }
 
 @(test)
 test_environment_variable_export :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Test that module settings are properly formatted as environment variables
-    temp_dir := "test_temp_env_vars"
-    defer remove_directory_recursive(temp_dir)
+    temp_dir := setup_test_environment("test_temp_env_vars")
+    defer teardown_test_environment(temp_dir)
     
     // Create module with settings
     module_dir := filepath.join({temp_dir, "env-test-module"})
-    os.make_directory(temp_dir)
+    defer delete(module_dir)
     os.make_directory(module_dir)
     
     manifest_content := `[module]
@@ -167,6 +170,7 @@ path_setting = "/custom/path"
 `
     
     manifest_path := filepath.join({module_dir, "module.toml"})
+    defer delete(manifest_path)
     testing.expect(t, create_test_shell_file(manifest_path, manifest_content), 
                    "Should create manifest file")
     
@@ -176,22 +180,17 @@ echo "Module loaded successfully"
 `
     
     shell_path := filepath.join({module_dir, "test.zsh"})
+    defer delete(shell_path)
     testing.expect(t, create_test_shell_file(shell_path, shell_content), 
                    "Should create shell file")
     
     // Test module loading
     modules := loader.discover(temp_dir)
-    defer {
-        manifest.cleanup_modules(modules[:])
-        delete(modules)
-    }
+    defer delete(modules)
     
     resolved_modules, err := loader.resolve(modules)
-    defer {
-        if resolved_modules != nil {
-            delete(resolved_modules)
-        }
-    }
+    defer cleanup_error_message(err)
+    defer cleanup_resolved(resolved_modules)
     
     testing.expect(t, err == "", "Should resolve env test module")
     
@@ -210,6 +209,8 @@ echo "Module loaded successfully"
                    "Should contain properly formatted env var")
     testing.expect(t, strings.contains(env_script, "custom_value"), 
                    "Should contain setting value")
+
+    cleanup_modules_and_cache(modules[:])
 }
 
 // Helper function to generate a basic shell script for syntax testing
@@ -222,13 +223,16 @@ generate_test_shell_script :: proc(modules: [dynamic]manifest.Module) -> string 
     
     for module in modules {
         strings.write_string(&script, fmt.tprintf("# Module: %s\n", module.name))
+
+        module_env := module_name_to_env(module.name)
+        defer delete(module_env)
         
         // Export settings as environment variables
         for key, value in module.settings {
             // Simple environment variable naming
-            env_var := fmt.tprintf("ZSH_MODULE_%s_%s", 
-                module_name_to_env(module.name), 
-                module_name_to_env(key))
+            key_env := module_name_to_env(key)
+            defer delete(key_env)
+            env_var := fmt.tprintf("ZSH_MODULE_%s_%s", module_env, key_env)
             strings.write_string(&script, fmt.tprintf("export %s=\"%s\"\n", env_var, value))
         }
         
@@ -250,20 +254,23 @@ generate_env_test_script :: proc(modules: [dynamic]manifest.Module, base_dir: st
     
     for module in modules {
         strings.write_string(&script, fmt.tprintf("# Testing environment variables for module: %s\n", module.name))
+
+        module_env := module_name_to_env(module.name)
+        defer delete(module_env)
         
         // Export settings
         for key, value in module.settings {
-            env_var := fmt.tprintf("ZSH_MODULE_%s_%s", 
-                module_name_to_env(module.name), 
-                module_name_to_env(key))
+            key_env := module_name_to_env(key)
+            defer delete(key_env)
+            env_var := fmt.tprintf("ZSH_MODULE_%s_%s", module_env, key_env)
             strings.write_string(&script, fmt.tprintf("export %s=\"%s\"\n", env_var, value))
         }
         
         // Test that variables are set correctly
         for key, value in module.settings {
-            env_var := fmt.tprintf("ZSH_MODULE_%s_%s", 
-                module_name_to_env(module.name), 
-                module_name_to_env(key))
+            key_env := module_name_to_env(key)
+            defer delete(key_env)
+            env_var := fmt.tprintf("ZSH_MODULE_%s_%s", module_env, key_env)
             strings.write_string(&script, fmt.tprintf("if [[ \"$%s\" != \"%s\" ]]; then\n", env_var, value))
             strings.write_string(&script, fmt.tprintf("    echo \"Error: %s not set correctly\" >&2\n", env_var))
             strings.write_string(&script, fmt.tprintf("    echo \"Expected: %s, Got: $%s\" >&2\n", value, env_var))

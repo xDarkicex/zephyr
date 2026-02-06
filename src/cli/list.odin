@@ -8,11 +8,40 @@ import "../manifest"
 import "../colors"
 import "../errors"
 
+// List_Options contains parsed command-line options for the list command
+List_Options :: struct {
+    json_output:  bool,
+    pretty_print: bool,
+    filter:       string,
+}
+
+// parse_list_options parses command-line arguments for list command
+parse_list_options :: proc() -> List_Options {
+    options := List_Options{}
+    
+    args := os.args[1:]
+    for arg in args {
+        if arg == "--json" {
+            options.json_output = true
+        } else if arg == "--pretty" {
+            options.pretty_print = true
+        } else if strings.has_prefix(arg, "--filter=") {
+            options.filter = strings.trim_prefix(arg, "--filter=")
+        }
+    }
+    
+    return options
+}
+
 // list_modules implements the 'zephyr list' command
 // Displays discovered modules in resolved dependency order with priorities and dependencies
 list_modules :: proc() {
+    // Parse command-line options
+    options := parse_list_options()
+    
     // Get modules directory
     modules_dir := loader.get_modules_dir()
+    defer delete(modules_dir)
     
     // Verify directory exists and is accessible
     if !os.exists(modules_dir) {
@@ -47,14 +76,27 @@ list_modules :: proc() {
     }
     
     if len(modules) == 0 {
-        colors.print_warning("No modules found in: %s", modules_dir)
-        fmt.eprintln("")
-        errors.suggest_for_directory_error(modules_dir, true, true)
-        return
+        if options.json_output {
+            // Output empty JSON structure
+            json_bytes, marshal_err := create_empty_json_output(modules_dir, options.pretty_print)
+            if marshal_err != nil {
+                colors.print_error("Failed to serialize JSON: %v", marshal_err)
+                os.exit(1)
+            }
+            defer delete(json_bytes)
+            fmt.println(string(json_bytes))
+            return
+        } else {
+            colors.print_warning("No modules found in: %s", modules_dir)
+            fmt.eprintln("")
+            errors.suggest_for_directory_error(modules_dir, true, true)
+            return
+        }
     }
     
     // Platform filtering phase
     current_platform := loader.get_current_platform()
+    defer loader.cleanup_platform_info(&current_platform)
     compatible_indices := loader.filter_compatible_indices(modules)
     defer delete(compatible_indices)
     
@@ -65,7 +107,7 @@ list_modules :: proc() {
         colors.print_error("Details: %s", err)
         fmt.eprintln("")
         errors.suggest_for_dependency_error(err)
-        return
+        os.exit(1)
     }
     defer {
         if resolved_modules != nil {
@@ -73,7 +115,29 @@ list_modules :: proc() {
         }
     }
     
-    // Display header
+    // Output based on format
+    if options.json_output {
+        json_bytes, marshal_err := generate_json_output(
+            modules_dir,
+            modules,
+            compatible_indices,
+            resolved_modules,
+            options.filter,
+            options.pretty_print,
+        )
+        
+        if marshal_err != nil {
+            colors.print_error("Failed to serialize JSON: %v", marshal_err)
+            os.exit(1)
+        }
+        defer delete(json_bytes)
+        
+        // Write to stdout
+        fmt.println(string(json_bytes))
+        return
+    }
+    
+    // Display header (existing human-readable output)
     fmt.println("")
     errors.print_formatted_info("MODULE DISCOVERY RESULTS")
     fmt.printf("  %s %s\n", colors.dim("Directory:"), modules_dir)

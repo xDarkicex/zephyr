@@ -124,6 +124,7 @@ run_load :: proc() {
 
 	// Get modules directory with error handling
 	modules_dir := get_modules_directory()
+	defer delete(modules_dir)
 	debug.debug_info("Using modules directory: %s", modules_dir)
 
 	// Verify directory exists and is accessible
@@ -233,17 +234,6 @@ get_modules_directory :: proc() -> string {
 	if modules_dir != "" {
 		debug.debug_info("Using ZSH_MODULES_DIR: %s", modules_dir)
 		return modules_dir
-	}
-
-	// Default to $HOME/.zsh/modules
-	home := os.get_env("HOME")
-	debug.debug_env_var("HOME", home)
-
-	if home == "" {
-		// Fallback if HOME is not set (shouldn't happen on Unix systems)
-		colors.print_warning("HOME environment variable not set, using current directory")
-		debug.debug_warn("HOME not set, using fallback")
-		return ".zsh/modules"
 	}
 
 	// Use the loader package's get_modules_dir function for consistency

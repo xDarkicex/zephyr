@@ -23,9 +23,30 @@ ResolutionResult :: struct {
 
 // cleanup_resolution_result cleans up allocated memory in ResolutionResult
 cleanup_resolution_result :: proc(result: ^ResolutionResult) {
-	manifest.cleanup_modules(result.modules[:])
-	delete(result.modules)
-	delete(result.message)
+	if result == nil do return
+
+	if result.modules != nil {
+		manifest.cleanup_modules(result.modules[:])
+		delete(result.modules)
+		result.modules = nil
+	}
+
+	if result.message != "" {
+		delete(result.message)
+		result.message = ""
+	}
+}
+
+cleanup_string_array :: proc(values: [dynamic]string) {
+	if values == nil do return
+
+	for &value in values {
+		if value != "" {
+			delete(value)
+			value = ""
+		}
+	}
+	delete(values)
 }
 
 // resolve_filtered performs dependency resolution on a filtered set of modules
@@ -66,67 +87,71 @@ resolve :: proc(modules: [dynamic]manifest.Module) -> ([dynamic]manifest.Module,
 	debug.debug_enter("resolve")
 	defer debug.debug_exit("resolve")
 
-	debug.debug_info("Resolving dependencies for %d modules", len(modules))
+	if cache_guard() {
+		debug.debug_info("Resolving dependencies for %d modules", len(modules))
 
-	// Initialize cache if not already done
-	if !cache_initialized {
-		init_cache()
-	}
+		// Initialize cache if not already done
+		if !cache_initialized {
+			init_cache()
+		}
 
-	// Try to get cached result first
-	if cached_order, cached := get_cached_dependency_result(&global_cache, modules); cached {
-		debug.debug_info("Using cached dependency resolution")
+		// Try to get cached result first
+		if cached_order, cached := get_cached_dependency_result(&global_cache, modules); cached {
+			debug.debug_info("Using cached dependency resolution")
 
-		// Convert cached names back to modules in correct order
-		result := make([dynamic]manifest.Module, 0, len(cached_order))
+			// Convert cached names back to modules in correct order
+			result := make([dynamic]manifest.Module, 0, len(cached_order))
 
-		for name in cached_order {
-			// Find module with this name
-			for module in modules {
-				if module.name == name {
-					// Clone the module to avoid double-free issues
-					cloned_module := clone_module(module)
-					append(&result, cloned_module)
-					break
+			for name in cached_order {
+				// Find module with this name
+				for module in modules {
+					if module.name == name {
+						// Clone the module to avoid double-free issues
+						cloned_module := CloneModule(module)
+						append(&result, cloned_module)
+						break
+					}
 				}
+			}
+
+			cleanup_string_array(cached_order)
+
+			if len(result) == len(modules) {
+				debug.debug_info("Cached resolution successful: %d modules in order", len(result))
+				return result, ""
+			} else {
+				// Cache was invalid, fall through to normal resolution
+				manifest.cleanup_modules(result[:])
+				delete(result)
+				debug.debug_warn("Cached resolution was invalid, performing fresh resolution")
 			}
 		}
 
-		delete(cached_order)
+		// Perform fresh resolution
+		resolved_modules: [dynamic]manifest.Module
+		err_msg: string
 
-		if len(result) == len(modules) {
-			debug.debug_info("Cached resolution successful: %d modules in order", len(result))
-			return result, ""
-		} else {
-			// Cache was invalid, fall through to normal resolution
-			manifest.cleanup_modules(result[:])
-			delete(result)
-			debug.debug_warn("Cached resolution was invalid, performing fresh resolution")
+		// Use detailed resolution (optimized version can be added later)
+		result := resolve_detailed(modules)
+		if result.error != .None {
+			debug.debug_error("Resolution failed: %s", result.message)
+			return nil, result.message
 		}
+		resolved_modules = result.modules
+
+		if err_msg == "" && len(resolved_modules) > 0 {
+			// Cache the successful result
+			cache_dependency_result(&global_cache, modules, resolved_modules)
+			debug.debug_info(
+				"Resolution successful and cached: %d modules in order",
+				len(resolved_modules),
+			)
+		}
+
+		return resolved_modules, err_msg
 	}
 
-	// Perform fresh resolution
-	resolved_modules: [dynamic]manifest.Module
-	err_msg: string
-
-	// Use detailed resolution (optimized version can be added later)
-	result := resolve_detailed(modules)
-	if result.error != .None {
-		debug.debug_error("Resolution failed: %s", result.message)
-		return nil, result.message
-	}
-	resolved_modules = result.modules
-
-	if err_msg == "" && len(resolved_modules) > 0 {
-		// Cache the successful result
-		cache_dependency_result(&global_cache, modules, resolved_modules)
-		debug.debug_info(
-			"Resolution successful and cached: %d modules in order",
-			len(resolved_modules),
-		)
-	}
-
-	return resolved_modules, err_msg
+	return nil, "cache lock failed"
 }
 
 // resolve_detailed provides detailed error information for debugging
@@ -226,7 +251,7 @@ resolve_detailed :: proc(modules: [dynamic]manifest.Module) -> ResolutionResult 
 
 		// ✅ CRITICAL FIX: Deep clone before appending to avoid shared ownership
 		current_module := modules[current_idx]
-		cloned_module := clone_module(current_module)
+		cloned_module := CloneModule(current_module)
 		append(&result.modules, cloned_module)
 
 		// Collect modules that become ready after processing current module

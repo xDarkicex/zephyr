@@ -164,6 +164,8 @@ check_priority_ordering :: proc(t: ^testing.T, resolved: []manifest.Module, test
 // **Validates: Requirements 3.3.4**
 @(test)
 test_property_priority_ordering_independent_modules :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Modules with no dependencies should be ordered strictly by priority
     // Property: Lower priority numbers should come first
     
@@ -186,6 +188,7 @@ test_property_priority_ordering_independent_modules :: proc(t: ^testing.T) {
             
             // Resolve modules
             resolved, err := loader.resolve(modules)
+            defer cleanup_error_message(err)
             
             // Property: Resolution should succeed for independent modules
             testing.expect(t, len(err) == 0, 
@@ -209,6 +212,8 @@ test_property_priority_ordering_independent_modules :: proc(t: ^testing.T) {
                 // Property: Check overall priority ordering correctness
                 check_priority_ordering(t, resolved[:], fmt.tprintf("Independent modules (count=%d, iter=%d)", test_case.count, iteration))
             }
+
+            cleanup_resolved_and_cache(resolved)
         }
     }
 }
@@ -216,6 +221,8 @@ test_property_priority_ordering_independent_modules :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.3.1, 3.3.4**
 @(test)
 test_property_priority_ordering_with_dependencies :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Dependencies must be satisfied regardless of priority
     // Property: Within dependency constraints, priority should determine order
     
@@ -240,6 +247,7 @@ test_property_priority_ordering_with_dependencies :: proc(t: ^testing.T) {
             
             // Resolve modules
             resolved, err := loader.resolve(modules)
+            defer cleanup_error_message(err)
             
             // Property: Resolution should succeed for chain dependencies
             testing.expect(t, len(err) == 0, 
@@ -259,6 +267,8 @@ test_property_priority_ordering_with_dependencies :: proc(t: ^testing.T) {
                 // Property: Check overall ordering correctness
                 check_priority_ordering(t, resolved[:], fmt.tprintf("Chain modules (length=%d, iter=%d)", chain_length, iteration))
             }
+
+            cleanup_resolved_and_cache(resolved)
         }
     }
 }
@@ -266,6 +276,8 @@ test_property_priority_ordering_with_dependencies :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.3.1, 3.3.4**
 @(test)
 test_property_priority_ordering_tree_structure :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Tree dependency structures should be resolved correctly
     // Property: Priority should determine order within each dependency level
     
@@ -281,6 +293,7 @@ test_property_priority_ordering_tree_structure :: proc(t: ^testing.T) {
             
             // Resolve modules
             resolved, err := loader.resolve(modules)
+            defer cleanup_error_message(err)
             
             // Property: Resolution should succeed for tree structures
             testing.expect(t, len(err) == 0, 
@@ -337,6 +350,8 @@ test_property_priority_ordering_tree_structure :: proc(t: ^testing.T) {
                 // Property: Check overall ordering correctness
                 check_priority_ordering(t, resolved[:], fmt.tprintf("Tree modules (levels=%d, iter=%d)", tree_level, iteration))
             }
+
+            cleanup_resolved_and_cache(resolved)
         }
     }
 }
@@ -344,6 +359,8 @@ test_property_priority_ordering_tree_structure :: proc(t: ^testing.T) {
 // **Validates: Requirements 3.3.4**
 @(test)
 test_property_priority_ordering_mixed_scenarios :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Complex scenarios with mixed dependencies and priorities should be handled correctly
     // Property: Priority ordering should be stable and consistent
     
@@ -378,6 +395,7 @@ test_property_priority_ordering_mixed_scenarios :: proc(t: ^testing.T) {
         
         // Resolve modules
         resolved, err := loader.resolve(modules)
+        defer cleanup_error_message(err)
         
         // Property: Resolution should succeed for mixed scenarios
         testing.expect(t, len(err) == 0, 
@@ -450,5 +468,7 @@ test_property_priority_ordering_mixed_scenarios :: proc(t: ^testing.T) {
             // Property: Check overall ordering correctness
             check_priority_ordering(t, resolved[:], fmt.tprintf("Mixed scenario (iter=%d)", iteration))
         }
+
+        cleanup_resolved_and_cache(resolved)
     }
 }

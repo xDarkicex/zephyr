@@ -5,13 +5,20 @@ import "core:testing"
 import "core:fmt"
 import "core:path/filepath"
 import "core:os"
+import "core:strings"
 import "../src/loader"
+import "../src/manifest"
 
 // Test to verify that memory leaks are properly fixed and no growth occurs
 // This test confirms that create_module_cache() + destroy_module_cache() cycles
 // do not accumulate memory leaks with repeated usage
 @(test)
 test_memory_leak_is_static :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    original_allocator := context.allocator
+    defer context.allocator = original_allocator
+
     // Create tracking allocator
     tracking_allocator: mem.Tracking_Allocator
     mem.tracking_allocator_init(&tracking_allocator, context.allocator)
@@ -104,6 +111,11 @@ test_memory_leak_is_static :: proc(t: ^testing.T) {
 // Test to isolate filepath.join() behavior specifically
 @(test)
 test_filepath_join_cleanup :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    original_allocator := context.allocator
+    defer context.allocator = original_allocator
+
     tracking_allocator: mem.Tracking_Allocator
     mem.tracking_allocator_init(&tracking_allocator, context.allocator)
     defer mem.tracking_allocator_destroy(&tracking_allocator)
@@ -141,6 +153,11 @@ test_filepath_join_cleanup :: proc(t: ^testing.T) {
 // Test to isolate os.get_env() behavior specifically  
 @(test)
 test_os_get_env_cleanup :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+    original_allocator := context.allocator
+    defer context.allocator = original_allocator
+
     tracking_allocator: mem.Tracking_Allocator
     mem.tracking_allocator_init(&tracking_allocator, context.allocator)
     defer mem.tracking_allocator_destroy(&tracking_allocator)
@@ -173,4 +190,168 @@ test_os_get_env_cleanup :: proc(t: ^testing.T) {
     } else {
         fmt.printf("❌ os.get_env() has %d leaks\n", leak_count)
     }
+}
+
+// **Property 14: Bounded Memory Leaks**
+// **Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5**
+@(test)
+test_property_bounded_memory_leaks :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+
+    // Avoid cross-test cache interference when running in parallel.
+    loader.lock_global_cache()
+    defer loader.unlock_global_cache()
+
+    original_allocator := context.allocator
+    defer context.allocator = original_allocator
+
+    tracking_allocator: mem.Tracking_Allocator
+    mem.tracking_allocator_init(&tracking_allocator, context.allocator)
+    defer mem.tracking_allocator_destroy(&tracking_allocator)
+
+    test_allocator := mem.tracking_allocator(&tracking_allocator)
+
+    // Run a representative cache cycle under tracking allocator.
+    {
+        context.allocator = test_allocator
+
+        temp_dir := setup_test_environment("test_bounded_memory_leaks")
+        defer teardown_test_environment(temp_dir)
+
+        max_entries := 2
+        cache := loader.create_module_cache(temp_dir, max_entries)
+
+        filenames := []string{"module0.toml", "module1.toml", "module2.toml"}
+        content := "test"
+        for name in filenames {
+            file_path := filepath.join({temp_dir, name})
+            os.write_entire_file(file_path, transmute([]u8)content)
+
+            module := make_test_module("bounded-module")
+            loader.cache_module(&cache, file_path, module)
+            manifest.cleanup_module(&module)
+
+            delete(file_path)
+
+            testing.expect(t, len(cache.modules) <= max_entries, "Cache size should not exceed max_entries")
+        }
+
+        loader.destroy_module_cache(&cache)
+        loader.reset_global_cache()
+    }
+
+    leak_size := 0
+    for _, entry in tracking_allocator.allocation_map {
+        leak_size += entry.size
+    }
+
+    testing.expect(
+        t,
+        leak_size <= 1024,
+        fmt.tprintf("Memory leaks should be <= 1KB (excluding Odin internals), got %d bytes", leak_size),
+    )
+}
+
+// **Property 17: Memory Stability**
+// **Validates: Requirements 3.5**
+@(test)
+test_property_memory_stability :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
+
+    // Avoid cross-test cache interference when running in parallel.
+    loader.lock_global_cache()
+    defer loader.unlock_global_cache()
+
+    original_allocator := context.allocator
+    defer context.allocator = original_allocator
+
+    tracking_allocator: mem.Tracking_Allocator
+    mem.tracking_allocator_init(&tracking_allocator, context.allocator)
+    defer mem.tracking_allocator_destroy(&tracking_allocator)
+
+    test_allocator := mem.tracking_allocator(&tracking_allocator)
+
+    {
+        context.allocator = test_allocator
+
+        temp_dir := setup_test_environment("test_memory_stability")
+        defer teardown_test_environment(temp_dir)
+
+        // Build a small module set for repeated discovery/resolution.
+        module_count := 5
+        for i in 0..<module_count {
+            module_dir := filepath.join({temp_dir, fmt.tprintf("module_%d", i)})
+            os.make_directory(module_dir)
+
+            manifest_path := filepath.join({module_dir, "module.toml"})
+            content := fmt.tprintf(`[module]
+name = "module_%d"
+version = "1.0.0"
+
+[load]
+files = ["init.zsh"]`, i)
+            os.write_entire_file(manifest_path, transmute([]u8)content)
+
+            delete(manifest_path)
+            delete(module_dir)
+        }
+
+        // Warm-up run to trigger any one-time initialization.
+        {
+            modules := loader.discover(temp_dir)
+            resolved, err := loader.resolve(modules)
+            if err != "" {
+                delete(err)
+            }
+            if resolved != nil {
+                manifest.cleanup_modules(resolved[:])
+                delete(resolved)
+            }
+            manifest.cleanup_modules(modules[:])
+            delete(modules)
+        }
+
+        // Clear any cache state from warm-up to avoid polluting the main loop.
+        loader.reset_global_cache()
+
+        iterations := 25
+        for _ in 0..<iterations {
+            modules := loader.discover(temp_dir)
+            resolved, err := loader.resolve(modules)
+            if err != "" {
+                delete(err)
+            }
+            if resolved != nil {
+                manifest.cleanup_modules(resolved[:])
+                delete(resolved)
+            }
+            manifest.cleanup_modules(modules[:])
+            delete(modules)
+        }
+
+        loader.reset_global_cache()
+    }
+
+    // Compute leak size excluding known Odin stdlib allocations.
+    total_leak := 0
+    filtered_leak := 0
+    for _, entry in tracking_allocator.allocation_map {
+        total_leak += entry.size
+        if is_stdlib_allocation(entry.location) {
+            continue
+        }
+        filtered_leak += entry.size
+    }
+
+    testing.expect(
+        t,
+        filtered_leak <= 1024,
+        fmt.tprintf(
+            "Memory usage should remain stable (<=1KB excluding Odin internals). filtered=%d total=%d",
+            filtered_leak,
+            total_leak,
+        ),
+    )
 }

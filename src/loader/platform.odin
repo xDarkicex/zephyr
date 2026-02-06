@@ -13,6 +13,21 @@ Platform_Info :: struct {
     version: string,
 }
 
+// cleanup_platform_info frees owned strings inside Platform_Info.
+// Only use this on values returned by get_current_platform.
+cleanup_platform_info :: proc(platform: ^Platform_Info) {
+    if platform == nil do return
+
+    if platform.shell != "" {
+        delete(platform.shell)
+        platform.shell = ""
+    }
+    if platform.version != "" {
+        delete(platform.version)
+        platform.version = ""
+    }
+}
+
 // get_current_platform detects the current system's platform information
 get_current_platform :: proc() -> Platform_Info {
     platform := Platform_Info{}
@@ -50,14 +65,15 @@ get_current_platform :: proc() -> Platform_Info {
     // Detect shell and version from environment
     shell_env := os.get_env("SHELL")
     if shell_env != "" {
+        defer delete(shell_env)
         // Extract shell name from path (e.g., "/bin/zsh" -> "zsh")
         shell_parts := strings.split(shell_env, "/")
         defer delete(shell_parts)
         if len(shell_parts) > 0 {
-            platform.shell = shell_parts[len(shell_parts) - 1]
+            platform.shell = strings.clone(shell_parts[len(shell_parts) - 1])  // ✅ CLONE IT!
         }
     } else {
-        platform.shell = "unknown"
+        platform.shell = strings.clone("unknown")
     }
     
     // Try to get shell version (this is shell-specific and may not always work)
@@ -83,7 +99,8 @@ get_zsh_version :: proc() -> string {
     // Try to get version from ZSH_VERSION environment variable first
     zsh_version := os.get_env("ZSH_VERSION")
     if zsh_version != "" {
-        return zsh_version
+        defer delete(zsh_version)
+        return strings.clone(zsh_version)  // ✅ CLONE IT!
     }
     
     // If not available, we can't easily detect it without running zsh
@@ -96,11 +113,12 @@ get_bash_version :: proc() -> string {
     // Try to get version from BASH_VERSION environment variable
     bash_version := os.get_env("BASH_VERSION")
     if bash_version != "" {
+        defer delete(bash_version)
         // BASH_VERSION contains more info, extract just the version number
         parts := strings.split(bash_version, " ")
         defer delete(parts)
         if len(parts) > 0 {
-            return parts[0]
+            return strings.clone(parts[0])  // ✅ CLONE IT!
         }
     }
     
@@ -109,6 +127,8 @@ get_bash_version :: proc() -> string {
 
 // is_platform_compatible checks if a module is compatible with the current platform
 is_platform_compatible :: proc(module: ^manifest.Module, current_platform: Platform_Info) -> bool {
+    if module == nil do return false
+
     filter := &module.platforms
     
     // If no platform filters are specified, assume compatible
@@ -223,6 +243,8 @@ parse_version :: proc(version: string) -> [dynamic]int {
 // filter_compatible_modules returns indices of modules that are compatible with the current platform
 filter_compatible_indices :: proc(modules: [dynamic]manifest.Module) -> [dynamic]int {
     current_platform := get_current_platform()
+    defer cleanup_platform_info(&current_platform)
+    
     compatible_indices := make([dynamic]int)
     
     for &module, idx in modules {

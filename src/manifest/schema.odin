@@ -1,6 +1,18 @@
 package manifest
 
-// Module represents a shell module with its metadata, dependencies, and configuration
+import "core:strings"
+
+// Module represents a shell module with its metadata, dependencies, and configuration.
+//
+// Ownership:
+// - All string fields are owned by the Module and must be heap-allocated
+//   (typically via strings.clone()).
+// - Dynamic arrays (required/optional/files/platforms.*) own their elements.
+// - settings map keys/values are owned and tracked via settings_storage.
+//
+// Cloning:
+// - Use loader.CloneModule() to create a deep, independent copy.
+// - Do not shallow copy Modules that will be cleaned up independently.
 Module :: struct {
     // Metadata
     name:        string,
@@ -16,11 +28,13 @@ Module :: struct {
     // Platform compatibility
     platforms:   Platform_Filter,
     
-    // Loading configuration
-    priority:    int,
-    files:       [dynamic]string,
-    hooks:       Hooks,
-    settings:    map[string]string,
+	// Loading configuration
+	priority:    int,
+	files:       [dynamic]string,
+	hooks:       Hooks,
+	settings:    map[string]string,
+	// Internal: track owned settings strings for cleanup without map iteration
+	settings_storage: [dynamic]string,
     
     // Internal state
     path:        string,
@@ -41,12 +55,13 @@ Hooks :: struct {
     post_load: string,
 }
 
-// cleanup_module frees all allocated memory for a single module
+// cleanup_module frees all allocated memory for a single module.
+// Only owned memory is freed. Safe to call multiple times and with nil input.
 // CRITICAL CONTRACT: ALL string fields in Module must be heap-allocated
 // (created with strings.clone()) and owned by the Module.
 // NEVER use string literals directly in Module structs.
 cleanup_module :: proc(module: ^Module) {
-    if module == nil do return
+	if module == nil do return
     
     // Only delete if non-empty (defense against string literals)
     if module.name != "" {
@@ -144,23 +159,50 @@ cleanup_module :: proc(module: ^Module) {
         module.hooks.post_load = ""
     }
     
-    // Clean up settings map and its strings
-    if module.settings != nil {
-        // ✅ CORRECT: Clean up map values before deleting the map
-        for key, value in module.settings {
-            if key != "" {
-                delete(key)
-            }
-            if value != "" {
-                delete(value)
-            }
-        }
-        delete(module.settings)
-        module.settings = nil
-    }
+	// Clean up settings map structure (strings tracked separately)
+	if module.settings != nil {
+		delete(module.settings)
+		module.settings = nil
+	}
+
+	// Clean up tracked settings strings (if any)
+	if module.settings_storage != nil {
+		for setting in module.settings_storage {
+			if setting != "" {
+				delete(setting)
+			}
+		}
+		delete(module.settings_storage)
+		module.settings_storage = nil
+	}
 }
 
-// cleanup_modules frees all allocated memory for a slice of modules
+// init_settings_storage ensures settings map and storage are initialized
+init_settings_storage :: proc(module: ^Module) {
+	if module == nil do return
+	if module.settings == nil {
+		module.settings = make(map[string]string)
+	}
+	if module.settings_storage == nil {
+		module.settings_storage = make([dynamic]string)
+	}
+}
+
+// add_setting inserts a settings key/value and tracks ownership for cleanup
+AddSetting :: proc(module: ^Module, key: string, value: string) {
+	if module == nil do return
+	init_settings_storage(module)
+
+	owned_key := strings.clone(key)
+	owned_value := strings.clone(value)
+	module.settings[owned_key] = owned_value
+
+	append(&module.settings_storage, owned_key)
+	append(&module.settings_storage, owned_value)
+}
+
+// cleanup_modules frees all owned memory for a slice of modules.
+// Idempotent when called multiple times on the same module values.
 cleanup_modules :: proc(modules: []Module) {
     for &module in modules {
         cleanup_module(&module)

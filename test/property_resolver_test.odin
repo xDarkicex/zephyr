@@ -14,7 +14,7 @@ test_counter := 0
 // Generate a unique module name
 generate_module_name :: proc(prefix: string = "module") -> string {
     test_counter += 1
-    return fmt.tprintf("%s-%d", prefix, test_counter)
+    return strings.clone(fmt.tprintf("%s-%d", prefix, test_counter))
 }
 
 // Generate a simple priority value
@@ -24,7 +24,7 @@ generate_priority :: proc(base: int) -> int {
 
 // Generate a simple version string
 generate_version :: proc(major: int = 1) -> string {
-    return fmt.tprintf("%d.0.0", major)
+    return strings.clone(fmt.tprintf("%d.0.0", major))
 }
 
 // Generate a valid acyclic dependency graph
@@ -36,8 +36,7 @@ generate_acyclic_modules :: proc(count: int) -> [dynamic]manifest.Module {
     defer delete(module_names)
     
     for i in 0..<count {
-        name := fmt.tprintf("module-%d", i)
-        append(&module_names, strings.clone(name))
+        append(&module_names, fmt.tprintf("module-%d", i))
     }
     
     // Create modules where each module can only depend on modules with lower indices
@@ -45,7 +44,7 @@ generate_acyclic_modules :: proc(count: int) -> [dynamic]manifest.Module {
     for i in 0..<count {
         module := manifest.Module{
             name = strings.clone(module_names[i]),
-            version = strings.clone(generate_version(i + 1)),
+            version = generate_version(i + 1),
             priority = generate_priority(i + 1),
             required = make([dynamic]string),
             optional = make([dynamic]string),
@@ -81,6 +80,8 @@ generate_acyclic_modules :: proc(count: int) -> [dynamic]manifest.Module {
 // **Validates: Requirements 3.3.1, 3.3.2**
 @(test)
 test_property_dependency_resolution_acyclicity :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: For any valid acyclic dependency graph, resolution must succeed
     // Property: The resolved order must satisfy all dependency constraints
     // Property: No cycles should exist in the resolved order
@@ -98,6 +99,7 @@ test_property_dependency_resolution_acyclicity :: proc(t: ^testing.T) {
             
             // Resolve dependencies
             resolved, err := loader.resolve(modules)
+            defer cleanup_error_message(err)
             
             // Property: Resolution should succeed for acyclic graphs
             testing.expect(t, len(err) == 0, 
@@ -140,6 +142,8 @@ test_property_dependency_resolution_acyclicity :: proc(t: ^testing.T) {
                     seen_modules[module.name] = true
                 }
             }
+
+            cleanup_resolved_and_cache(resolved)
         }
     }
 }
@@ -157,15 +161,14 @@ generate_cyclic_modules :: proc(count: int) -> [dynamic]manifest.Module {
     defer delete(module_names)
     
     for i in 0..<count {
-        name := fmt.tprintf("cyclic-%d", i)
-        append(&module_names, strings.clone(name))
+        append(&module_names, fmt.tprintf("cyclic-%d", i))
     }
     
     // Create modules with a guaranteed cycle
     for i in 0..<count {
         module := manifest.Module{
             name = strings.clone(module_names[i]),
-            version = strings.clone(generate_version(i + 1)),
+            version = generate_version(i + 1),
             priority = generate_priority(i + 1),
             required = make([dynamic]string),
             optional = make([dynamic]string),
@@ -190,6 +193,8 @@ generate_cyclic_modules :: proc(count: int) -> [dynamic]manifest.Module {
 // **Validates: Requirements 3.3.2**
 @(test)
 test_property_circular_dependency_detection :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Any dependency graph with cycles must be detected and rejected
     
     // Test with different cycle sizes
@@ -205,6 +210,7 @@ test_property_circular_dependency_detection :: proc(t: ^testing.T) {
             
             // Resolve dependencies
             resolved, err := loader.resolve(modules)
+            defer cleanup_error_message(err)
             
             // Property: Resolution should fail for cyclic graphs
             testing.expect(t, len(err) > 0, 
@@ -218,6 +224,8 @@ test_property_circular_dependency_detection :: proc(t: ^testing.T) {
             // Property: No modules should be resolved when there's a cycle
             testing.expect(t, resolved == nil || len(resolved) == 0, 
                 "No modules should be resolved when circular dependency exists")
+
+            cleanup_resolved_and_cache(resolved)
         }
     }
 }
@@ -230,7 +238,7 @@ generate_modules_with_missing_deps :: proc(valid_count: int, missing_count: int)
     for i in 0..<valid_count {
         module := manifest.Module{
             name = strings.clone(fmt.tprintf("valid-%d", i)),
-            version = strings.clone(generate_version(i + 1)),
+            version = generate_version(i + 1),
             priority = generate_priority(i + 1),
             required = make([dynamic]string),
             optional = make([dynamic]string),
@@ -257,6 +265,8 @@ generate_modules_with_missing_deps :: proc(valid_count: int, missing_count: int)
 // **Validates: Requirements 3.3.3**
 @(test)
 test_property_missing_dependency_detection :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Any module with missing required dependencies must cause resolution to fail
     
     // Test with different numbers of valid modules and missing dependencies
@@ -274,6 +284,7 @@ test_property_missing_dependency_detection :: proc(t: ^testing.T) {
             
             // Resolve dependencies
             resolved, err := loader.resolve(modules)
+            defer cleanup_error_message(err)
             
             // Property: Resolution should fail when dependencies are missing
             testing.expect(t, len(err) > 0, 
@@ -283,6 +294,8 @@ test_property_missing_dependency_detection :: proc(t: ^testing.T) {
             // Property: Error should mention missing dependency
             testing.expect(t, strings.contains(err, "missing dependency"), 
                 fmt.tprintf("Error should mention missing dependency, got: %s", err))
+
+            cleanup_resolved_and_cache(resolved)
         }
     }
 }
@@ -311,7 +324,7 @@ generate_priority_test_modules :: proc(count: int) -> [dynamic]manifest.Module {
     for i in 1..<count {
         module := manifest.Module{
             name = strings.clone(fmt.tprintf("priority-%d", i)),
-            version = strings.clone(generate_version(i)),
+            version = generate_version(i),
             priority = i * 5, // Different priorities: 5, 10, 15, etc.
             required = make([dynamic]string),
             optional = make([dynamic]string),
@@ -334,6 +347,8 @@ generate_priority_test_modules :: proc(count: int) -> [dynamic]manifest.Module {
 // **Validates: Requirements 3.3.4**
 @(test)
 test_property_priority_ordering_correctness :: proc(t: ^testing.T) {
+    set_test_timeout(t)
+    reset_test_state(t)
     // Property: Within dependency constraints, modules should be ordered by priority
     // Property: Lower priority numbers should come first
     
@@ -350,6 +365,7 @@ test_property_priority_ordering_correctness :: proc(t: ^testing.T) {
             
             // Resolve dependencies
             resolved, err := loader.resolve(modules)
+            defer cleanup_error_message(err)
             
             // Property: Resolution should succeed
             testing.expect(t, len(err) == 0, 
@@ -371,6 +387,8 @@ test_property_priority_ordering_correctness :: proc(t: ^testing.T) {
                             resolved[i].name, current_priority, resolved[i+1].name, next_priority))
                 }
             }
+
+            cleanup_resolved_and_cache(resolved)
         }
     }
 }
