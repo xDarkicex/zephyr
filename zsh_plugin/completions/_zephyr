@@ -1,0 +1,84 @@
+#compdef zephyr
+
+# Zephyr completion script for zsh
+
+_zephyr() {
+    local -a commands
+    commands=(
+        'load:Generate and load shell modules'
+        'list:List all discovered modules'
+        'validate:Validate module manifests'
+        'init:Create a new module skeleton'
+        'install:Install a module from git repository'
+        'update:Update installed modules'
+        'uninstall:Remove an installed module'
+        'scan:Scan a module for security issues'
+        'exports:Show exported functions and aliases'
+    )
+
+    local -a global_opts
+    global_opts=(
+        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]'
+        '(-d --debug)'{-d,--debug}'[Enable debug output]'
+        '--trace[Enable trace-level debugging]'
+        '--no-color[Disable colored output]'
+        '(-h --help)'{-h,--help}'[Show help information]'
+    )
+
+    _arguments -C \
+        $global_opts \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            _describe 'command' commands
+            ;;
+        args)
+            case $words[1] in
+                install)
+                    _arguments \
+                        '--force[Reinstall if module exists]' \
+                        '--local[Install from local path]' \
+                        '--unsafe[Bypass security scan blocking]' \
+                        ':source:_urls'
+                    ;;
+                update)
+                    _arguments \
+                        ':module:_zephyr_installed_modules'
+                    ;;
+                uninstall)
+                    _arguments \
+                        '--confirm[Confirm uninstall with dependents]' \
+                        ':module:_zephyr_installed_modules'
+                    ;;
+                scan)
+                    _arguments \
+                        '--json[Output JSON format]' \
+                        ':source:_urls'
+                    ;;
+                list)
+                    _arguments \
+                        '--json[Output JSON format]' \
+                        '--pretty[Pretty-print JSON]' \
+                        '--filter=[Filter modules by name]:pattern:'
+                    ;;
+                init)
+                    _arguments \
+                        ':module_name:'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+# Helper function to list installed modules
+_zephyr_installed_modules() {
+    local -a modules
+    if command -v zephyr >/dev/null 2>&1; then
+        modules=(${(f)"$(zephyr list 2>/dev/null | grep -E '^\s*✓' | awk '{print $2}')"})
+        _describe 'installed module' modules
+    fi
+}
+
+_zephyr "$@"

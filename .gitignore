@@ -50,3 +50,6 @@ odule_*
 # Temporary files
 *.tmp
 *.temp
+
+# internal docs
+docs_internal/

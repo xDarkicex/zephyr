@@ -4,6 +4,26 @@
 This output is designed for agent frameworks and CI tooling. Human-friendly output
 is the default when `--json` is not provided.
 
+## Security Isolation During Install
+
+Zephyr uses a **clone-scan-validate-move** pipeline to ensure modules are analyzed
+before they can execute:
+
+1. **Clone to temporary directory**: Module is cloned to a temp location outside your modules directory
+2. **Security scan**: All files are scanned for dangerous patterns while isolated
+3. **Validation**: Manifest and dependencies are validated
+4. **Move to final location**: Only if all checks pass, module is moved to `~/.zsh/modules/`
+
+This ensures that:
+- Malicious code cannot execute during the scan
+- Failed scans leave no artifacts in your modules directory
+- Git hooks in the module cannot run until after security approval
+- Temporary files are cleaned up on any failure
+
+**Note:** Git hooks in the cloned repository may execute during the clone operation
+itself, before the scan runs. This is a limitation of git's design. Always clone
+from trusted sources.
+
 ## Stability
 
 - The JSON schema is versioned with `schema_version`.

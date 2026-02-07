@@ -24,6 +24,17 @@ Zephyr is a shell module loader system that manages dependencies, load order, an
 Zephyr provides **structured security signals** to help identify obvious risks in shell modules.
 It is **not a security guarantee**—no static scanner can detect all malicious code.
 
+### Installation Security Pipeline
+
+Zephyr uses a **clone-scan-validate-move** pipeline to isolate modules during analysis:
+
+1. **Clone to temp**: Module cloned to temporary directory (outside modules path)
+2. **Security scan**: All files scanned for dangerous patterns while isolated
+3. **Validation**: Manifest and dependencies validated
+4. **Move to final**: Only if all checks pass, moved to `~/.zsh/modules/`
+
+This ensures malicious code cannot execute during the scan, and failed scans leave no artifacts.
+
 ### What Zephyr Detects (v1.1)
 - ✅ Obvious remote code execution patterns (`curl|bash`, `wget|sh`)
 - ✅ Dangerous operations (`rm -rf /`, `dd if=`)
@@ -61,6 +72,26 @@ It is **not a security guarantee**—no static scanner can detect all malicious 
 - pkg-config (recommended for auto-detection of libgit2)
 - ZSH shell
 - macOS or Linux
+
+### Quick Install (Plugin Manager)
+
+If you use a zsh plugin manager (Oh My Zsh, Zinit, Antigen, etc.):
+
+```bash
+# 1. Build and install zephyr
+git clone https://github.com/xDarkicex/zephyr.git
+cd zephyr
+make install
+
+# 2. Add as plugin (example for Oh My Zsh)
+git clone https://github.com/xDarkicex/zephyr.git \
+    ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zephyr
+
+# 3. Add to ~/.zshrc plugins list
+plugins=(... zephyr)
+```
+
+See [zsh_plugin/README.md](zsh_plugin/README.md) for detailed instructions for all plugin managers.
 
 ### Install from Source
 
