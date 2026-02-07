@@ -19,6 +19,28 @@ Zephyr is a shell module loader system that manages dependencies, load order, an
 - 🎨 **Beautiful Output**: Colored terminal output with clear formatting
 - 🤖 **Machine Readable**: JSON security scan output for AI assistants and automation tools
 
+## Security Model
+
+Zephyr provides **structured security signals** to help identify obvious risks in shell modules.
+It is **not a security guarantee**—no static scanner can detect all malicious code.
+
+### What Zephyr Detects (v1.1)
+- ✅ Obvious remote code execution patterns (`curl|bash`, `wget|sh`)
+- ✅ Dangerous operations (`rm -rf /`, `dd if=`)
+- ✅ Insecure HTTP downloads (`curl http://`)
+- ✅ Common obfuscation patterns (e.g., `base64 -d | sh`, process substitution)
+
+### Critical Limitations
+- ⚠️ **Cannot detect sophisticated obfuscation** (multi-stage or encrypted payloads)
+- ⚠️ **Cannot analyze behavior** (code may execute only under specific conditions)
+- ⚠️ **No runtime protection** (approved modules execute with full user privileges)
+- ⚠️ **Git hook risk**: Git hooks can execute during clone *before* the scan runs
+
+### Responsible Usage
+- 🔒 **For agents**: Only install from pre-vetted sources. Never allow autonomous `--unsafe`.
+- 👁️ **For humans**: Review source before approving warnings or using `--unsafe`.
+- 📜 **For compliance**: Treat `zephyr scan` as a *risk assessment tool*, not a security boundary.
+
 ## Table of Contents
 
 - [Installation](#installation)
@@ -454,6 +476,7 @@ zephyr install --unsafe https://github.com/user/zephyr-git-helpers
 - `--force`: Reinstall if the module already exists
 - `--local`: Treat the source as a local path
 - `--unsafe`: Bypass security scan blocking (still prints findings)
+  - ⚠️ **WARNING**: This does **not** make a module safe. Only use after manual review.
 
 **Notes:**
 - Git commands require libgit2 to be installed and discoverable at build time.

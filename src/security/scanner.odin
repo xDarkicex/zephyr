@@ -446,27 +446,39 @@ escape_json_string :: proc(value: string) -> string {
 	defer strings.builder_destroy(&builder)
 
 	for c in value {
+		// Handle special characters
+		handled := false
 		switch c {
 		case '"':
-			fmt.sbprintf(&builder, "\\\"")
+			strings.write_string(&builder, "\\\"")
+			handled = true
 		case '\\':
-			fmt.sbprintf(&builder, "\\\\")
+			strings.write_string(&builder, "\\\\")
+			handled = true
 		case '\n':
-			fmt.sbprintf(&builder, "\\n")
+			strings.write_string(&builder, "\\n")
+			handled = true
 		case '\r':
-			fmt.sbprintf(&builder, "\\r")
+			strings.write_string(&builder, "\\r")
+			handled = true
 		case '\t':
-			fmt.sbprintf(&builder, "\\t")
-		default:
+			strings.write_string(&builder, "\\t")
+			handled = true
+		}
+		
+		// Handle control characters and normal characters outside switch
+		if !handled {
 			if c < 0x20 {
 				fmt.sbprintf(&builder, "\\u%04x", c)
 			} else {
-				fmt.sbprintf(&builder, "%c", c)
+				strings.write_rune(&builder, c)
 			}
 		}
 	}
 
-	return strings.clone(strings.to_string(builder))
+	result_str := strings.to_string(builder)
+	result := strings.clone(result_str)
+	return result
 }
 
 exit_code_for_scan :: proc(result: ^Scan_Result) -> int {

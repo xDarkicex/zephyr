@@ -159,6 +159,13 @@ If unit tests hang, this is a known issue:
 2. Clean up test directories: `rm -rf test_temp_*`
 3. The acceptance tests still verify all functionality
 
+### macOS xcodebuild warnings during security tests
+
+On macOS, some security integration tests may print `xcodebuild` / `DVTFilePathFSEvents`
+warnings. These are environmental and originate from macOS Developer Tools being invoked
+indirectly during libgit2-driven Git operations (Keychain/Developer tooling). They do not
+indicate a Zephyr bug and do not affect test results.
+
 ### Build fails
 
 If the build fails:

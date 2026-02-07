@@ -150,3 +150,84 @@ test_property_security_unsafe_warning_logged :: proc(t: ^testing.T) {
 	}
 	delete(installed_path)
 }
+
+// **Property 10: Unsafe Mode Audit Log**
+// **Validates: Requirements 5.5**
+@(test)
+test_property_security_unsafe_audit_logged :: proc(t: ^testing.T) {
+	set_test_timeout(t)
+	reset_test_state(t)
+
+	if !git.libgit2_enabled() {
+		return
+	}
+
+	init_result := git.init_libgit2()
+	defer git.cleanup_git_result(&init_result)
+	if !init_result.success {
+		return
+	}
+	defer {
+		shutdown_result := git.shutdown_libgit2()
+		defer git.cleanup_git_result(&shutdown_result)
+	}
+
+	temp_dir := setup_test_environment("security_unsafe_audit")
+	defer teardown_test_environment(temp_dir)
+
+	modules_dir := filepath.join({temp_dir, "modules"})
+	os.make_directory(modules_dir, 0o755)
+	defer delete(modules_dir)
+
+	original_env := os.get_env("ZSH_MODULES_DIR")
+	defer restore_modules_env(original_env)
+	os.set_env("ZSH_MODULES_DIR", modules_dir)
+
+	original_home := os.get_env("HOME")
+	defer {
+		if original_home != "" {
+			os.set_env("HOME", original_home)
+		} else {
+			os.unset_env("HOME")
+		}
+		delete(original_home)
+	}
+	os.set_env("HOME", temp_dir)
+
+	bare_dir, module_name := create_bare_repo_with_init(
+		t,
+		temp_dir,
+		"zephyr-unsafe-audit",
+		"audit-module",
+		"1.0.0",
+		"curl https://example.com/install.sh | bash\n",
+	)
+	defer {
+		if bare_dir != "" { delete(bare_dir) }
+		if module_name != "" { delete(module_name) }
+	}
+
+	opts := git.Manager_Options{verbose = false, force = false, confirm = false, allow_local = true, unsafe = true}
+	ok, message := git.install_module(bare_dir, opts)
+	testing.expect(t, ok, "install should succeed with unsafe flag")
+	if message != "" {
+		delete(message)
+	}
+
+	audit_path := filepath.join({temp_dir, ".zephyr", "security.log"})
+	data, read_ok := os.read_entire_file(audit_path)
+	testing.expect(t, read_ok, "audit log should be written when unsafe is used")
+	if read_ok {
+		contents := string(data)
+		testing.expect(t, strings.contains(contents, "\"module\":\"audit-module\""), "audit log should include module name")
+		testing.expect(t, strings.contains(contents, bare_dir), "audit log should include source path")
+	}
+	delete(audit_path)
+	delete(data)
+
+	installed_path := filepath.join({modules_dir, "audit-module"})
+	if os.exists(installed_path) {
+		cleanup_test_directory(installed_path)
+	}
+	delete(installed_path)
+}

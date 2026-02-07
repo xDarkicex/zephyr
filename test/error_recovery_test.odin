@@ -251,7 +251,6 @@ files = ["valid.zsh"]
     valid_shell_path := filepath.join({valid_dir, "valid.zsh"})
     defer delete(valid_shell_path)
     os.write_entire_file(valid_shell_path, transmute([]u8)shell_content)
-    
     // Test discovery - should handle malformed dependencies gracefully
     modules := loader.discover(temp_dir)
     defer delete(modules)

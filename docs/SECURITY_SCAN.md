@@ -17,9 +17,18 @@ scan outcome:
 
 - `0`: No findings
 - `1`: Warning findings present
-- `2`: Critical findings present or scan error
+- `2`: Critical findings present
+- `3`: Scan failed (I/O error, timeout, or other scan error)
+- `4`: Invalid arguments
 
 Agents can rely on exit codes without parsing JSON for quick policy checks.
+
+## Schema Evolution Policy
+
+- Minor versions (`1.1`, `1.2`, …) may add fields but will not remove or
+  change existing fields.
+- Major versions (`2.0`, …) may introduce breaking changes.
+- Consumers should validate `schema_version` and ignore unknown fields.
 
 ## Schema (v1.0)
 
@@ -63,4 +72,3 @@ Agents can rely on exit codes without parsing JSON for quick policy checks.
 - `snippet` is the trimmed line content where the match occurred.
 - `bypass_required` is informational and indicates the explicit flag needed to
   bypass a finding.
-

@@ -205,6 +205,14 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 		colors.print_warning("%s", validation.warning)
 	}
 
+	if options.unsafe {
+		audit_name := module_name
+		if is_local && validation.module.name != "" {
+			audit_name = validation.module.name
+		}
+		security.audit_unsafe_usage(audit_name, source.url, &scan_result)
+	}
+
 	if !validation.valid {
 		cleanup_temp(install_result.temp_path)
 		return false, format_manager_validation_error(&validation, module_name)
@@ -505,6 +513,9 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 		report := security.format_scan_report(&scan_result, module_name)
 		fmt.println(report)
 		delete(report)
+	}
+	if options.unsafe {
+		security.audit_unsafe_usage(module_name, module_path, &scan_result)
 	}
 	if security.should_block_install(&scan_result, options.unsafe) {
 		result.message = format_manager_error(.Validation_Failed, "Critical security issues detected. Use --unsafe to override.", module_name, "security scan")

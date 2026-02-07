@@ -45,7 +45,7 @@ scan_command :: proc() {
 	if options.source == "" {
 		colors.print_error("Scan source required")
 		fmt.eprintln("Usage: zephyr scan <git-url> [--json]")
-		os.exit(1)
+		os.exit(4)
 	}
 
 	init_git_or_exit()
@@ -62,7 +62,7 @@ scan_command :: proc() {
 		if scan_result.error_message != "" {
 			fmt.eprintln(scan_result.error_message)
 		}
-		os.exit(1)
+		os.exit(3)
 	}
 
 	if options.json {
