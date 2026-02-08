@@ -9,7 +9,20 @@ BINARY := zephyr
 # Optional libgit2 flags (auto-detected via pkg-config)
 LIBGIT2_LIBS ?= $(shell pkg-config --libs libgit2 2>/dev/null)
 ifneq ($(strip $(LIBGIT2_LIBS)),)
-LIBGIT2_FLAGS := -extra-linker-flags:"$(LIBGIT2_LIBS)"
+LIBGIT2_FLAGS :=
+endif
+
+# Optional libmagic flags (auto-detected via pkg-config)
+LIBMAGIC_LIBS ?= $(shell pkg-config --libs libmagic 2>/dev/null)
+ifneq ($(strip $(LIBMAGIC_LIBS)),)
+LIBMAGIC_FLAGS := -define:ZEPHYR_HAS_MAGIC=true
+else
+LIBMAGIC_FLAGS := -define:ZEPHYR_HAS_MAGIC=false
+endif
+
+LINKER_FLAGS := $(strip $(LIBGIT2_LIBS) $(LIBMAGIC_LIBS))
+ifneq ($(LINKER_FLAGS),)
+EXTRA_LINKER_FLAGS := -extra-linker-flags:"$(LINKER_FLAGS)"
 endif
 
 # Colors for output
@@ -57,7 +70,7 @@ clean: ## Remove build artifacts
 
 test: build ## Run test suite
 	@echo "$(BLUE)Running tests...$(NC)"
-	@odin test test $(LIBGIT2_FLAGS)
+	@odin test test $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS)
 	@echo "$(GREEN)✓ Tests passed$(NC)"
 
 benchmark: build ## Run performance benchmark
@@ -81,7 +94,7 @@ run: build ## Build and run with test modules
 
 dev: ## Build with debug flags
 	@echo "$(BLUE)Building $(BINARY) in debug mode...$(NC)"
-	@odin build src -o:none -debug -out:$(BINARY) $(LIBGIT2_FLAGS)
+	@odin build src -o:none -debug -out:$(BINARY) $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS)
 	@echo "$(GREEN)✓ Debug build complete$(NC)"
 
 check: ## Validate code (odin check)

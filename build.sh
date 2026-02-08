@@ -3,6 +3,7 @@ set -euo pipefail
 
 BINARY_NAME="zephyr"
 BUILD_FLAGS=(-o:speed)
+LINKER_FLAGS=""
 
 # Detect OS and architecture
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -35,12 +36,12 @@ fi
 
 # Detect libgit2 via pkg-config (or use LIBGIT2_LIBS override)
 if [ -n "${LIBGIT2_LIBS:-}" ]; then
-    BUILD_FLAGS+=("-extra-linker-flags:${LIBGIT2_LIBS}")
+    LINKER_FLAGS="${LINKER_FLAGS} ${LIBGIT2_LIBS}"
     echo "✓ libgit2 flags from LIBGIT2_LIBS: ${LIBGIT2_LIBS}"
 elif command -v pkg-config &> /dev/null; then
     LIBGIT2_LIBS=$(pkg-config --libs libgit2 2>/dev/null || true)
     if [ -n "${LIBGIT2_LIBS:-}" ]; then
-        BUILD_FLAGS+=("-extra-linker-flags:${LIBGIT2_LIBS}")
+        LINKER_FLAGS="${LINKER_FLAGS} ${LIBGIT2_LIBS}"
         echo "✓ libgit2 detected: ${LIBGIT2_LIBS}"
     else
         echo "ℹ libgit2 not detected; install libgit2 or set LIBGIT2_LIBS"
@@ -48,6 +49,31 @@ elif command -v pkg-config &> /dev/null; then
 else
     echo "ℹ pkg-config not available; libgit2 auto-detect skipped"
     echo "  Install pkg-config or set LIBGIT2_LIBS if libgit2 is not on the default linker path"
+fi
+
+# Detect libmagic via pkg-config (or use LIBMAGIC_LIBS override)
+if [ -n "${LIBMAGIC_LIBS:-}" ]; then
+    LINKER_FLAGS="${LINKER_FLAGS} ${LIBMAGIC_LIBS}"
+    BUILD_FLAGS+=("-define:ZEPHYR_HAS_MAGIC=true")
+    echo "✓ libmagic flags from LIBMAGIC_LIBS: ${LIBMAGIC_LIBS}"
+elif command -v pkg-config &> /dev/null; then
+    LIBMAGIC_LIBS=$(pkg-config --libs libmagic 2>/dev/null || true)
+    if [ -n "${LIBMAGIC_LIBS:-}" ]; then
+        LINKER_FLAGS="${LINKER_FLAGS} ${LIBMAGIC_LIBS}"
+        BUILD_FLAGS+=("-define:ZEPHYR_HAS_MAGIC=true")
+        echo "✓ libmagic detected: ${LIBMAGIC_LIBS}"
+    else
+        BUILD_FLAGS+=("-define:ZEPHYR_HAS_MAGIC=false")
+        echo "ℹ libmagic not detected; install libmagic or set LIBMAGIC_LIBS"
+    fi
+else
+    BUILD_FLAGS+=("-define:ZEPHYR_HAS_MAGIC=false")
+    echo "ℹ pkg-config not available; libmagic auto-detect skipped"
+    echo "  Install pkg-config or set LIBMAGIC_LIBS if libmagic is not on the default linker path"
+fi
+
+if [ -n "${LINKER_FLAGS// }" ]; then
+    BUILD_FLAGS+=("-extra-linker-flags:${LINKER_FLAGS}")
 fi
 
 # Verify source directory exists
