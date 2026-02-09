@@ -98,6 +98,7 @@ Scan_Result :: struct {
 	git_hooks:      [dynamic]Git_Hook_Finding,
 	reverse_shell_findings: [dynamic]Reverse_Shell_Finding,
 	credential_findings: [dynamic]Credential_Finding,
+	trusted_module_applied: bool,
 	error_message:  string,
 	summary:        Scan_Summary,
 }
@@ -119,6 +120,10 @@ Build_Context :: enum {
 	Build_Script,
 	Install_Script,
 	Package_Manager,
+}
+
+Trusted_Module_Config :: struct {
+	modules: map[string]bool,
 }
 
 MAX_LINE_LENGTH :: 100_000
@@ -316,6 +321,10 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	duration := time.since(start_time)
 	result.summary.duration_ms = i64(duration / time.Millisecond)
 
+	trusted_config := load_trusted_modules()
+	defer cleanup_trusted_modules(&trusted_config)
+	apply_trusted_module_relaxation(&result, module_root_real, &trusted_config)
+
 	return result
 }
 
@@ -387,6 +396,7 @@ cleanup_scan_result :: proc(result: ^Scan_Result) {
 	result.git_hooks = nil
 	result.reverse_shell_findings = nil
 	result.credential_findings = nil
+	result.trusted_module_applied = false
 	result.error_message = ""
 	result.success = false
 	result.critical_count = 0
@@ -607,6 +617,136 @@ apply_build_context_downgrade :: proc(pattern: Pattern, file_path: string) -> Pa
 		adjusted.severity = .Info
 	}
 	return adjusted
+}
+
+load_trusted_modules :: proc() -> Trusted_Module_Config {
+	config := Trusted_Module_Config{}
+	config.modules = make(map[string]bool)
+
+	defaults := []string{"oh-my-zsh", "zinit", "nvm", "rbenv", "pyenv", "asdf"}
+	for name in defaults {
+		config.modules[name] = true
+	}
+
+	home := os.get_env("HOME")
+	if home == "" {
+		return config
+	}
+	defer delete(home)
+
+	config_path := filepath.join({home, ".zephyr", "trusted_modules.toml"})
+	defer delete(config_path)
+
+	if !os.exists(config_path) {
+		return config
+	}
+
+	data, ok := os.read_entire_file(config_path)
+	if !ok {
+		return config
+	}
+	defer delete(data)
+
+	content := string(data)
+	lines := strings.split_lines(content)
+	defer delete(lines)
+
+	for line in lines {
+		trimmed := strings.trim_space(line)
+		if trimmed == "" || strings.has_prefix(trimmed, "#") {
+			continue
+		}
+
+		if strings.contains(trimmed, "=") {
+			parts := strings.split(trimmed, "=")
+			defer delete(parts)
+			if len(parts) < 2 {
+				continue
+			}
+			key := strings.trim_space(parts[0])
+			value_part := strings.join(parts[1:], "=")
+			defer delete(value_part)
+			value := strings.trim_space(value_part)
+
+			if key == "modules" {
+				if strings.has_prefix(value, "[") && strings.has_suffix(value, "]") {
+					array_content := strings.trim(value, "[]")
+					if len(array_content) == 0 {
+						continue
+					}
+					items := strings.split(array_content, ",")
+					defer delete(items)
+					for item in items {
+						module_name := strings.trim_space(item)
+						if len(module_name) >= 2 && module_name[0] == '"' && module_name[len(module_name)-1] == '"' {
+							module_name = module_name[1:len(module_name)-1]
+						}
+						if module_name != "" {
+							config.modules[module_name] = true
+						}
+					}
+				}
+				continue
+			}
+
+			if strings.to_lower(value) == "true" {
+				config.modules[key] = true
+			}
+			continue
+		}
+
+		// Allow bare module names, one per line
+		config.modules[trimmed] = true
+	}
+
+	return config
+}
+
+cleanup_trusted_modules :: proc(config: ^Trusted_Module_Config) {
+	if config == nil do return
+	if config.modules != nil {
+		delete(config.modules)
+	}
+}
+
+is_trusted_module :: proc(module_path: string, config: ^Trusted_Module_Config) -> bool {
+	if config == nil || config.modules == nil {
+		return false
+	}
+	base := filepath.base(module_path)
+	if base == "" {
+		return false
+	}
+	return config.modules[base]
+}
+
+is_cve_pattern :: proc(pattern: Pattern) -> bool {
+	desc := strings.to_lower(pattern.description)
+	return strings.contains(desc, "cve-2026-")
+}
+
+apply_trusted_module_relaxation :: proc(result: ^Scan_Result, module_path: string, config: ^Trusted_Module_Config) {
+	if result == nil || !is_trusted_module(module_path, config) {
+		return
+	}
+
+	result.trusted_module_applied = true
+
+	for i in 0..<len(result.findings) {
+		finding := &result.findings[i]
+		if is_credential_description(finding.pattern) && finding.severity == .Warning {
+			finding.severity = .Info
+			result.warning_count -= 1
+			result.info_count += 1
+			continue
+		}
+
+		if is_cve_pattern(finding.pattern) && get_build_context(finding.file_path) != .None && finding.severity == .Critical {
+			finding.severity = .Warning
+			result.critical_count -= 1
+			result.warning_count += 1
+		}
+	}
 }
 
 check_exfiltration :: proc(line: string) -> bool {
