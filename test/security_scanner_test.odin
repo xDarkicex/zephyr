@@ -62,6 +62,20 @@ test_scanner_detects_critical_patterns :: proc(t: ^testing.T) {
 		"xxd -r -p payload.hex",
 		"rm -rf / --no-preserve-root",
 		"dd if=/dev/zero of=/dev/sda",
+		"echo boom > /dev/sda",
+		"echo boom > /dev/nvme0n1",
+		"bash -c 'echo ok >/dev/tcp/127.0.0.1/4444'",
+		"bash -c 'echo ok >/dev/udp/127.0.0.1/4444'",
+		"nc -e /bin/sh 127.0.0.1 4444",
+		"socat exec:/bin/sh tcp:127.0.0.1:4444",
+		"ptrace PTRACE_ATTACH 1234",
+		"cat /proc/1234/mem",
+		"LD_PRELOAD=/tmp/inject.so ls",
+		"DYLD_INSERT_LIBRARIES=/tmp/inject.dylib ls",
+		"cat /proc/self/exe",
+		"ls /proc/1234/root",
+		"nsenter -t 1 -m /bin/sh",
+		"ls /sys/fs/cgroup",
 	}
 
 	for line, idx in cases {

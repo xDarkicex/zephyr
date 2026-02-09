@@ -93,6 +93,20 @@ get_critical_patterns :: proc() -> [dynamic]Pattern {
 	append(&patterns, Pattern{.Critical, `xxd\s+-r\s+-p`, "Hex decode pipeline"})
 	append(&patterns, Pattern{.Critical, `rm\s+-rf\s+/`, "Destructive filesystem operation"})
 	append(&patterns, Pattern{.Critical, `dd\s+if=`, "Low-level disk operation"})
+	append(&patterns, Pattern{.Critical, `>\s*/dev/sda`, "Direct disk overwrite (/dev/sda)"})
+	append(&patterns, Pattern{.Critical, `>\s*/dev/nvme`, "Direct disk overwrite (/dev/nvme)"})
+	append(&patterns, Pattern{.Critical, `/dev/tcp/`, "Reverse shell via /dev/tcp"})
+	append(&patterns, Pattern{.Critical, `/dev/udp/`, "Reverse shell via /dev/udp"})
+	append(&patterns, Pattern{.Critical, `nc\s+-e\s+/bin/sh`, "Reverse shell via netcat"})
+	append(&patterns, Pattern{.Critical, `socat\s+exec:`, "Reverse shell via socat"})
+	append(&patterns, Pattern{.Critical, `ptrace`, "Process inspection/manipulation via ptrace"})
+	append(&patterns, Pattern{.Critical, `/proc/[^\\s]+/mem`, "Direct process memory access"})
+	append(&patterns, Pattern{.Critical, `LD_PRELOAD`, "Dynamic loader injection (LD_PRELOAD)"})
+	append(&patterns, Pattern{.Critical, `DYLD_INSERT_LIBRARIES`, "Dynamic loader injection (DYLD_INSERT_LIBRARIES)"})
+	append(&patterns, Pattern{.Critical, `/proc/self/exe`, "Container escape via /proc/self/exe"})
+	append(&patterns, Pattern{.Critical, `/proc/\\d+/root`, "Container escape via /proc/<pid>/root"})
+	append(&patterns, Pattern{.Critical, `nsenter`, "Namespace escape via nsenter"})
+	append(&patterns, Pattern{.Critical, `/sys/fs/cgroup`, "Container escape via cgroup access"})
 	return patterns
 }
 

