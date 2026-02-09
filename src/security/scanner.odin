@@ -113,6 +113,14 @@ Scan_Options :: struct {
 	verbose:     bool,
 }
 
+Build_Context :: enum {
+	None,
+	Makefile,
+	Build_Script,
+	Install_Script,
+	Package_Manager,
+}
+
 MAX_LINE_LENGTH :: 100_000
 MAX_FILE_SIZE :: 1_048_576
 MAX_TOTAL_PATTERN_SIZE :: 10_000_000
@@ -546,6 +554,59 @@ get_credential_type_from_pattern :: proc(pattern: Pattern) -> Credential_Type {
 		return .Shell_History
 	}
 	return .AWS
+}
+
+get_build_context :: proc(file_path: string) -> Build_Context {
+	if file_path == "" {
+		return .None
+	}
+	lower_path := strings.to_lower(file_path)
+	base := filepath.base(lower_path)
+
+	if base == "makefile" || strings.has_suffix(base, ".mk") {
+		return .Makefile
+	}
+	if base == "build.sh" || base == "build" {
+		return .Build_Script
+	}
+	if base == "install.sh" || base == "setup.sh" {
+		return .Install_Script
+	}
+	if base == "package.json" || base == "cargo.toml" || base == "build.gradle" || base == "pom.xml" {
+		return .Package_Manager
+	}
+	return .None
+}
+
+is_reverse_shell_description :: proc(pattern: Pattern) -> bool {
+	_, ok := get_reverse_shell_type_from_pattern(pattern)
+	return ok
+}
+
+is_credential_description :: proc(pattern: Pattern) -> bool {
+	desc := strings.to_lower(pattern.description)
+	return strings.contains(desc, "credential") ||
+		strings.contains(desc, "api key") ||
+		strings.contains(desc, "history")
+}
+
+apply_build_context_downgrade :: proc(pattern: Pattern, file_path: string) -> Pattern {
+	context := get_build_context(file_path)
+	if context == .None {
+		return pattern
+	}
+
+	if is_reverse_shell_description(pattern) || is_credential_description(pattern) {
+		return pattern
+	}
+
+	adjusted := pattern
+	if adjusted.severity == .Critical {
+		adjusted.severity = .Warning
+	} else if adjusted.severity == .Warning {
+		adjusted.severity = .Info
+	}
+	return adjusted
 }
 
 check_exfiltration :: proc(line: string) -> bool {
@@ -1072,6 +1133,8 @@ append_finding :: proc(
 		} else if adjusted_pattern.severity == .Warning {
 			adjusted_pattern.severity = .Info
 		}
+	} else {
+		adjusted_pattern = apply_build_context_downgrade(adjusted_pattern, file_path)
 	}
 	finding := Finding{
 		pattern = adjusted_pattern,
