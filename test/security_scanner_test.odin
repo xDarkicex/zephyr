@@ -174,6 +174,9 @@ test_is_scannable_file_extensions_and_shebang :: proc(t: ^testing.T) {
 	temp_dir := setup_test_environment("security_ext")
 	defer teardown_test_environment(temp_dir)
 
+	result := security.Scan_Result{}
+	defer security.cleanup_scan_result(&result)
+
 	simple_content := "echo ok"
 	python_content := "print('ok')"
 	paths := []string{
@@ -189,13 +192,13 @@ test_is_scannable_file_extensions_and_shebang :: proc(t: ^testing.T) {
 	}
 
 	for p in paths {
-		testing.expect(t, security.is_scannable_file(p), "supported extension should be scannable")
+		testing.expect(t, security.is_scannable_file(p, temp_dir, &result), "text files should be scannable")
 	}
 
 	shebang_content := "#!/bin/bash\necho ok\n"
 	shebang_path := write_test_file(temp_dir, "script", transmute([]u8)shebang_content)
 	defer delete(shebang_path)
-	testing.expect(t, security.is_scannable_file(shebang_path), "shebang file should be scannable")
+	testing.expect(t, security.is_scannable_file(shebang_path, temp_dir, &result), "shebang file should be scannable")
 }
 
 @(test)
@@ -206,15 +209,18 @@ test_is_scannable_file_binary_and_large :: proc(t: ^testing.T) {
 	temp_dir := setup_test_environment("security_binary_large")
 	defer teardown_test_environment(temp_dir)
 
+	result := security.Scan_Result{}
+	defer security.cleanup_scan_result(&result)
+
 	binary := []u8{0, 1, 2, 3}
 	binary_path := write_test_file(temp_dir, "binary.sh", binary)
 	defer delete(binary_path)
-	testing.expect(t, !security.is_scannable_file(binary_path), "binary files should not be scannable")
+	testing.expect(t, !security.is_scannable_file(binary_path, temp_dir, &result), "binary files should not be scannable")
 
 	large := make([]u8, 1_048_577)
 	large_path := write_test_file(temp_dir, "large.sh", large)
 	defer delete(large_path)
-	testing.expect(t, !security.is_scannable_file(large_path), "large files should not be scannable")
+	testing.expect(t, !security.is_scannable_file(large_path, temp_dir, &result), "large files should not be scannable")
 	delete(large)
 }
 

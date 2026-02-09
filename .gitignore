@@ -43,6 +43,7 @@ tmp_*
 CACHE_CLEANUP_ANALYSIS.md
 CODEBASE_HEALTH_ASSESSMENT.md
 docs/MEMORY_MANAGEMENT.md
+docs_internal/
 
 # Garbage temp files accidentally created
 odule_*
@@ -52,4 +53,12 @@ odule_*
 *.temp
 
 # internal docs
-docs_internal/
+docs_internal/git_memory_safety_*
+cli_git_commands_*
+git_fetch_pull_*
+git_install_duplicate_*
+git_install_force_*
+git_memory_safety_*
+git_update_all_*
+git_update_summary_*
+security_*

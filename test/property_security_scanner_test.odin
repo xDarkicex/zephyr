@@ -146,7 +146,7 @@ test_property_security_finding_structure :: proc(t: ^testing.T) {
 	}
 }
 
-// Feature: module-security, Property 3: File Selection by Extension
+// Feature: module-security, Property 3: Language-Agnostic File Selection
 @(test)
 test_property_security_file_selection_by_extension :: proc(t: ^testing.T) {
 	set_test_timeout(t)
@@ -155,21 +155,24 @@ test_property_security_file_selection_by_extension :: proc(t: ^testing.T) {
 	temp_dir := setup_test_environment("security_prop_files")
 	defer teardown_test_environment(temp_dir)
 
+	result := security.Scan_Result{}
+	defer security.cleanup_scan_result(&result)
+
 	supported := []string{".sh", ".bash", ".zsh", ".fish", ".py", ".rb", ".js"}
 	for ext, idx in supported {
 		name := fmt.tprintf("file_%d%s", idx, ext)
 		path := write_security_file(temp_dir, name, "echo ok")
 		defer delete(path)
-		testing.expect(t, security.is_scannable_file(path), "supported extension should be scannable")
+		testing.expect(t, security.is_scannable_file(path, temp_dir, &result), "text files should be scannable")
 	}
 
 	unsupported_path := write_security_file(temp_dir, "file.txt", "echo ok")
 	defer delete(unsupported_path)
-	testing.expect(t, !security.is_scannable_file(unsupported_path), "unsupported extension should not be scannable")
+	testing.expect(t, security.is_scannable_file(unsupported_path, temp_dir, &result), "text files should be scannable regardless of extension")
 
 	shebang_path := write_security_file(temp_dir, "script", "#!/bin/sh\necho ok")
 	defer delete(shebang_path)
-	testing.expect(t, security.is_scannable_file(shebang_path), "shebang file should be scannable")
+	testing.expect(t, security.is_scannable_file(shebang_path, temp_dir, &result), "shebang file should be scannable")
 }
 
 // Feature: module-security, Property 5: Error Message Completeness

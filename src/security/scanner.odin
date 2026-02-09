@@ -30,11 +30,17 @@ Finding :: struct {
 	line_text:   string,
 }
 
+Symlink_Finding :: struct {
+	file_path: string,
+	real_path: string,
+}
+
 Scan_Result :: struct {
 	success:        bool,
 	critical_count: int,
 	warning_count:  int,
 	findings:       [dynamic]Finding,
+	symlink_evasions: [dynamic]Symlink_Finding,
 	error_message:  string,
 	summary:        Scan_Summary,
 }
@@ -92,6 +98,17 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	}
 
 	start_time := time.now()
+	module_root := get_module_directory(module_path)
+	if module_root == "" {
+		module_root = strings.clone(module_path)
+	}
+	module_root_real := module_root
+	root_real, real_err := os.absolute_path_from_relative(module_root)
+	if real_err == os.ERROR_NONE {
+		delete(module_root)
+		module_root_real = root_real
+	}
+	defer delete(module_root_real)
 
 	all_patterns := make([dynamic]Pattern)
 	critical_patterns := get_critical_patterns()
@@ -114,7 +131,7 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	}
 	defer cleanup_compiled_patterns(compiled)
 
-	files := walk_module_files(module_path)
+	files := walk_module_files(module_root_real, &result)
 	defer cleanup_string_list(files)
 	result.summary.files_scanned = len(files)
 
@@ -144,10 +161,22 @@ cleanup_scan_result :: proc(result: ^Scan_Result) {
 	if result.findings != nil {
 		delete(result.findings)
 	}
+	for &symlink in result.symlink_evasions {
+		if symlink.file_path != "" {
+			delete(symlink.file_path)
+		}
+		if symlink.real_path != "" {
+			delete(symlink.real_path)
+		}
+	}
+	if result.symlink_evasions != nil {
+		delete(result.symlink_evasions)
+	}
 	if result.error_message != "" {
 		delete(result.error_message)
 	}
 	result.findings = nil
+	result.symlink_evasions = nil
 	result.error_message = ""
 	result.success = false
 	result.critical_count = 0
@@ -317,7 +346,7 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, result: ^Scan
 	return lines_scanned
 }
 
-is_scannable_file :: proc(file_path: string) -> bool {
+is_scannable_file :: proc(file_path: string, module_root: string, result: ^Scan_Result) -> bool {
 	if file_path == "" {
 		return false
 	}
@@ -330,6 +359,19 @@ is_scannable_file :: proc(file_path: string) -> bool {
 
 	if fi.is_dir {
 		return false
+	}
+
+	if module_root != "" {
+		real_path, real_err := os.absolute_path_from_relative(file_path)
+		if real_err != os.ERROR_NONE {
+			return false
+		}
+		defer delete(real_path)
+
+		if !path_within_root(real_path, module_root) {
+			log_symlink_evasion(file_path, real_path, result)
+			return false
+		}
 	}
 
 	if fi.size > 1_048_576 {
@@ -347,21 +389,16 @@ is_scannable_file :: proc(file_path: string) -> bool {
 		return false
 	}
 
-	if has_supported_extension(file_path) {
-		return true
-	}
-
-	line := first_line(string(data))
-	return has_shell_shebang(line)
+	return true
 }
 
-walk_module_files :: proc(module_path: string) -> [dynamic]string {
+walk_module_files :: proc(module_path: string, result: ^Scan_Result) -> [dynamic]string {
 	paths := make([dynamic]string)
-	walk_module_files_internal(module_path, &paths)
+	walk_module_files_internal(module_path, module_path, result, &paths)
 	return paths
 }
 
-walk_module_files_internal :: proc(dir_path: string, paths: ^[dynamic]string) {
+walk_module_files_internal :: proc(dir_path: string, module_root: string, result: ^Scan_Result, paths: ^[dynamic]string) {
 	if dir_path == "" || !os.exists(dir_path) do return
 
 	handle, open_err := os.open(dir_path)
@@ -381,12 +418,105 @@ walk_module_files_internal :: proc(dir_path: string, paths: ^[dynamic]string) {
 	for entry in entries {
 		full_path := filepath.join({dir_path, entry.name})
 		if entry.is_dir {
-			walk_module_files_internal(full_path, paths)
-		} else if is_scannable_file(full_path) {
+			walk_module_files_internal(full_path, module_root, result, paths)
+		} else if is_scannable_file(full_path, module_root, result) {
 			append(paths, strings.clone(full_path))
 		}
 		delete(full_path)
 	}
+}
+
+path_within_root :: proc(path: string, root: string) -> bool {
+	if root == "" || path == "" {
+		return false
+	}
+	if path == root {
+		return true
+	}
+	if !strings.has_prefix(path, root) {
+		return false
+	}
+	if len(path) <= len(root) {
+		return true
+	}
+	next := path[len(root)]
+	return next == '/' || next == '\\'
+}
+
+log_symlink_evasion :: proc(file_path: string, real_path: string, result: ^Scan_Result) {
+	if result == nil {
+		return
+	}
+
+	symlink := Symlink_Finding{
+		file_path = strings.clone(file_path),
+		real_path = strings.clone(real_path),
+	}
+	append(&result.symlink_evasions, symlink)
+
+	pattern := Pattern{
+		type = .Critical,
+		pattern = "symlink",
+		description = "Symlink points outside module directory",
+	}
+
+	finding := Finding{
+		pattern = pattern,
+		file_path = strings.clone(file_path),
+		line_number = 0,
+		line_text = strings.clone(real_path),
+	}
+	append(&result.findings, finding)
+	result.critical_count += 1
+}
+
+get_module_directory :: proc(file_path: string) -> string {
+	if file_path == "" {
+		return ""
+	}
+
+	dir := ""
+	fi, err := os.stat(file_path)
+	if err == os.ERROR_NONE {
+		if !fi.is_dir {
+			dir = filepath.dir(file_path)
+		} else {
+			dir = strings.clone(file_path)
+		}
+		os.file_info_delete(fi)
+	} else {
+		dir = filepath.dir(file_path)
+	}
+
+	start_dir := strings.clone(dir)
+	found := false
+	for {
+		manifest := filepath.join({dir, "module.toml"})
+		exists := os.exists(manifest)
+		delete(manifest)
+		if exists {
+			found = true
+			break
+		}
+
+		parent := filepath.dir(dir)
+		if parent == dir {
+			delete(parent)
+			break
+		}
+		delete(dir)
+		dir = parent
+	}
+
+	if !found {
+		delete(dir)
+		dir = strings.clone(start_dir)
+	}
+	delete(start_dir)
+
+	result := strings.clone(dir)
+	delete(dir)
+	return result
 }
 
 compile_patterns :: proc(patterns: []Pattern) -> ([dynamic]Compiled_Pattern, string) {
@@ -576,46 +706,6 @@ cleanup_string_list :: proc(list: [dynamic]string) {
 		}
 	}
 	delete(list)
-}
-
-has_supported_extension :: proc(file_path: string) -> bool {
-	last_dot := strings.last_index_byte(file_path, '.')
-	last_slash := strings.last_index_byte(file_path, '/')
-	last_backslash := strings.last_index_byte(file_path, '\\')
-	if last_backslash > last_slash {
-		last_slash = last_backslash
-	}
-	if last_dot == -1 || last_dot < last_slash {
-		return false
-	}
-
-	ext := file_path[last_dot:]
-	lower := strings.to_lower(ext)
-	defer delete(lower)
-
-	switch lower {
-	case ".sh", ".bash", ".zsh", ".fish", ".py", ".rb", ".js":
-		return true
-	}
-	return false
-}
-
-first_line :: proc(content: string) -> string {
-	idx := strings.index_byte(content, '\n')
-	if idx == -1 {
-		return content
-	}
-	return content[:idx]
-}
-
-has_shell_shebang :: proc(line: string) -> bool {
-	trimmed := strings.trim_space(line)
-	if !strings.has_prefix(trimmed, "#!") {
-		return false
-	}
-	lower := strings.to_lower(trimmed)
-	defer delete(lower)
-	return strings.contains(lower, "sh") || strings.contains(lower, "bash") || strings.contains(lower, "zsh") || strings.contains(lower, "fish")
 }
 
 is_binary_data :: proc(data: []byte) -> bool {
