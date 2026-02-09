@@ -552,6 +552,9 @@ zephyr scan https://github.com/user/zephyr-git-helpers --json
 - `schema_version`: current schema version (string, currently `1.0`)
 - `scan_summary`: counts and timing (files, lines, duration, finding counts)
 - `findings`: list of findings with severity, file, line, snippet, and bypass hint
+- `credential_findings`: detected credential access (type + exfiltration)
+- `reverse_shell_findings`: detected reverse shell patterns (type + location)
+- `trusted_module_applied`: whether trusted-module relaxations were applied
 - `policy_recommendation`: `allow`, `warn`, or `block`
 - `exit_code_hint`: `0` (clean), `1` (warnings), `2` (critical)
 
