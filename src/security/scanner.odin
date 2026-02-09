@@ -749,6 +749,28 @@ apply_trusted_module_relaxation :: proc(result: ^Scan_Result, module_path: strin
 	}
 }
 
+downgrade_severity :: proc(pattern: Pattern) -> Pattern {
+	adjusted := pattern
+	if adjusted.severity == .Critical {
+		adjusted.severity = .Warning
+	} else if adjusted.severity == .Warning {
+		adjusted.severity = .Info
+	}
+	return adjusted
+}
+
+is_coupled_pattern :: proc(pattern: Pattern, line: string) -> bool {
+	desc := strings.to_lower(pattern.description)
+
+	// Command substitution requires a network fetch.
+	if strings.contains(desc, "command substitution") || strings.contains(desc, "pipe with command substitution") {
+		has_fetch := strings.contains(line, "curl") || strings.contains(line, "wget")
+		return has_fetch
+	}
+
+	return true
+}
+
 check_exfiltration :: proc(line: string) -> bool {
 	lower := strings.to_lower(line)
 	exfil_patterns := []string{
@@ -901,8 +923,13 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, credential_pa
 			}
 
 			if matched && !match_is_ignored(line, match_start) {
-				append_finding(&result.findings, &result.critical_count, &result.warning_count, &result.info_count, compiled.pattern, file_path, line_number, line)
-				shell_type, ok := get_reverse_shell_type_from_pattern(compiled.pattern)
+				applied_pattern := compiled.pattern
+				if !is_coupled_pattern(applied_pattern, line) {
+					applied_pattern = downgrade_severity(applied_pattern)
+				}
+
+				append_finding(&result.findings, &result.critical_count, &result.warning_count, &result.info_count, applied_pattern, file_path, line_number, line)
+				shell_type, ok := get_reverse_shell_type_from_pattern(applied_pattern)
 				if ok {
 					append(&result.reverse_shell_findings, Reverse_Shell_Finding{
 						file_path = strings.clone(file_path),
