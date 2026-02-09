@@ -36,7 +36,7 @@ Zephyr uses a **clone-scan-validate-move** pipeline to isolate modules during an
 This ensures malicious code cannot execute during the scan, and failed scans leave no artifacts.
 Git hooks are detected during the scan and **blocked by default** (install fails unless `--unsafe` is used).
 
-See `docs/SECURITY_PIPELINE.md` for a technical breakdown.
+See [docs/SECURITY_PIPELINE.md](docs/SECURITY_PIPELINE.md) for a technical breakdown.
 
 ### What Zephyr Detects (v1.1)
 - ✅ Obvious remote code execution patterns (`curl|bash`, `wget|sh`)
