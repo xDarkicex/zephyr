@@ -738,14 +738,22 @@ get_module_directory :: proc(file_path: string) -> string {
 	return result
 }
 
-compile_patterns :: proc(patterns: []Pattern) -> ([dynamic]Compiled_Pattern, string) {
+validate_pattern_set_size :: proc(patterns: []Pattern) -> (ok: bool, message: string) {
 	total_size := 0
 	for pattern in patterns {
 		total_size += len(pattern.pattern)
 		if total_size > MAX_TOTAL_PATTERN_SIZE {
 			message := strings.clone(fmt.tprintf("pattern set too large: %d bytes (max %d)", total_size, MAX_TOTAL_PATTERN_SIZE))
-			return nil, message
+			return false, message
 		}
+	}
+	return true, ""
+}
+
+compile_patterns :: proc(patterns: []Pattern) -> ([dynamic]Compiled_Pattern, string) {
+	ok, message := validate_pattern_set_size(patterns)
+	if !ok {
+		return nil, message
 	}
 	compiled := make([dynamic]Compiled_Pattern, 0, len(patterns))
 	for pattern in patterns {

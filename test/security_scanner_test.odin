@@ -315,6 +315,76 @@ test_scanner_skips_long_lines :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_scanner_detects_git_hooks :: proc(t: ^testing.T) {
+	set_test_timeout(t)
+	reset_test_state(t)
+
+	temp_dir := setup_test_environment("security_git_hooks")
+	defer teardown_test_environment(temp_dir)
+
+	manifest := "name = \"test\"\nversion = \"1.0.0\"\n"
+	os.write_entire_file(strings.concatenate({temp_dir, "/module.toml"}), transmute([]u8)manifest)
+
+	hooks_dir := strings.concatenate({temp_dir, "/.git/hooks"})
+	os.make_directory(strings.concatenate({temp_dir, "/.git"}))
+	os.make_directory(hooks_dir)
+	hook_path := strings.concatenate({hooks_dir, "/post-checkout"})
+	defer delete(hook_path)
+	hook_content := "#!/bin/sh\necho hook\n"
+	os.write_entire_file(hook_path, transmute([]u8)hook_content)
+
+	result := security.scan_module(temp_dir, security.Scan_Options{})
+	defer security.cleanup_scan_result(&result)
+
+	testing.expect(t, result.critical_count > 0, "git hooks should produce critical findings")
+	testing.expect(t, len(result.git_hooks) > 0, "git hook findings should be recorded")
+	delete(hooks_dir)
+}
+
+@(test)
+test_magic_file_type_text :: proc(t: ^testing.T) {
+	set_test_timeout(t)
+	reset_test_state(t)
+
+	temp_dir := setup_test_environment("security_magic")
+	defer teardown_test_environment(temp_dir)
+
+	content := "hello"
+	path := write_test_file(temp_dir, "plain.txt", transmute([]u8)content)
+	defer delete(path)
+
+	file_type, has_magic := security.get_file_type(path)
+	defer {
+		if file_type != "" {
+			delete(file_type)
+		}
+	}
+
+	testing.expect(t, file_type != "", "file type should be reported")
+	if has_magic {
+		testing.expect(t, strings.contains(file_type, "text"), "libmagic should report text type")
+	}
+}
+
+@(test)
+test_pattern_set_size_validation :: proc(t: ^testing.T) {
+	set_test_timeout(t)
+	reset_test_state(t)
+
+	pattern_str := strings.repeat("a", security.MAX_TOTAL_PATTERN_SIZE+1)
+	defer delete(pattern_str)
+	patterns := []security.Pattern{
+		{severity = .Critical, pattern = pattern_str, description = "too large"},
+	}
+
+	ok, message := security.validate_pattern_set_size(patterns)
+	if message != "" {
+		delete(message)
+	}
+	testing.expect(t, !ok, "pattern set size should be rejected")
+}
+
+@(test)
 test_format_scan_report_includes_findings :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)
