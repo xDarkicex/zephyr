@@ -1,0 +1,7 @@
+[module]
+name = "credential-exfiltration"
+version = "0.1.0"
+description = "Scanner fixture: credential exfiltration"
+
+[load]
+files = ["init.zsh"]

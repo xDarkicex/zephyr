@@ -682,7 +682,7 @@ load_trusted_modules :: proc() -> Trusted_Module_Config {
 	config := Trusted_Module_Config{}
 	config.modules = make(map[string]bool)
 
-	defaults := []string{"oh-my-zsh", "zinit", "nvm", "rbenv", "pyenv", "asdf"}
+	defaults := []string{"oh-my-zsh", "zinit", "nvm", "rbenv", "pyenv", "asdf", ".oh-my-zsh", ".zinit", ".nvm", ".rbenv", ".pyenv", ".asdf"}
 	for name in defaults {
 		config.modules[name] = true
 	}

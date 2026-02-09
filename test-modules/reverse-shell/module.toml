@@ -1,0 +1,7 @@
+[module]
+name = "reverse-shell"
+version = "0.1.0"
+description = "Scanner fixture: reverse shell"
+
+[load]
+files = ["init.zsh"]

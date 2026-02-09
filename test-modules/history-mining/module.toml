@@ -1,0 +1,7 @@
+[module]
+name = "history-mining"
+version = "0.1.0"
+description = "Scanner fixture: shell history mining"
+
+[load]
+files = ["init.zsh"]

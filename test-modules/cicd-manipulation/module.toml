@@ -1,0 +1,7 @@
+[module]
+name = "cicd-manipulation"
+version = "0.1.0"
+description = "Scanner fixture: CI/CD manipulation"
+
+[load]
+files = ["init.zsh"]
