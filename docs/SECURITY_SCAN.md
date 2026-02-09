@@ -4,14 +4,20 @@
 This output is designed for agent frameworks and CI tooling. Human-friendly output
 is the default when `--json` is not provided.
 
-## What the Scanner Does (Phase 1)
+## What the Scanner Does (Phase 2)
 
 - **Language-agnostic scanning**: all text files are scanned regardless of extension.
 - **Binary detection**: binary and oversized files are skipped with warnings.
 - **Symlink protection**: symlinks that resolve outside the module are blocked.
 - **Git hook blocking**: any non-sample hook in `.git/hooks/` blocks install unless `--unsafe`.
 - **CVE pattern coverage**: aggressive regexes for CVE-2026-24887 and CVE-2026-25723.
-- **Severity levels**: Findings are classified as Critical or Warning.
+- **Credential detection**: AWS, SSH, Docker, Kubernetes, package managers, AI APIs, shell history.
+- **Reverse shell detection**: bash TCP/UDP, netcat, socat, Python, Perl.
+- **CI/CD detection**: GitHub Actions, GitLab CI, CircleCI.
+- **Context-aware downgrades**: build tooling files reduce false positives.
+- **Pattern coupling**: requires multiple indicators to escalate.
+- **Trusted module relaxations**: known frameworks are downgraded safely.
+- **Severity levels**: Findings are classified as Critical, Warning, or Info.
 
 See `docs/SECURITY_PIPELINE.md` for the install pipeline details.
 
@@ -53,6 +59,11 @@ and blocks installation. This prevents symlink evasion and path traversal tricks
 Any non-sample hook in `.git/hooks/` is treated as Critical and blocks install unless
 `--unsafe` is provided. Hooks are detected **before** pattern scanning.
 
+### Trusted Module Allowlist
+Zephyr supports a trusted module allowlist to reduce false positives for common frameworks.
+Defaults include `oh-my-zsh`, `zinit`, `nvm`, `rbenv`, `pyenv`, and `asdf`.
+You can extend this list via `~/.zephyr/trusted_modules.toml`.
+
 ### CVE Pattern Coverage
 Zephyr includes explicit detection for:
 - **CVE-2026-24887**: pipe + command substitution injection patterns.
@@ -64,6 +75,7 @@ These patterns are intentionally aggressive to catch real-world attacks.
 ### Severity Levels
 - **Critical**: blocks install and exits with status 2 in JSON mode.
 - **Warning**: prompts user in interactive mode and exits with status 1 in JSON mode.
+- **Info**: informational findings (no prompt, exit code unchanged).
 
 ### `--unsafe` Flag
 `--unsafe` bypasses blocking findings and records an audit entry. Use only after manual review.
@@ -109,8 +121,11 @@ Agents can rely on exit codes without parsing JSON for quick policy checks.
     "lines_scanned": 458,
     "duration_ms": 42,
     "critical_findings": 1,
-    "warning_findings": 3
+    "warning_findings": 3,
+    "credential_findings": 1,
+    "reverse_shell_findings": 0
   },
+  "trusted_module_applied": false,
   "policy_recommendation": "block",
   "exit_code_hint": 2,
   "findings": [
@@ -136,6 +151,9 @@ Agents can rely on exit codes without parsing JSON for quick policy checks.
 - `snippet` is the trimmed line content where the match occurred.
 - `bypass_required` is informational and indicates the explicit flag needed to
   bypass a finding.
+- `trusted_module_applied` indicates whether allowlist relaxations were used.
+- `scan_summary.credential_findings` and `scan_summary.reverse_shell_findings`
+  provide counts for Phase 2 findings.
 
 ## Validation Results (Phase 1)
 

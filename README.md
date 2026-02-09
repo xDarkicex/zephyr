@@ -18,7 +18,7 @@ Zephyr is a shell module loader system that manages dependencies, load order, an
 - 🐛 **Excellent Debugging**: Verbose output, colored errors, and helpful suggestions
 - 🎨 **Beautiful Output**: Colored terminal output with clear formatting
 - 🤖 **Machine Readable**: JSON security scan output for AI assistants and automation tools
-- 🧪 **Security Scanning**: Language-agnostic scanning with CVE pattern coverage and git hook blocking
+- 🧪 **Security Scanning**: Language-agnostic scanning with CVE coverage, credential and reverse shell detection, and git hook blocking
 
 ## Security Model
 
@@ -40,7 +40,7 @@ Git hooks are detected during the scan and **blocked by default** (install fails
 
 See [docs/SECURITY_PIPELINE.md](docs/SECURITY_PIPELINE.md) for a technical breakdown.
 
-### What Zephyr Detects (v1.1)
+### What Zephyr Detects (v1.2)
 - ✅ Obvious remote code execution patterns (`curl|bash`, `wget|sh`)
 - ✅ Dangerous operations (`rm -rf /`, `dd if=`)
 - ✅ Insecure HTTP downloads (`curl http://`)
@@ -48,6 +48,12 @@ See [docs/SECURITY_PIPELINE.md](docs/SECURITY_PIPELINE.md) for a technical break
 - ✅ Git hooks present in `.git/hooks/` (blocked unless `--unsafe`)
 - ✅ Symlink evasion attempts (symlinks pointing outside the module)
 - ✅ Binary and oversized files (skipped with warnings; libmagic improves detection)
+- ✅ Credential file access (AWS, SSH, Docker, Kubernetes, package managers, AI APIs)
+- ✅ Reverse shell patterns (bash TCP/UDP, netcat, socat, Python, Perl)
+- ✅ CI/CD configuration manipulation (GitHub Actions, GitLab CI, CircleCI)
+- ✅ Context-aware downgrades in build tooling files
+- ✅ Pattern coupling to reduce false positives
+- ✅ Trusted module relaxations (oh-my-zsh, zinit, nvm, rbenv, pyenv, asdf)
 
 ### Critical Limitations
 - ⚠️ **Cannot detect sophisticated obfuscation** (multi-stage or encrypted payloads)
@@ -59,6 +65,12 @@ See [docs/SECURITY_PIPELINE.md](docs/SECURITY_PIPELINE.md) for a technical break
 - 🔒 **For agents**: Only install from pre-vetted sources. Never allow autonomous `--unsafe`.
 - 👁️ **For humans**: Review source before approving warnings or using `--unsafe`.
 - 📜 **For compliance**: Treat `zephyr scan` as a *risk assessment tool*, not a security boundary.
+
+### Trusted Modules
+Zephyr supports a trusted module allowlist to reduce false positives for known frameworks
+(`oh-my-zsh`, `zinit`, `nvm`, `rbenv`, `pyenv`, `asdf`). You can extend this list via:
+
+`~/.zephyr/trusted_modules.toml`
 
 ## Table of Contents
 
@@ -543,7 +555,7 @@ zephyr scan https://github.com/user/zephyr-git-helpers --json
 - `policy_recommendation`: `allow`, `warn`, or `block`
 - `exit_code_hint`: `0` (clean), `1` (warnings), `2` (critical)
 
-See `docs/SECURITY_SCAN.md` for the full schema and exit code contract.
+See [docs/SECURITY_SCAN.md](docs/SECURITY_SCAN.md) for the full schema and exit code contract.
 
 **Exit codes (when `--json` is used):**
 - `0`: No findings
