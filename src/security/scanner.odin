@@ -6,6 +6,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:text/regex"
 import "core:time"
+import "core:unicode/utf8"
 
 import "../debug"
 
@@ -202,47 +203,47 @@ get_credential_patterns :: proc() -> [dynamic]Pattern {
 	patterns := make([dynamic]Pattern)
 
 	// AWS credentials
-	append(&patterns, Pattern{.Warning, `\.aws/credentials`, "AWS credentials file access"})
+	append(&patterns, Pattern{.Warning, `.aws/credentials`, "AWS credentials file access"})
 	append(&patterns, Pattern{.Warning, `AWS_ACCESS_KEY_ID`, "AWS access key environment variable"})
 	append(&patterns, Pattern{.Warning, `AWS_SECRET_ACCESS_KEY`, "AWS secret key environment variable"})
 
 	// SSH keys
-	append(&patterns, Pattern{.Warning, `\.ssh/id_rsa`, "SSH private key access (RSA)"})
-	append(&patterns, Pattern{.Warning, `\.ssh/id_dsa`, "SSH private key access (DSA)"})
-	append(&patterns, Pattern{.Warning, `\.ssh/id_ed25519`, "SSH private key access (Ed25519)"})
+	append(&patterns, Pattern{.Warning, `.ssh/id_rsa`, "SSH private key access (RSA)"})
+	append(&patterns, Pattern{.Warning, `.ssh/id_dsa`, "SSH private key access (DSA)"})
+	append(&patterns, Pattern{.Warning, `.ssh/id_ed25519`, "SSH private key access (Ed25519)"})
 
 	// GPG keys
-	append(&patterns, Pattern{.Warning, `\.gnupg`, "GPG key directory access"})
+	append(&patterns, Pattern{.Warning, `.gnupg`, "GPG key directory access"})
 
 	// Docker credentials
-	append(&patterns, Pattern{.Warning, `\.docker/config\.json`, "Docker credentials access"})
+	append(&patterns, Pattern{.Warning, `.docker/config.json`, "Docker credentials access"})
 
 	// Kubernetes credentials
-	append(&patterns, Pattern{.Warning, `\.kube/config`, "Kubernetes credentials access"})
+	append(&patterns, Pattern{.Warning, `.kube/config`, "Kubernetes credentials access"})
 
 	// Package manager credentials
-	append(&patterns, Pattern{.Warning, `\.npmrc`, "NPM credentials access"})
-	append(&patterns, Pattern{.Warning, `\.pypirc`, "PyPI credentials access"})
-	append(&patterns, Pattern{.Warning, `\.gem/credentials`, "RubyGems credentials access"})
-	append(&patterns, Pattern{.Warning, `\.cargo/credentials`, "Cargo/Rust credentials access"})
-	append(&patterns, Pattern{.Warning, `\.gradle/gradle\.properties`, "Gradle credentials access"})
-	append(&patterns, Pattern{.Warning, `\.m2/settings\.xml`, "Maven credentials access"})
-	append(&patterns, Pattern{.Warning, `\.netrc`, "FTP credentials access"})
+	append(&patterns, Pattern{.Warning, `.npmrc`, "NPM credentials access"})
+	append(&patterns, Pattern{.Warning, `.pypirc`, "PyPI credentials access"})
+	append(&patterns, Pattern{.Warning, `.gem/credentials`, "RubyGems credentials access"})
+	append(&patterns, Pattern{.Warning, `.cargo/credentials`, "Cargo/Rust credentials access"})
+	append(&patterns, Pattern{.Warning, `.gradle/gradle.properties`, "Gradle credentials access"})
+	append(&patterns, Pattern{.Warning, `.m2/settings.xml`, "Maven credentials access"})
+	append(&patterns, Pattern{.Warning, `.netrc`, "FTP credentials access"})
 
 	// AI API keys
 	append(&patterns, Pattern{.Critical, `ANTHROPIC_API_KEY`, "Anthropic API key access"})
 	append(&patterns, Pattern{.Critical, `OPENAI_API_KEY`, "OpenAI API key access"})
 	append(&patterns, Pattern{.Critical, `GROK_API_KEY`, "Grok API key access"})
 	append(&patterns, Pattern{.Critical, `XAI_API_KEY`, "xAI API key access"})
-	append(&patterns, Pattern{.Critical, `anthropic\.com/api`, "Anthropic API endpoint access"})
-	append(&patterns, Pattern{.Critical, `openai\.com/api`, "OpenAI API endpoint access"})
-	append(&patterns, Pattern{.Critical, `x\.ai/api`, "xAI API endpoint access"})
-	append(&patterns, Pattern{.Critical, `\.grok/credentials`, "Grok credentials file access"})
+	append(&patterns, Pattern{.Critical, `anthropic.com/api`, "Anthropic API endpoint access"})
+	append(&patterns, Pattern{.Critical, `openai.com/api`, "OpenAI API endpoint access"})
+	append(&patterns, Pattern{.Critical, `x.ai/api`, "xAI API endpoint access"})
+	append(&patterns, Pattern{.Critical, `.grok/credentials`, "Grok credentials file access"})
 
 	// Shell history (credential mining)
-	append(&patterns, Pattern{.Warning, `~?/\.zsh_history`, "ZSH history access"})
-	append(&patterns, Pattern{.Warning, `~?/\.bash_history`, "Bash history access"})
-	append(&patterns, Pattern{.Warning, `history\s+\|\s+grep`, "History searching for secrets"})
+	append(&patterns, Pattern{.Warning, `.zsh_history`, "ZSH history access"})
+	append(&patterns, Pattern{.Warning, `.bash_history`, "Bash history access"})
+	append(&patterns, Pattern{.Warning, `history | grep`, "History searching for secrets"})
 
 	return patterns
 }
@@ -315,13 +316,7 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	defer cleanup_compiled_patterns(compiled)
 
 	credential_patterns := get_credential_patterns()
-	credential_compiled, credential_err := compile_patterns(credential_patterns[:])
-	delete(credential_patterns)
-	if credential_err == "" {
-		defer cleanup_compiled_patterns(credential_compiled)
-	} else {
-		debug.debug_warn("security scan: credential pattern compile failed: %s", credential_err)
-	}
+	defer delete(credential_patterns)
 
 	files := walk_module_files(module_root_real, &result)
 	defer cleanup_string_list(files)
@@ -330,7 +325,7 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	total_lines := 0
 	for file_path in files {
 		if file_path == "" do continue
-		total_lines += scan_file(file_path, compiled[:], credential_compiled[:], credential_err, &result)
+		total_lines += scan_file(file_path, compiled[:], credential_patterns[:], &result)
 	}
 
 	result.summary.lines_scanned = total_lines
@@ -660,8 +655,8 @@ is_credential_description :: proc(pattern: Pattern) -> bool {
 }
 
 apply_build_context_downgrade :: proc(pattern: Pattern, file_path: string) -> Pattern {
-	context := get_build_context(file_path)
-	if context == .None {
+	ctx := get_build_context(file_path)
+	if ctx == .None {
 		return pattern
 	}
 
@@ -874,7 +869,7 @@ record_credential_finding :: proc(result: ^Scan_Result, pattern: Pattern, file_p
 	}
 }
 
-scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, credential_patterns: []Compiled_Pattern, credential_err: string, result: ^Scan_Result) -> int {
+scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, credential_patterns: []Pattern, result: ^Scan_Result) -> int {
 	if result == nil || file_path == "" {
 		return 0
 	}
@@ -892,6 +887,20 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, credential_pa
 
 	content := string(data)
 	if len(content) == 0 {
+		return 0
+	}
+	if !utf8.valid_string(content) {
+		if result != nil {
+			invalid := Finding{
+				pattern = Pattern{severity = .Warning, pattern = "invalid_utf8", description = "Invalid UTF-8 data (skipped)"},
+				severity = .Warning,
+				file_path = strings.clone(file_path),
+				line_number = 0,
+				line_text = strings.clone("invalid utf-8"),
+			}
+			append(&result.findings, invalid)
+			result.warning_count += 1
+		}
 		return 0
 	}
 	line_number := 1
@@ -953,25 +962,24 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, credential_pa
 			continue
 		}
 
-		if credential_err == "" {
-			for cred in credential_patterns {
-				cred_capture, cred_matched := regex.match_and_allocate_capture(cred.re, line)
-				cred_start := 0
-				if len(cred_capture.pos) > 0 {
-					cred_start = cred_capture.pos[0][0]
-				}
-				if cred_capture.groups != nil || cred_capture.pos != nil {
-					regex.destroy_capture(cred_capture)
-				}
-
-				if cred_matched && !match_is_ignored(line, cred_start) {
-					has_exfiltration := check_exfiltration(line)
-					record_credential_finding(result, cred.pattern, file_path, line_number, line, has_exfiltration)
-				}
+		for cred in credential_patterns {
+			if cred.pattern == "" {
+				continue
+			}
+			if !strings.contains(line, cred.pattern) {
+				continue
+			}
+			match_start := strings.index(line, cred.pattern)
+			if match_start >= 0 && !match_is_ignored(line, match_start) {
+				has_exfiltration := check_exfiltration(line)
+				record_credential_finding(result, cred, file_path, line_number, line, has_exfiltration)
 			}
 		}
 
 		for compiled in patterns {
+			if len(compiled.re.program) == 0 {
+				continue
+			}
 			capture, matched := regex.match_and_allocate_capture(compiled.re, line)
 			match_start := 0
 			if len(capture.pos) > 0 {
@@ -1321,9 +1329,20 @@ compile_patterns :: proc(patterns: []Pattern) -> ([dynamic]Compiled_Pattern, str
 	}
 	compiled := make([dynamic]Compiled_Pattern, 0, len(patterns))
 	for pattern in patterns {
+		if pattern.pattern == "" {
+			message := strings.clone(fmt.tprintf("regex compile failed: empty pattern for '%s'", pattern.description))
+			cleanup_compiled_patterns(compiled)
+			return nil, message
+		}
 		re, err := regex.create(pattern.pattern)
 		if err != nil {
 			message := strings.clone(fmt.tprintf("regex compile failed for '%s': %v", pattern.pattern, err))
+			cleanup_compiled_patterns(compiled)
+			return nil, message
+		}
+		if len(re.program) == 0 {
+			message := strings.clone(fmt.tprintf("regex compile failed (empty program) for '%s'", pattern.pattern))
+			regex.destroy_regex(re)
 			cleanup_compiled_patterns(compiled)
 			return nil, message
 		}

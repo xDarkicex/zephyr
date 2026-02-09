@@ -93,6 +93,12 @@ scan_source :: proc(url: string) -> (security.Scan_Result, string, string) {
 		return result, "", ""
 	}
 
+	if os.exists(url) && os.is_dir(url) {
+		scan_options := security.Scan_Options{}
+		scan_result := security.scan_module(url, scan_options)
+		return scan_result, "", ""
+	}
+
 	temp_dir := create_temp_install_dir("zephyr-scan")
 	if temp_dir == "" {
 		result.error_message = strings.clone("failed to create scan directory")
