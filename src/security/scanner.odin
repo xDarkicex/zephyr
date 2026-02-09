@@ -890,20 +890,24 @@ format_scan_report_json :: proc(result: ^Scan_Result, source_url: string, commit
 		delete(commit_escaped)
 	}
 
-	fmt.sbprintf(&builder, "{")
-	fmt.sbprintf(&builder, "\"schema_version\":\"1.0\",")
-	fmt.sbprintf(&builder, "\"source\":{\"type\":\"git\",\"url\":\"%s\"", source_escaped)
+	strings.write_string(&builder, "{")
+	strings.write_string(&builder, "\"schema_version\":\"1.0\",")
+	strings.write_string(&builder, "\"source\":{")
+	strings.write_string(&builder, "\"type\":\"git\",")
+	fmt.sbprintf(&builder, "\"url\":\"%s\"", source_escaped)
 	if commit != "" {
 		fmt.sbprintf(&builder, ",\"commit\":\"%s\"", commit_escaped)
 	}
-	fmt.sbprintf(&builder, "},")
-	fmt.sbprintf(&builder, "\"scan_summary\":{\"files_scanned\":%d,\"lines_scanned\":%d,\"duration_ms\":%d,\"critical_findings\":%d,\"warning_findings\":%d},",
+	strings.write_string(&builder, "},")
+	strings.write_string(&builder, "\"scan_summary\":{")
+	fmt.sbprintf(&builder, "\"files_scanned\":%d,\"lines_scanned\":%d,\"duration_ms\":%d,\"critical_findings\":%d,\"warning_findings\":%d",
 		result.summary.files_scanned,
 		result.summary.lines_scanned,
 		result.summary.duration_ms,
 		result.critical_count,
 		result.warning_count,
 	)
+	strings.write_string(&builder, "},")
 
 	policy := "allow"
 	if result.critical_count > 0 {
@@ -913,12 +917,12 @@ format_scan_report_json :: proc(result: ^Scan_Result, source_url: string, commit
 	}
 	fmt.sbprintf(&builder, "\"policy_recommendation\":\"%s\",", policy)
 	fmt.sbprintf(&builder, "\"exit_code_hint\":%d,", exit_code_for_scan(result))
-	fmt.sbprintf(&builder, "\"findings\":[")
+	strings.write_string(&builder, "\"findings\":[")
 
 	for i in 0..<len(result.findings) {
 		finding := result.findings[i]
 		if i > 0 {
-			fmt.sbprintf(&builder, ",")
+			strings.write_string(&builder, ",")
 		}
 		pattern_escaped := escape_json_string(finding.pattern.pattern)
 		description_escaped := escape_json_string(finding.pattern.description)
@@ -933,7 +937,7 @@ format_scan_report_json :: proc(result: ^Scan_Result, source_url: string, commit
 			severity = "warning"
 			bypass = "user_approval"
 		}
-		fmt.sbprintf(&builder, "{")
+		strings.write_string(&builder, "{")
 		fmt.sbprintf(&builder, "\"severity\":\"%s\",", severity)
 		fmt.sbprintf(&builder, "\"pattern\":\"%s\",", pattern_escaped)
 		fmt.sbprintf(&builder, "\"description\":\"%s\",", description_escaped)
@@ -941,14 +945,14 @@ format_scan_report_json :: proc(result: ^Scan_Result, source_url: string, commit
 		fmt.sbprintf(&builder, "\"line\":%d,", finding.line_number)
 		fmt.sbprintf(&builder, "\"snippet\":\"%s\",", snippet_escaped)
 		fmt.sbprintf(&builder, "\"bypass_required\":\"%s\"", bypass)
-		fmt.sbprintf(&builder, "}")
+		strings.write_string(&builder, "}")
 		delete(pattern_escaped)
 		delete(description_escaped)
 		delete(file_escaped)
 		delete(snippet_escaped)
 	}
 
-	fmt.sbprintf(&builder, "]}")
+	strings.write_string(&builder, "]}")
 	return strings.clone(strings.to_string(builder))
 }
 

@@ -18,6 +18,7 @@ Zephyr is a shell module loader system that manages dependencies, load order, an
 - 🐛 **Excellent Debugging**: Verbose output, colored errors, and helpful suggestions
 - 🎨 **Beautiful Output**: Colored terminal output with clear formatting
 - 🤖 **Machine Readable**: JSON security scan output for AI assistants and automation tools
+- 🧪 **Security Scanning**: Language-agnostic scanning with CVE pattern coverage and git hook blocking
 
 ## Security Model
 
@@ -44,6 +45,8 @@ See [docs/SECURITY_PIPELINE.md](docs/SECURITY_PIPELINE.md) for a technical break
 - ✅ Insecure HTTP downloads (`curl http://`)
 - ✅ Common obfuscation patterns (e.g., `base64 -d | sh`, process substitution)
 - ✅ Git hooks present in `.git/hooks/` (blocked unless `--unsafe`)
+- ✅ Symlink evasion attempts (symlinks pointing outside the module)
+- ✅ Binary and oversized files (skipped with warnings; libmagic improves detection)
 
 ### Critical Limitations
 - ⚠️ **Cannot detect sophisticated obfuscation** (multi-stage or encrypted payloads)
@@ -74,6 +77,7 @@ See [docs/SECURITY_PIPELINE.md](docs/SECURITY_PIPELINE.md) for a technical break
 - [Odin compiler](https://odin-lang.org/docs/install/) (for building from source)
 - libgit2 (required for git-based module management)
 - pkg-config (recommended for auto-detection of libgit2)
+- libmagic (optional, improves binary detection in security scans)
 - ZSH shell
 - macOS or Linux
 
@@ -539,6 +543,13 @@ zephyr scan https://github.com/user/zephyr-git-helpers --json
 - `exit_code_hint`: `0` (clean), `1` (warnings), `2` (critical)
 
 See `docs/SECURITY_SCAN.md` for the full schema and exit code contract.
+
+**Exit codes (when `--json` is used):**
+- `0`: No findings
+- `1`: Warning findings present
+- `2`: Critical findings present
+- `3`: Scan failed (I/O error, timeout, or other scan error)
+- `4`: Invalid arguments
 
 ### `zephyr update [module-name]`
 
