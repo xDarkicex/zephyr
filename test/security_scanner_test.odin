@@ -398,6 +398,45 @@ test_scanner_detects_symlink_evasion :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_scanner_integration_fixtures :: proc(t: ^testing.T) {
+	set_test_timeout(t)
+	reset_test_state(t)
+
+	modules_dir := get_test_modules_dir()
+	defer delete(modules_dir)
+
+	safe_modules := []string{
+		"scanner-test-rust",
+		"scanner-test-zig",
+		"scanner-test-go",
+		"scanner-test-python",
+		"scanner-test-binaries",
+	}
+
+	for name in safe_modules {
+		module_path := strings.concatenate({modules_dir, "/", name})
+		defer delete(module_path)
+		result := security.scan_module(module_path, security.Scan_Options{})
+		defer security.cleanup_scan_result(&result)
+		testing.expect(t, result.critical_count == 0 && result.warning_count == 0, "fixture should scan clean")
+	}
+
+	hooks_path := strings.concatenate({modules_dir, "/scanner-test-git-hooks"})
+	defer delete(hooks_path)
+	hooks_result := security.scan_module(hooks_path, security.Scan_Options{})
+	defer security.cleanup_scan_result(&hooks_result)
+	testing.expect(t, hooks_result.critical_count > 0, "git hook fixture should be blocked")
+	testing.expect(t, len(hooks_result.git_hooks) > 0, "git hook fixture should record hooks")
+
+	symlink_path := strings.concatenate({modules_dir, "/scanner-test-symlinks"})
+	defer delete(symlink_path)
+	symlink_result := security.scan_module(symlink_path, security.Scan_Options{})
+	defer security.cleanup_scan_result(&symlink_result)
+	testing.expect(t, symlink_result.critical_count > 0, "symlink fixture should be blocked")
+	testing.expect(t, len(symlink_result.symlink_evasions) > 0, "symlink fixture should record evasion")
+}
+
+@(test)
 test_magic_file_type_text :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)

@@ -1,0 +1,7 @@
+[module]
+name = "scanner-test-python"
+version = "0.1.0"
+description = "Scanner fixture: Python module"
+
+[load]
+files = ["init.zsh"]

@@ -1,0 +1,7 @@
+[module]
+name = "scanner-test-zig"
+version = "0.1.0"
+description = "Scanner fixture: Zig module"
+
+[load]
+files = ["init.zsh"]

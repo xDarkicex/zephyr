@@ -1,0 +1,1 @@
+echo "scanner-test-rust"

@@ -1,0 +1,7 @@
+[module]
+name = "scanner-test-git-hooks"
+version = "0.1.0"
+description = "Scanner fixture: git hooks"
+
+[load]
+files = ["init.zsh"]

@@ -1,0 +1,7 @@
+[module]
+name = "scanner-test-go"
+version = "0.1.0"
+description = "Scanner fixture: Go module"
+
+[load]
+files = ["init.zsh"]

@@ -1,0 +1,7 @@
+[module]
+name = "scanner-test-symlinks"
+version = "0.1.0"
+description = "Scanner fixture: symlinks"
+
+[load]
+files = ["init.zsh"]

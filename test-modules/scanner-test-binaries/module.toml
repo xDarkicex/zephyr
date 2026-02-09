@@ -1,0 +1,7 @@
+[module]
+name = "scanner-test-binaries"
+version = "0.1.0"
+description = "Scanner fixture: binaries"
+
+[load]
+files = ["init.zsh"]

@@ -1,0 +1,7 @@
+[module]
+name = "scanner-test-rust"
+version = "0.1.0"
+description = "Scanner fixture: Rust module"
+
+[load]
+files = ["init.zsh"]
