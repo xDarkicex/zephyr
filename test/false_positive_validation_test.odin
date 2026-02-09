@@ -111,7 +111,7 @@ test_oh_my_zsh_false_positives :: proc(t: ^testing.T) {
 	defer delete(omz_path)
 	
 	if !path_exists(omz_path) {
-		testing.skip(t, "oh-my-zsh not installed at ~/.oh-my-zsh")
+		fmt.printf("SKIP: oh-my-zsh not installed at ~/.oh-my-zsh\n")
 		return
 	}
 	
@@ -136,7 +136,7 @@ test_nvm_false_positives :: proc(t: ^testing.T) {
 	defer delete(nvm_path)
 	
 	if !path_exists(nvm_path) {
-		testing.skip(t, "nvm not installed at ~/.nvm")
+		fmt.printf("SKIP: nvm not installed at ~/.nvm\n")
 		return
 	}
 	
@@ -159,7 +159,7 @@ test_rbenv_false_positives :: proc(t: ^testing.T) {
 	defer delete(rbenv_path)
 	
 	if !path_exists(rbenv_path) {
-		testing.skip(t, "rbenv not installed at ~/.rbenv")
+		fmt.printf("SKIP: rbenv not installed at ~/.rbenv\n")
 		return
 	}
 	
@@ -182,7 +182,7 @@ test_pyenv_false_positives :: proc(t: ^testing.T) {
 	defer delete(pyenv_path)
 	
 	if !path_exists(pyenv_path) {
-		testing.skip(t, "pyenv not installed at ~/.pyenv")
+		fmt.printf("SKIP: pyenv not installed at ~/.pyenv\n")
 		return
 	}
 	
@@ -205,7 +205,7 @@ test_zinit_false_positives :: proc(t: ^testing.T) {
 	defer delete(zinit_path)
 	
 	if !path_exists(zinit_path) {
-		testing.skip(t, "zinit not installed at ~/.zinit")
+		fmt.printf("SKIP: zinit not installed at ~/.zinit\n")
 		return
 	}
 	
@@ -228,7 +228,7 @@ test_asdf_false_positives :: proc(t: ^testing.T) {
 	defer delete(asdf_path)
 	
 	if !path_exists(asdf_path) {
-		testing.skip(t, "asdf not installed at ~/.asdf")
+		fmt.printf("SKIP: asdf not installed at ~/.asdf\n")
 		return
 	}
 	

@@ -536,6 +536,10 @@ walk_module_files_internal :: proc(dir_path: string, module_root: string, result
 
 	for entry in entries {
 		full_path := filepath.join({dir_path, entry.name})
+		if is_git_metadata_path(full_path) {
+			delete(full_path)
+			continue
+		}
 		if entry.is_dir {
 			walk_module_files_internal(full_path, module_root, result, paths)
 		} else if is_scannable_file(full_path, module_root, result) {
@@ -788,18 +792,26 @@ append_finding :: proc(
 	line_text: string,
 ) {
 	trimmed_line := strings.trim_space(line_text)
+	adjusted_pattern := pattern
+	if is_documentation_path(file_path) {
+		if adjusted_pattern.severity == .Critical {
+			adjusted_pattern.severity = .Warning
+		} else if adjusted_pattern.severity == .Warning {
+			adjusted_pattern.severity = .Info
+		}
+	}
 	finding := Finding{
-		pattern = pattern,
-		severity = pattern.severity,
+		pattern = adjusted_pattern,
+		severity = adjusted_pattern.severity,
 		file_path = strings.clone(file_path),
 		line_number = line_number,
 		line_text = strings.clone(trimmed_line),
 	}
 	append(findings, finding)
 
-	if pattern.severity == .Critical {
+	if adjusted_pattern.severity == .Critical {
 		critical_count^ += 1
-	} else if pattern.severity == .Warning {
+	} else if adjusted_pattern.severity == .Warning {
 		warning_count^ += 1
 	} else {
 		info_count^ += 1
@@ -1009,6 +1021,22 @@ is_documentation_path :: proc(file_path: string) -> bool {
 	}
 	base := filepath.base(lower)
 	return base == "readme.md" || base == "readme"
+}
+
+is_git_metadata_path :: proc(file_path: string) -> bool {
+	if file_path == "" {
+		return false
+	}
+	lower := strings.to_lower(file_path)
+	defer delete(lower)
+
+	if strings.contains(lower, "/.git/") || strings.contains(lower, "\\.git\\") {
+		return true
+	}
+	if strings.has_suffix(lower, "/.git") || strings.has_suffix(lower, "\\.git") {
+		return true
+	}
+	return false
 }
 
 parse_heredoc_marker :: proc(line: string) -> string {
