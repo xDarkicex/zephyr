@@ -44,6 +44,50 @@ Git_Hook_Finding :: struct {
 	shebang_issue: string,
 }
 
+Reverse_Shell_Type :: enum {
+	Bash_TCP,
+	Bash_UDP,
+	Netcat,
+	Socat,
+	Python,
+	Perl,
+}
+
+Reverse_Shell_Finding :: struct {
+	file_path:   string,
+	line_number: int,
+	shell_type:  Reverse_Shell_Type,
+	line_text:   string,
+}
+
+Credential_Type :: enum {
+	AWS,
+	SSH,
+	GPG,
+	Docker,
+	Kubernetes,
+	NPM,
+	PyPI,
+	RubyGems,
+	Cargo,
+	Gradle,
+	Maven,
+	FTP,
+	Anthropic_API,
+	OpenAI_API,
+	Grok_API,
+	XAI_API,
+	Shell_History,
+}
+
+Credential_Finding :: struct {
+	file_path:        string,
+	line_number:      int,
+	credential_type:  Credential_Type,
+	has_exfiltration: bool,
+	line_text:        string,
+}
+
 Scan_Result :: struct {
 	success:        bool,
 	critical_count: int,
@@ -52,6 +96,8 @@ Scan_Result :: struct {
 	findings:       [dynamic]Finding,
 	symlink_evasions: [dynamic]Symlink_Finding,
 	git_hooks:      [dynamic]Git_Hook_Finding,
+	reverse_shell_findings: [dynamic]Reverse_Shell_Finding,
+	credential_findings: [dynamic]Credential_Finding,
 	error_message:  string,
 	summary:        Scan_Summary,
 }
@@ -102,10 +148,6 @@ get_critical_patterns :: proc() -> [dynamic]Pattern {
 	append(&patterns, Pattern{.Critical, `dd\s+if=`, "Low-level disk operation"})
 	append(&patterns, Pattern{.Critical, `>\s*/dev/sda`, "Direct disk overwrite (/dev/sda)"})
 	append(&patterns, Pattern{.Critical, `>\s*/dev/nvme`, "Direct disk overwrite (/dev/nvme)"})
-	append(&patterns, Pattern{.Critical, `/dev/tcp/`, "Reverse shell via /dev/tcp"})
-	append(&patterns, Pattern{.Critical, `/dev/udp/`, "Reverse shell via /dev/udp"})
-	append(&patterns, Pattern{.Critical, `nc\s+-e\s+/bin/sh`, "Reverse shell via netcat"})
-	append(&patterns, Pattern{.Critical, `socat\s+exec:`, "Reverse shell via socat"})
 	append(&patterns, Pattern{.Critical, `ptrace`, "Process inspection/manipulation via ptrace"})
 	append(&patterns, Pattern{.Critical, `/proc/[^\\s]+/mem`, "Direct process memory access"})
 	append(&patterns, Pattern{.Critical, `LD_PRELOAD`, "Dynamic loader injection (LD_PRELOAD)"})
@@ -114,6 +156,11 @@ get_critical_patterns :: proc() -> [dynamic]Pattern {
 	append(&patterns, Pattern{.Critical, `/proc/\\d+/root`, "Container escape via /proc/<pid>/root"})
 	append(&patterns, Pattern{.Critical, `nsenter`, "Namespace escape via nsenter"})
 	append(&patterns, Pattern{.Critical, `/sys/fs/cgroup`, "Container escape via cgroup access"})
+	reverse_shell_patterns := get_reverse_shell_patterns()
+	for p in reverse_shell_patterns {
+		append(&patterns, p)
+	}
+	delete(reverse_shell_patterns)
 	return patterns
 }
 
@@ -124,6 +171,68 @@ get_warning_patterns :: proc() -> [dynamic]Pattern {
 	append(&patterns, Pattern{.Warning, `sudo\s+`, "Privilege escalation"})
 	append(&patterns, Pattern{.Warning, `>>\s+~/.zshrc`, "Shell config modification (zsh)"})
 	append(&patterns, Pattern{.Warning, `>>\s+~/.bashrc`, "Shell config modification (bash)"})
+	return patterns
+}
+
+get_credential_patterns :: proc() -> [dynamic]Pattern {
+	patterns := make([dynamic]Pattern)
+
+	// AWS credentials
+	append(&patterns, Pattern{.Warning, `\.aws/credentials`, "AWS credentials file access"})
+	append(&patterns, Pattern{.Warning, `AWS_ACCESS_KEY_ID`, "AWS access key environment variable"})
+	append(&patterns, Pattern{.Warning, `AWS_SECRET_ACCESS_KEY`, "AWS secret key environment variable"})
+
+	// SSH keys
+	append(&patterns, Pattern{.Warning, `\.ssh/id_rsa`, "SSH private key access (RSA)"})
+	append(&patterns, Pattern{.Warning, `\.ssh/id_dsa`, "SSH private key access (DSA)"})
+	append(&patterns, Pattern{.Warning, `\.ssh/id_ed25519`, "SSH private key access (Ed25519)"})
+
+	// GPG keys
+	append(&patterns, Pattern{.Warning, `\.gnupg`, "GPG key directory access"})
+
+	// Docker credentials
+	append(&patterns, Pattern{.Warning, `\.docker/config\.json`, "Docker credentials access"})
+
+	// Kubernetes credentials
+	append(&patterns, Pattern{.Warning, `\.kube/config`, "Kubernetes credentials access"})
+
+	// Package manager credentials
+	append(&patterns, Pattern{.Warning, `\.npmrc`, "NPM credentials access"})
+	append(&patterns, Pattern{.Warning, `\.pypirc`, "PyPI credentials access"})
+	append(&patterns, Pattern{.Warning, `\.gem/credentials`, "RubyGems credentials access"})
+	append(&patterns, Pattern{.Warning, `\.cargo/credentials`, "Cargo/Rust credentials access"})
+	append(&patterns, Pattern{.Warning, `\.gradle/gradle\.properties`, "Gradle credentials access"})
+	append(&patterns, Pattern{.Warning, `\.m2/settings\.xml`, "Maven credentials access"})
+	append(&patterns, Pattern{.Warning, `\.netrc`, "FTP credentials access"})
+
+	// AI API keys
+	append(&patterns, Pattern{.Critical, `ANTHROPIC_API_KEY`, "Anthropic API key access"})
+	append(&patterns, Pattern{.Critical, `OPENAI_API_KEY`, "OpenAI API key access"})
+	append(&patterns, Pattern{.Critical, `GROK_API_KEY`, "Grok API key access"})
+	append(&patterns, Pattern{.Critical, `XAI_API_KEY`, "xAI API key access"})
+	append(&patterns, Pattern{.Critical, `anthropic\.com/api`, "Anthropic API endpoint access"})
+	append(&patterns, Pattern{.Critical, `openai\.com/api`, "OpenAI API endpoint access"})
+	append(&patterns, Pattern{.Critical, `x\.ai/api`, "xAI API endpoint access"})
+	append(&patterns, Pattern{.Critical, `\.grok/credentials`, "Grok credentials file access"})
+
+	// Shell history (credential mining)
+	append(&patterns, Pattern{.Warning, `~?/\.zsh_history`, "ZSH history access"})
+	append(&patterns, Pattern{.Warning, `~?/\.bash_history`, "Bash history access"})
+	append(&patterns, Pattern{.Warning, `history\s+\|\s+grep`, "History searching for secrets"})
+
+	return patterns
+}
+
+get_reverse_shell_patterns :: proc() -> [dynamic]Pattern {
+	patterns := make([dynamic]Pattern)
+	append(&patterns, Pattern{.Critical, `/dev/tcp/`, "Reverse shell via /dev/tcp"})
+	append(&patterns, Pattern{.Critical, `/dev/udp/`, "Reverse shell via /dev/udp"})
+	append(&patterns, Pattern{.Critical, `nc\s+.*-e\s+/bin/sh`, "Reverse shell via netcat (sh)"})
+	append(&patterns, Pattern{.Critical, `nc\s+.*-e\s+/bin/bash`, "Reverse shell via netcat (bash)"})
+	append(&patterns, Pattern{.Critical, `netcat\s+.*-e`, "Reverse shell via netcat"})
+	append(&patterns, Pattern{.Critical, `socat\s+exec:`, "Reverse shell via socat"})
+	append(&patterns, Pattern{.Critical, `python.*socket.*subprocess`, "Reverse shell via python"})
+	append(&patterns, Pattern{.Critical, `perl.*socket.*open.*STDIN`, "Reverse shell via perl"})
 	return patterns
 }
 
@@ -176,6 +285,15 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	}
 	defer cleanup_compiled_patterns(compiled)
 
+	credential_patterns := get_credential_patterns()
+	credential_compiled, credential_err := compile_patterns(credential_patterns[:])
+	delete(credential_patterns)
+	if credential_err == "" {
+		defer cleanup_compiled_patterns(credential_compiled)
+	} else {
+		debug.debug_warn("security scan: credential pattern compile failed: %s", credential_err)
+	}
+
 	files := walk_module_files(module_root_real, &result)
 	defer cleanup_string_list(files)
 	result.summary.files_scanned = len(files)
@@ -183,7 +301,7 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	total_lines := 0
 	for file_path in files {
 		if file_path == "" do continue
-		total_lines += scan_file(file_path, compiled[:], &result)
+		total_lines += scan_file(file_path, compiled[:], credential_compiled[:], credential_err, &result)
 	}
 
 	result.summary.lines_scanned = total_lines
@@ -231,12 +349,36 @@ cleanup_scan_result :: proc(result: ^Scan_Result) {
 	if result.git_hooks != nil {
 		delete(result.git_hooks)
 	}
+	for &shell_finding in result.reverse_shell_findings {
+		if shell_finding.file_path != "" {
+			delete(shell_finding.file_path)
+		}
+		if shell_finding.line_text != "" {
+			delete(shell_finding.line_text)
+		}
+	}
+	if result.reverse_shell_findings != nil {
+		delete(result.reverse_shell_findings)
+	}
+	for &cred_finding in result.credential_findings {
+		if cred_finding.file_path != "" {
+			delete(cred_finding.file_path)
+		}
+		if cred_finding.line_text != "" {
+			delete(cred_finding.line_text)
+		}
+	}
+	if result.credential_findings != nil {
+		delete(result.credential_findings)
+	}
 	if result.error_message != "" {
 		delete(result.error_message)
 	}
 	result.findings = nil
 	result.symlink_evasions = nil
 	result.git_hooks = nil
+	result.reverse_shell_findings = nil
+	result.credential_findings = nil
 	result.error_message = ""
 	result.success = false
 	result.critical_count = 0
@@ -346,7 +488,111 @@ clear_input_reader_override :: proc() {
 	input_reader_override = nil
 }
 
-scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, result: ^Scan_Result) -> int {
+get_reverse_shell_type_from_pattern :: proc(pattern: Pattern) -> (Reverse_Shell_Type, bool) {
+	desc := strings.to_lower(pattern.description)
+	switch {
+	case strings.contains(desc, "/dev/tcp"):
+		return .Bash_TCP, true
+	case strings.contains(desc, "/dev/udp"):
+		return .Bash_UDP, true
+	case strings.contains(desc, "netcat") || strings.contains(desc, "nc"):
+		return .Netcat, true
+	case strings.contains(desc, "socat"):
+		return .Socat, true
+	case strings.contains(desc, "python"):
+		return .Python, true
+	case strings.contains(desc, "perl"):
+		return .Perl, true
+	}
+	return .Bash_TCP, false
+}
+
+get_credential_type_from_pattern :: proc(pattern: Pattern) -> Credential_Type {
+	desc := strings.to_lower(pattern.description)
+	switch {
+	case strings.contains(desc, "aws"):
+		return .AWS
+	case strings.contains(desc, "ssh"):
+		return .SSH
+	case strings.contains(desc, "gpg"):
+		return .GPG
+	case strings.contains(desc, "docker"):
+		return .Docker
+	case strings.contains(desc, "kubernetes"):
+		return .Kubernetes
+	case strings.contains(desc, "npm"):
+		return .NPM
+	case strings.contains(desc, "pypi"):
+		return .PyPI
+	case strings.contains(desc, "rubygems"):
+		return .RubyGems
+	case strings.contains(desc, "cargo") || strings.contains(desc, "rust"):
+		return .Cargo
+	case strings.contains(desc, "gradle"):
+		return .Gradle
+	case strings.contains(desc, "maven"):
+		return .Maven
+	case strings.contains(desc, "ftp") || strings.contains(desc, "netrc"):
+		return .FTP
+	case strings.contains(desc, "anthropic"):
+		return .Anthropic_API
+	case strings.contains(desc, "openai"):
+		return .OpenAI_API
+	case strings.contains(desc, "grok"):
+		return .Grok_API
+	case strings.contains(desc, "xai") || strings.contains(desc, "x.ai"):
+		return .XAI_API
+	case strings.contains(desc, "history"):
+		return .Shell_History
+	}
+	return .AWS
+}
+
+check_exfiltration :: proc(line: string) -> bool {
+	lower := strings.to_lower(line)
+	exfil_patterns := []string{
+		"curl", "wget", "post", "nc ", "netcat", "scp", "rsync", "ftp", "tftp",
+	}
+	for pattern in exfil_patterns {
+		if strings.contains(lower, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+record_credential_finding :: proc(result: ^Scan_Result, pattern: Pattern, file_path: string, line_number: int, line: string, has_exfiltration: bool) {
+	cred_type := get_credential_type_from_pattern(pattern)
+	severity := pattern.severity
+	if has_exfiltration {
+		severity = .Critical
+	}
+	credential := Credential_Finding{
+		file_path = strings.clone(file_path),
+		line_number = line_number,
+		credential_type = cred_type,
+		has_exfiltration = has_exfiltration,
+		line_text = strings.clone(line),
+	}
+	append(&result.credential_findings, credential)
+
+	finding := Finding{
+		pattern = pattern,
+		severity = severity,
+		file_path = strings.clone(file_path),
+		line_number = line_number,
+		line_text = strings.clone(line),
+	}
+	append(&result.findings, finding)
+
+	if severity == .Critical {
+		result.critical_count += 1
+	} else {
+		result.warning_count += 1
+	}
+}
+
+scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, credential_patterns: []Compiled_Pattern, credential_err: string, result: ^Scan_Result) -> int {
 	if result == nil || file_path == "" {
 		return 0
 	}
@@ -425,6 +671,24 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, result: ^Scan
 			continue
 		}
 
+		if credential_err == "" {
+			for cred in credential_patterns {
+				cred_capture, cred_matched := regex.match_and_allocate_capture(cred.re, line)
+				cred_start := 0
+				if len(cred_capture.pos) > 0 {
+					cred_start = cred_capture.pos[0][0]
+				}
+				if cred_capture.groups != nil || cred_capture.pos != nil {
+					regex.destroy_capture(cred_capture)
+				}
+
+				if cred_matched && !match_is_ignored(line, cred_start) {
+					has_exfiltration := check_exfiltration(line)
+					record_credential_finding(result, cred.pattern, file_path, line_number, line, has_exfiltration)
+				}
+			}
+		}
+
 		for compiled in patterns {
 			capture, matched := regex.match_and_allocate_capture(compiled.re, line)
 			match_start := 0
@@ -437,6 +701,15 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, result: ^Scan
 
 			if matched && !match_is_ignored(line, match_start) {
 				append_finding(&result.findings, &result.critical_count, &result.warning_count, &result.info_count, compiled.pattern, file_path, line_number, line)
+				shell_type, ok := get_reverse_shell_type_from_pattern(compiled.pattern)
+				if ok {
+					append(&result.reverse_shell_findings, Reverse_Shell_Finding{
+						file_path = strings.clone(file_path),
+						line_number = line_number,
+						shell_type = shell_type,
+						line_text = strings.clone(line),
+					})
+				}
 			}
 		}
 
