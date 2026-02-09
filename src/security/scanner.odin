@@ -74,6 +74,15 @@ Compiled_Pattern :: struct {
 
 get_critical_patterns :: proc() -> [dynamic]Pattern {
 	patterns := make([dynamic]Pattern)
+	// CVE-2026-24887 patterns
+	append(&patterns, Pattern{.Critical, `;\s*\$\(`, "Command substitution injection (CVE-2026-24887)"})
+	append(&patterns, Pattern{.Critical, `\|\s*\$\(`, "Pipe with command substitution (CVE-2026-24887)"})
+	append(&patterns, Pattern{.Critical, `&&\s*curl`, "Command chaining with curl (CVE-2026-24887)"})
+	append(&patterns, Pattern{.Critical, `\|\|\s*wget`, "Command chaining with wget (CVE-2026-24887)"})
+	// CVE-2026-25723 patterns
+	append(&patterns, Pattern{.Critical, `\|\s*sed.*-e.*\|`, "Chained sed operations (CVE-2026-25723)"})
+	append(&patterns, Pattern{.Critical, `sed.*'s/.*\$\([^']*\)'`, "Sed with command substitution (CVE-2026-25723)"})
+
 	append(&patterns, Pattern{.Critical, `curl\s+.*\|\s*bash`, "Download and execute via curl"})
 	append(&patterns, Pattern{.Critical, `wget\s+.*\|\s*sh`, "Download and execute via wget"})
 	append(&patterns, Pattern{.Critical, `eval\s+\$\(curl`, "Remote code execution via eval"})

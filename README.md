@@ -34,7 +34,7 @@ Zephyr uses a **clone-scan-validate-move** pipeline to isolate modules during an
 4. **Move to final**: Only if all checks pass, moved to `~/.zsh/modules/`
 
 This ensures malicious code cannot execute during the scan, and failed scans leave no artifacts.
-Git hooks are also scanned and **blocked by default** if present.
+Git hooks are detected during the scan and **blocked by default** (install fails unless `--unsafe` is used).
 
 See `docs/SECURITY_PIPELINE.md` for a technical breakdown.
 
