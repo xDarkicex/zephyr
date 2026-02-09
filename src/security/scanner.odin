@@ -430,6 +430,16 @@ format_scan_report :: proc(result: ^Scan_Result, module_name: string) -> string 
 	defer strings.builder_destroy(&builder)
 
 	fmt.sbprintf(&builder, "Security Issues Detected in module '%s'\n\n", module_name)
+	fmt.sbprintf(&builder, "Summary: %d Critical, %d Warning, %d Info, %d Credential, %d Reverse Shell\n\n",
+		result.critical_count,
+		result.warning_count,
+		result.info_count,
+		len(result.credential_findings),
+		len(result.reverse_shell_findings),
+	)
+	if result.trusted_module_applied {
+		fmt.sbprintf(&builder, "Trusted module allowlist applied.\n\n")
+	}
 
 	has_critical := result.critical_count > 0
 	has_warning := result.warning_count > 0
@@ -1452,14 +1462,17 @@ format_scan_report_json :: proc(result: ^Scan_Result, source_url: string, commit
 	}
 	strings.write_string(&builder, "},")
 	strings.write_string(&builder, "\"scan_summary\":{")
-	fmt.sbprintf(&builder, "\"files_scanned\":%d,\"lines_scanned\":%d,\"duration_ms\":%d,\"critical_findings\":%d,\"warning_findings\":%d",
+	fmt.sbprintf(&builder, "\"files_scanned\":%d,\"lines_scanned\":%d,\"duration_ms\":%d,\"critical_findings\":%d,\"warning_findings\":%d,\"credential_findings\":%d,\"reverse_shell_findings\":%d",
 		result.summary.files_scanned,
 		result.summary.lines_scanned,
 		result.summary.duration_ms,
 		result.critical_count,
 		result.warning_count,
+		len(result.credential_findings),
+		len(result.reverse_shell_findings),
 	)
 	strings.write_string(&builder, "},")
+	fmt.sbprintf(&builder, "\"trusted_module_applied\":%v,", result.trusted_module_applied)
 
 	policy := "allow"
 	if result.critical_count > 0 {
