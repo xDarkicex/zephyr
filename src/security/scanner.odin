@@ -187,6 +187,17 @@ get_warning_patterns :: proc() -> [dynamic]Pattern {
 	return patterns
 }
 
+get_cicd_patterns :: proc() -> [dynamic]Pattern {
+	patterns := make([dynamic]Pattern)
+	append(&patterns, Pattern{.Warning, `\.github/workflows/.*\.ya?ml`, "GitHub Actions workflow"})
+	append(&patterns, Pattern{.Warning, `on:\s*push`, "CI trigger on push"})
+	append(&patterns, Pattern{.Warning, `actions/checkout`, "GitHub Actions checkout"})
+	append(&patterns, Pattern{.Warning, `\.gitlab-ci\.yml`, "GitLab CI configuration"})
+	append(&patterns, Pattern{.Warning, `\.circleci/config\.yml`, "CircleCI configuration"})
+	append(&patterns, Pattern{.Critical, `\.(github/workflows/.*|gitlab-ci\.yml|circleci/config\.yml).*(credentials|secrets|secret)`, "CI configuration credential access"})
+	return patterns
+}
+
 get_credential_patterns :: proc() -> [dynamic]Pattern {
 	patterns := make([dynamic]Pattern)
 
@@ -280,14 +291,19 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	all_patterns := make([dynamic]Pattern)
 	critical_patterns := get_critical_patterns()
 	warning_patterns := get_warning_patterns()
+	cicd_patterns := get_cicd_patterns()
 	for p in critical_patterns {
 		append(&all_patterns, p)
 	}
 	for p in warning_patterns {
 		append(&all_patterns, p)
 	}
+	for p in cicd_patterns {
+		append(&all_patterns, p)
+	}
 	delete(critical_patterns)
 	delete(warning_patterns)
+	delete(cicd_patterns)
 
 	compiled, err := compile_patterns(all_patterns[:])
 	delete(all_patterns)
