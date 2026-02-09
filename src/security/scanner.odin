@@ -12,19 +12,21 @@ import "../debug"
 // Module security scanner with regex-based pattern matching.
 // Ownership: all strings stored in Scan_Result and Finding are owned by the caller.
 
-Pattern_Type :: enum {
-	Critical,
+Severity :: enum {
+	Info,
 	Warning,
+	Critical,
 }
 
 Pattern :: struct {
-	type:        Pattern_Type,
+	severity:    Severity,
 	pattern:     string,
 	description: string,
 }
 
 Finding :: struct {
 	pattern:     Pattern,
+	severity:    Severity,
 	file_path:   string,
 	line_number: int,
 	line_text:   string,
@@ -46,6 +48,7 @@ Scan_Result :: struct {
 	success:        bool,
 	critical_count: int,
 	warning_count:  int,
+	info_count:     int,
 	findings:       [dynamic]Finding,
 	symlink_evasions: [dynamic]Symlink_Finding,
 	git_hooks:      [dynamic]Git_Hook_Finding,
@@ -234,6 +237,7 @@ cleanup_scan_result :: proc(result: ^Scan_Result) {
 	result.success = false
 	result.critical_count = 0
 	result.warning_count = 0
+	result.info_count = 0
 	result.summary = Scan_Summary{}
 }
 
@@ -253,7 +257,7 @@ format_scan_report :: proc(result: ^Scan_Result, module_name: string) -> string 
 	if has_critical {
 		fmt.sbprintf(&builder, "CRITICAL (blocks installation):\n")
 		for finding in result.findings {
-			if finding.pattern.type != .Critical do continue
+			if finding.pattern.severity != .Critical do continue
 			fmt.sbprintf(&builder, "  ✗ %s\n", finding.pattern.description)
 			fmt.sbprintf(&builder, "    Pattern: %s\n", finding.pattern.pattern)
 			fmt.sbprintf(&builder, "    File: %s:%d\n", finding.file_path, finding.line_number)
@@ -264,7 +268,7 @@ format_scan_report :: proc(result: ^Scan_Result, module_name: string) -> string 
 	if has_warning {
 		fmt.sbprintf(&builder, "WARNINGS (require confirmation):\n")
 		for finding in result.findings {
-			if finding.pattern.type != .Warning do continue
+			if finding.pattern.severity != .Warning do continue
 			fmt.sbprintf(&builder, "  ⚠ %s\n", finding.pattern.description)
 			fmt.sbprintf(&builder, "    Pattern: %s\n", finding.pattern.pattern)
 			fmt.sbprintf(&builder, "    File: %s:%d\n", finding.file_path, finding.line_number)
@@ -412,7 +416,7 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, result: ^Scan
 			}
 
 			if matched && !match_is_ignored(line, match_start) {
-				append_finding(&result.findings, &result.critical_count, &result.warning_count, compiled.pattern, file_path, line_number, line)
+				append_finding(&result.findings, &result.critical_count, &result.warning_count, &result.info_count, compiled.pattern, file_path, line_number, line)
 			}
 		}
 
@@ -547,13 +551,14 @@ log_symlink_evasion :: proc(file_path: string, real_path: string, result: ^Scan_
 	append(&result.symlink_evasions, symlink)
 
 	pattern := Pattern{
-		type = .Critical,
+		severity = .Critical,
 		pattern = "symlink",
 		description = "Symlink points outside module directory",
 	}
 
 	finding := Finding{
 		pattern = pattern,
+		severity = pattern.severity,
 		file_path = strings.clone(file_path),
 		line_number = 0,
 		line_text = strings.clone(real_path),
@@ -635,12 +640,13 @@ scan_for_git_hooks :: proc(module_root: string, result: ^Scan_Result) {
 		append(&result.git_hooks, hook)
 
 		pattern := Pattern{
-			type = .Critical,
+			severity = .Critical,
 			pattern = "git hook",
 			description = "Git hook present in module",
 		}
 		finding := Finding{
 			pattern = pattern,
+			severity = pattern.severity,
 			file_path = strings.clone(hook_path),
 			line_number = 0,
 			line_text = "",
@@ -728,6 +734,7 @@ append_finding :: proc(
 	findings: ^[dynamic]Finding,
 	critical_count: ^int,
 	warning_count: ^int,
+	info_count: ^int,
 	pattern: Pattern,
 	file_path: string,
 	line_number: int,
@@ -736,16 +743,19 @@ append_finding :: proc(
 	trimmed_line := strings.trim_space(line_text)
 	finding := Finding{
 		pattern = pattern,
+		severity = pattern.severity,
 		file_path = strings.clone(file_path),
 		line_number = line_number,
 		line_text = strings.clone(trimmed_line),
 	}
 	append(findings, finding)
 
-	if pattern.type == .Critical {
+	if pattern.severity == .Critical {
 		critical_count^ += 1
-	} else {
+	} else if pattern.severity == .Warning {
 		warning_count^ += 1
+	} else {
+		info_count^ += 1
 	}
 }
 
@@ -855,11 +865,14 @@ format_scan_report_json :: proc(result: ^Scan_Result, source_url: string, commit
 		description_escaped := escape_json_string(finding.pattern.description)
 		file_escaped := escape_json_string(finding.file_path)
 		snippet_escaped := escape_json_string(finding.line_text)
-		severity := "warning"
-		bypass := "user_approval"
-		if finding.pattern.type == .Critical {
+		severity := "info"
+		bypass := "none"
+		if finding.pattern.severity == .Critical {
 			severity = "critical"
 			bypass = "--unsafe"
+		} else if finding.pattern.severity == .Warning {
+			severity = "warning"
+			bypass = "user_approval"
 		}
 		fmt.sbprintf(&builder, "{")
 		fmt.sbprintf(&builder, "\"severity\":\"%s\",", severity)

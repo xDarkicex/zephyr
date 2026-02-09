@@ -97,12 +97,12 @@ sample_for_pattern :: proc(p: security.Pattern) -> string {
 
 make_scan_result_for_report :: proc() -> security.Scan_Result {
 	critical_pattern := security.Pattern{
-		type = .Critical,
+		severity = .Critical,
 		pattern = `curl\s+.*\|\s*bash`,
 		description = "Download and execute via curl",
 	}
 	warning_pattern := security.Pattern{
-		type = .Warning,
+		severity = .Warning,
 		pattern = `sudo\s+`,
 		description = "Privilege escalation",
 	}

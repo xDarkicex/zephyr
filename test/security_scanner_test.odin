@@ -15,7 +15,7 @@ write_test_file :: proc(dir: string, name: string, content: []u8) -> string {
 
 make_warning_result :: proc() -> security.Scan_Result {
 	pattern := security.Pattern{
-		type = .Warning,
+		severity = .Warning,
 		pattern = "sudo\\s+",
 		description = "Privilege escalation",
 	}
