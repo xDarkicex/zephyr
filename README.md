@@ -1,4 +1,4 @@
-# Zephyr Shell Loader - testing transfer
+# Zephyr Shell Loader
 
 A fast, dependency-aware shell module loader written in Odin that brings order to your shell configuration.
 
