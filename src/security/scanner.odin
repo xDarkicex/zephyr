@@ -35,12 +35,20 @@ Symlink_Finding :: struct {
 	real_path: string,
 }
 
+Git_Hook_Finding :: struct {
+	hook_name:     string,
+	file_path:     string,
+	is_executable: bool,
+	shebang_issue: string,
+}
+
 Scan_Result :: struct {
 	success:        bool,
 	critical_count: int,
 	warning_count:  int,
 	findings:       [dynamic]Finding,
 	symlink_evasions: [dynamic]Symlink_Finding,
+	git_hooks:      [dynamic]Git_Hook_Finding,
 	error_message:  string,
 	summary:        Scan_Summary,
 }
@@ -110,6 +118,13 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	}
 	defer delete(module_root_real)
 
+	scan_for_git_hooks(module_root_real, &result)
+	if len(result.git_hooks) > 0 && !options.unsafe_mode {
+		result.success = false
+		result.error_message = strings.clone("git hooks detected")
+		return result
+	}
+
 	all_patterns := make([dynamic]Pattern)
 	critical_patterns := get_critical_patterns()
 	warning_patterns := get_warning_patterns()
@@ -172,11 +187,26 @@ cleanup_scan_result :: proc(result: ^Scan_Result) {
 	if result.symlink_evasions != nil {
 		delete(result.symlink_evasions)
 	}
+	for &hook in result.git_hooks {
+		if hook.hook_name != "" {
+			delete(hook.hook_name)
+		}
+		if hook.file_path != "" {
+			delete(hook.file_path)
+		}
+		if hook.shebang_issue != "" {
+			delete(hook.shebang_issue)
+		}
+	}
+	if result.git_hooks != nil {
+		delete(result.git_hooks)
+	}
 	if result.error_message != "" {
 		delete(result.error_message)
 	}
 	result.findings = nil
 	result.symlink_evasions = nil
+	result.git_hooks = nil
 	result.error_message = ""
 	result.success = false
 	result.critical_count = 0
@@ -443,6 +473,14 @@ path_within_root :: proc(path: string, root: string) -> bool {
 	return next == '/' || next == '\\'
 }
 
+first_line :: proc(content: string) -> string {
+	idx := strings.index_byte(content, '\n')
+	if idx == -1 {
+		return content
+	}
+	return content[:idx]
+}
+
 log_symlink_evasion :: proc(file_path: string, real_path: string, result: ^Scan_Result) {
 	if result == nil {
 		return
@@ -468,6 +506,96 @@ log_symlink_evasion :: proc(file_path: string, real_path: string, result: ^Scan_
 	}
 	append(&result.findings, finding)
 	result.critical_count += 1
+}
+
+scan_for_git_hooks :: proc(module_root: string, result: ^Scan_Result) {
+	if module_root == "" || result == nil {
+		return
+	}
+
+	hooks_dir := filepath.join({module_root, ".git", "hooks"})
+	defer delete(hooks_dir)
+
+	if !os.exists(hooks_dir) {
+		return
+	}
+
+	handle, open_err := os.open(hooks_dir)
+	if open_err != os.ERROR_NONE {
+		debug.debug_warn("security scan: unable to open %s", hooks_dir)
+		return
+	}
+	defer os.close(handle)
+
+	entries, read_err := os.read_dir(handle, -1)
+	if read_err != os.ERROR_NONE {
+		debug.debug_warn("security scan: unable to read %s", hooks_dir)
+		return
+	}
+	defer os.file_info_slice_delete(entries)
+
+	for entry in entries {
+		if entry.is_dir do continue
+		if strings.has_suffix(entry.name, ".sample") {
+			continue
+		}
+
+		hook_path := filepath.join({hooks_dir, entry.name})
+		fi, stat_err := os.stat(hook_path)
+		if stat_err != os.ERROR_NONE {
+			delete(hook_path)
+			continue
+		}
+		is_exec := (fi.mode & 0o111) != 0
+		os.file_info_delete(fi)
+
+		shebang_issue := ""
+		data, ok := os.read_entire_file(hook_path)
+		if ok && len(data) > 2 {
+			content := string(data)
+			if strings.has_prefix(content, "#!") {
+				line := first_line(content)
+				lower := strings.to_lower(line)
+				defer delete(lower)
+				if strings.contains(lower, "python") {
+					shebang_issue = strings.clone("Python interpreter hook")
+				} else if strings.contains(lower, "perl") {
+					shebang_issue = strings.clone("Perl interpreter hook")
+				} else if strings.contains(lower, "ruby") {
+					shebang_issue = strings.clone("Ruby interpreter hook")
+				} else if strings.contains(lower, "node") {
+					shebang_issue = strings.clone("Node.js interpreter hook")
+				}
+			}
+			delete(data)
+		} else if ok {
+			delete(data)
+		}
+
+		hook := Git_Hook_Finding{
+			hook_name = strings.clone(entry.name),
+			file_path = strings.clone(hook_path),
+			is_executable = is_exec,
+			shebang_issue = shebang_issue,
+		}
+		append(&result.git_hooks, hook)
+
+		pattern := Pattern{
+			type = .Critical,
+			pattern = "git hook",
+			description = "Git hook present in module",
+		}
+		finding := Finding{
+			pattern = pattern,
+			file_path = strings.clone(hook_path),
+			line_number = 0,
+			line_text = "",
+		}
+		append(&result.findings, finding)
+		result.critical_count += 1
+
+		delete(hook_path)
+	}
 }
 
 get_module_directory :: proc(file_path: string) -> string {
