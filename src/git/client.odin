@@ -22,6 +22,7 @@ Git_Error :: enum {
 	Pull_Failed,
 	Reset_Failed,
 	Revparse_Failed,
+	Checkout_Failed,
 	Invalid_URL,
 	Unknown,
 }
@@ -150,6 +151,96 @@ clone_repository :: proc(url: string, target_path: string) -> Git_Result {
 
 	if repo != nil {
 		git_repository_free(repo)
+	}
+
+	return Git_Result{success = true, error = .None}
+}
+
+// clone_repository_no_checkout clones a repository without checking out files.
+// This prevents any checkout-time hooks from executing prior to validation.
+clone_repository_no_checkout :: proc(url: string, target_path: string) -> Git_Result {
+	if url == "" {
+		return Git_Result{success = false, error = .Invalid_URL, message = strings.clone("empty URL")}
+	}
+	when !LIBGIT2_ENABLED {
+		return Git_Result{
+			success = false,
+			error = .Clone_Failed,
+			message = strings.clone("libgit2 disabled (build with -define:LIBGIT2_ENABLED=true)"),
+		}
+	}
+
+	final_target := target_path
+	if final_target == "" {
+		final_target = create_unique_temp_dir("zephyr_git")
+		if final_target == "" {
+			return Git_Result{success = false, error = .Clone_Failed, message = strings.clone("failed to create temp directory")}
+		}
+	}
+
+	url_buf, url_c := to_cstring_buffer(url)
+	defer if url_buf != nil { delete(url_buf) }
+
+	path_buf, path_c := to_cstring_buffer(final_target)
+	defer if path_buf != nil { delete(path_buf) }
+
+	opts := git_clone_options{}
+	if git_clone_options_init(&opts, GIT_CLONE_OPTIONS_VERSION) < 0 {
+		return Git_Result{
+			success = false,
+			error = .Clone_Failed,
+			message = strings.clone("failed to init clone options"),
+		}
+	}
+	opts.checkout_opts.checkout_strategy = GIT_CHECKOUT_NONE
+
+	repo: ^git_repository
+	rc := git_clone(&repo, url_c, path_c, &opts)
+	if rc < 0 {
+		return Git_Result{
+			success = false,
+			error = .Clone_Failed,
+			message = clone_git_error_message(),
+		}
+	}
+
+	if repo != nil {
+		git_repository_free(repo)
+	}
+
+	return Git_Result{success = true, error = .None}
+}
+
+// checkout_repository_head checks out the working tree for HEAD.
+checkout_repository_head :: proc(repo_path: string) -> Git_Result {
+	if repo_path == "" {
+		return Git_Result{success = false, error = .Checkout_Failed, message = strings.clone("empty repository path")}
+	}
+	when !LIBGIT2_ENABLED {
+		return Git_Result{
+			success = false,
+			error = .Checkout_Failed,
+			message = strings.clone("libgit2 disabled (build with libgit2 installed)"),
+		}
+	}
+
+	path_buf, path_c := to_cstring_buffer(repo_path)
+	defer if path_buf != nil { delete(path_buf) }
+
+	repo: ^git_repository
+	if git_repository_open(&repo, path_c) < 0 {
+		return Git_Result{success = false, error = .Checkout_Failed, message = clone_git_error_message()}
+	}
+	defer if repo != nil { git_repository_free(repo) }
+
+	opts := git_checkout_options{}
+	if git_checkout_options_init(&opts, GIT_CHECKOUT_OPTIONS_VERSION) < 0 {
+		return Git_Result{success = false, error = .Checkout_Failed, message = strings.clone("failed to init checkout options")}
+	}
+	opts.checkout_strategy = GIT_CHECKOUT_SAFE
+
+	if git_checkout_head(repo, &opts) < 0 {
+		return Git_Result{success = false, error = .Checkout_Failed, message = clone_git_error_message()}
 	}
 
 	return Git_Result{success = true, error = .None}
@@ -383,10 +474,13 @@ when LIBGIT2_ENABLED {
 		git_libgit2_init :: proc() -> c.int ---
 		git_libgit2_shutdown :: proc() -> c.int ---
 		git_error_last :: proc() -> ^git_error ---
+		git_clone_options_init :: proc(opts: ^git_clone_options, version: c.uint) -> c.int ---
+		git_checkout_options_init :: proc(opts: ^git_checkout_options, version: c.uint) -> c.int ---
 		git_clone :: proc(out: ^^git_repository, url: cstring, path: cstring, options: ^git_clone_options) -> c.int ---
 		git_repository_free :: proc(repo: ^git_repository) ---
 		git_repository_open :: proc(out: ^^git_repository, path: cstring) -> c.int ---
 		git_repository_head :: proc(out: ^^git_reference, repo: ^git_repository) -> c.int ---
+		git_checkout_head :: proc(repo: ^git_repository, opts: ^git_checkout_options) -> c.int ---
 		git_remote_lookup :: proc(out: ^^git_remote, repo: ^git_repository, name: cstring) -> c.int ---
 		git_remote_fetch :: proc(remote: ^git_remote, refspecs: ^git_strarray, opts: ^git_fetch_options, reflog_message: cstring) -> c.int ---
 		git_remote_free :: proc(remote: ^git_remote) ---
@@ -404,10 +498,13 @@ when LIBGIT2_ENABLED {
 	git_libgit2_init :: proc() -> c.int { return -1 }
 	git_libgit2_shutdown :: proc() -> c.int { return -1 }
 	git_error_last :: proc() -> ^git_error { return nil }
+	git_clone_options_init :: proc(opts: ^git_clone_options, version: c.uint) -> c.int { return -1 }
+	git_checkout_options_init :: proc(opts: ^git_checkout_options, version: c.uint) -> c.int { return -1 }
 	git_clone :: proc(out: ^^git_repository, url: cstring, path: cstring, options: ^git_clone_options) -> c.int { return -1 }
 	git_repository_free :: proc(repo: ^git_repository) {}
 	git_repository_open :: proc(out: ^^git_repository, path: cstring) -> c.int { return -1 }
 	git_repository_head :: proc(out: ^^git_reference, repo: ^git_repository) -> c.int { return -1 }
+	git_checkout_head :: proc(repo: ^git_repository, opts: ^git_checkout_options) -> c.int { return -1 }
 	git_remote_lookup :: proc(out: ^^git_remote, repo: ^git_repository, name: cstring) -> c.int { return -1 }
 	git_remote_fetch :: proc(remote: ^git_remote, refspecs: ^git_strarray, opts: ^git_fetch_options, reflog_message: cstring) -> c.int { return -1 }
 	git_remote_free :: proc(remote: ^git_remote) {}
@@ -428,14 +525,17 @@ git_error :: struct {
 }
 
 git_repository :: struct {}
-git_clone_options :: struct {}
 git_remote :: struct {}
 git_reference :: struct {}
 git_object :: struct {}
-git_checkout_options :: struct {}
 git_object_t :: enum c.int {
 	ANY    = -2,
 	COMMIT = 1,
+}
+git_checkout_strategy_t :: enum c.uint {
+	SAFE  = 0,
+	FORCE = (1 << 1),
+	NONE  = (1 << 30),
 }
 git_reset_t :: enum c.int {
 	SOFT  = 1,
@@ -449,4 +549,115 @@ git_strarray :: struct {
 	strings: ^cstring,
 	count:   c.size_t,
 }
-git_fetch_options :: struct {}
+git_checkout_options :: struct {
+	version:           c.uint,
+	checkout_strategy: c.uint,
+	disable_filters:   c.int,
+	dir_mode:          c.uint,
+	file_mode:         c.uint,
+	file_open_flags:   c.int,
+	notify_flags:      c.uint,
+	notify_cb:         rawptr,
+	notify_payload:    rawptr,
+	progress_cb:       rawptr,
+	progress_payload:  rawptr,
+	paths:             git_strarray,
+	baseline:          rawptr,
+	baseline_index:    rawptr,
+	target_directory:  cstring,
+	ancestor_label:    cstring,
+	our_label:         cstring,
+	their_label:       cstring,
+	perfdata_cb:       rawptr,
+	perfdata_payload:  rawptr,
+}
+
+git_remote_callbacks :: struct {
+	version:             c.uint,
+	sideband_progress:   rawptr,
+	completion:          rawptr,
+	credentials:         rawptr,
+	certificate_check:   rawptr,
+	transfer_progress:   rawptr,
+	update_tips:         rawptr,
+	pack_progress:       rawptr,
+	push_transfer_progress: rawptr,
+	push_update_reference:  rawptr,
+	push_negotiation:       rawptr,
+	transport:              rawptr,
+	remote_ready:           rawptr,
+	payload:                rawptr,
+	resolve_url:            rawptr,
+	update_refs:            rawptr,
+}
+
+git_fetch_prune_t :: enum c.int {
+	UNSPECIFIED = 0,
+	PRUNE       = 1,
+	NO_PRUNE    = 2,
+}
+
+git_remote_autotag_option_t :: enum c.int {
+	UNSPECIFIED = 0,
+	AUTO        = 1,
+	NONE        = 2,
+	ALL         = 3,
+}
+
+git_remote_redirect_t :: enum c.int {
+	NONE    = (1 << 0),
+	INITIAL = (1 << 1),
+	ALL     = (1 << 2),
+}
+
+git_proxy_t :: enum c.int {
+	NONE      = 0,
+	AUTO      = 1,
+	SPECIFIED = 2,
+}
+
+git_proxy_options :: struct {
+	version:            c.uint,
+	proxy_type:         git_proxy_t,
+	url:                cstring,
+	credentials:        rawptr,
+	certificate_check:  rawptr,
+	payload:            rawptr,
+}
+
+git_fetch_options :: struct {
+	version:          c.int,
+	callbacks:        git_remote_callbacks,
+	prune:            git_fetch_prune_t,
+	update_fetchhead: c.uint,
+	download_tags:    git_remote_autotag_option_t,
+	proxy_opts:       git_proxy_options,
+	depth:            c.int,
+	follow_redirects: git_remote_redirect_t,
+	custom_headers:   git_strarray,
+}
+
+git_clone_local_t :: enum c.int {
+	LOCAL_AUTO      = 0,
+	LOCAL           = 1,
+	NO_LOCAL        = 2,
+	LOCAL_NO_LINKS  = 3,
+}
+
+git_clone_options :: struct {
+	version:             c.uint,
+	checkout_opts:       git_checkout_options,
+	fetch_opts:          git_fetch_options,
+	bare:                c.int,
+	local:               git_clone_local_t,
+	checkout_branch:     cstring,
+	repository_cb:       rawptr,
+	repository_cb_payload: rawptr,
+	remote_cb:           rawptr,
+	remote_cb_payload:   rawptr,
+}
+
+GIT_CLONE_OPTIONS_VERSION :: 1
+GIT_CHECKOUT_OPTIONS_VERSION :: 1
+GIT_CHECKOUT_SAFE :: 0
+GIT_CHECKOUT_NONE :: (1 << 30)

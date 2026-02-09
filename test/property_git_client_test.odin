@@ -171,6 +171,85 @@ test_git_fetch_pull_local_repo :: proc(t: ^testing.T) {
 	delete(data)
 }
 
+// **Security: Hook execution is blocked during controlled checkout**
+@(test)
+test_git_hooks_not_executed_on_checkout :: proc(t: ^testing.T) {
+	set_test_timeout(t)
+	reset_test_state(t)
+
+	if !git.libgit2_enabled() {
+		return
+	}
+
+	init_result := git.init_libgit2()
+	defer git.cleanup_git_result(&init_result)
+	if !init_result.success {
+		testing.expect(t, false, "libgit2 init failed for hook execution test")
+		return
+	}
+	defer {
+		shutdown_result := git.shutdown_libgit2()
+		defer git.cleanup_git_result(&shutdown_result)
+		testing.expect(t, shutdown_result.success, "shutdown should succeed after hook execution test")
+	}
+
+	temp_dir := setup_test_environment("git_hook_execution")
+	defer teardown_test_environment(temp_dir)
+
+	bare_dir := filepath.join({temp_dir, "origin.git"})
+	work_dir := filepath.join({temp_dir, "work"})
+	clone_dir := filepath.join({temp_dir, "clone"})
+	hook_marker := filepath.join({temp_dir, "HOOK_EXECUTED_BAD"})
+	defer {
+		if bare_dir != "" { delete(bare_dir) }
+		if work_dir != "" { delete(work_dir) }
+		if clone_dir != "" { delete(clone_dir) }
+		if hook_marker != "" { delete(hook_marker) }
+	}
+
+	testing.expect(t, run_git_cmd(fmt.tprintf("git init --bare %q", bare_dir)), "init bare repo")
+	testing.expect(t, run_git_cmd(fmt.tprintf("git init %q", work_dir)), "init work repo")
+	testing.expect(t, run_git_cmd(fmt.tprintf("git -C %q config user.email \"test@example.com\"", work_dir)), "git config email")
+	testing.expect(t, run_git_cmd(fmt.tprintf("git -C %q config user.name \"Test User\"", work_dir)), "git config name")
+
+	manifest_path := filepath.join({work_dir, "module.toml"})
+	init_path := filepath.join({work_dir, "init.zsh"})
+	content := "name = \"git-hook-test\"\nversion = \"1.0.0\"\n"
+	os.write_entire_file(manifest_path, transmute([]u8)content)
+	init_content := "echo \"safe\"\n"
+	os.write_entire_file(init_path, transmute([]u8)init_content)
+	delete(manifest_path)
+	delete(init_path)
+
+	testing.expect(t, run_git_cmd(fmt.tprintf("git -C %q add .", work_dir)), "git add initial")
+	testing.expect(t, run_git_cmd(fmt.tprintf("git -C %q commit -m \"init\"", work_dir)), "git commit initial")
+	testing.expect(t, run_git_cmd(fmt.tprintf("git -C %q branch -M main", work_dir)), "git set main")
+	testing.expect(t, run_git_cmd(fmt.tprintf("git -C %q remote add origin %q", work_dir, bare_dir)), "git remote add")
+	testing.expect(t, run_git_cmd(fmt.tprintf("git -C %q push -u origin main", work_dir)), "git push initial")
+
+	clone_result := git.clone_repository_no_checkout(bare_dir, clone_dir)
+	defer git.cleanup_git_result(&clone_result)
+	testing.expect(t, clone_result.success, "clone without checkout should succeed")
+
+	hooks_dir := filepath.join({clone_dir, ".git", "hooks"})
+	os.make_directory(hooks_dir, 0o755)
+	hook_path := filepath.join({hooks_dir, "post-checkout"})
+	hook_script := fmt.tprintf("#!/bin/sh\ntouch %s\n", hook_marker)
+	os.write_entire_file(hook_path, transmute([]u8)hook_script)
+	_ = run_git_cmd(fmt.tprintf("chmod +x %q", hook_path))
+	delete(hooks_dir)
+	delete(hook_path)
+	delete(hook_script)
+
+	os.remove(hook_marker)
+
+	checkout_result := git.checkout_repository_head(clone_dir)
+	defer git.cleanup_git_result(&checkout_result)
+	testing.expect(t, checkout_result.success, "checkout should succeed")
+
+	testing.expect(t, !os.exists(hook_marker), "hook should not execute during checkout")
+}
+
 run_git_cmd :: proc(command: string) -> bool {
 	cmd_buf, cmd_c := cstring_buffer(command)
 	defer if cmd_buf != nil { delete(cmd_buf) }

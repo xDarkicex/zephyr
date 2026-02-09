@@ -27,12 +27,13 @@ It is **not a security guarantee**—no static scanner can detect all malicious 
 
 ### Installation Security Pipeline
 
-Zephyr uses a **clone-scan-validate-move** pipeline to isolate modules during analysis:
+Zephyr uses a **clone (no checkout) → scan → validate → checkout → move** pipeline to isolate modules during analysis:
 
-1. **Clone to temp**: Module cloned to temporary directory (outside modules path)
+1. **Clone to temp (no checkout)**: Repository cloned without checking out files (hooks cannot execute)
 2. **Security scan**: All files scanned for dangerous patterns while isolated
 3. **Validation**: Manifest and dependencies validated
-4. **Move to final**: Only if all checks pass, moved to `~/.zsh/modules/`
+4. **Controlled checkout**: Files are checked out only after scan + validation
+5. **Move to final**: Only if all checks pass, moved to `~/.zsh/modules/`
 
 This ensures malicious code cannot execute during the scan, and failed scans leave no artifacts.
 Git hooks are detected during the scan and **blocked by default** (install fails unless `--unsafe` is used).
@@ -52,7 +53,7 @@ See [docs/SECURITY_PIPELINE.md](docs/SECURITY_PIPELINE.md) for a technical break
 - ⚠️ **Cannot detect sophisticated obfuscation** (multi-stage or encrypted payloads)
 - ⚠️ **Cannot analyze behavior** (code may execute only under specific conditions)
 - ⚠️ **No runtime protection** (approved modules execute with full user privileges)
-- ⚠️ **Git hook risk**: Git hooks can execute during clone *before* the scan runs
+- ✅ **Git hook mitigation**: Zephyr clones without checkout, so hooks cannot run before scan
 
 ### Responsible Usage
 - 🔒 **For agents**: Only install from pre-vetted sources. Never allow autonomous `--unsafe`.

@@ -17,13 +17,14 @@ See `docs/SECURITY_PIPELINE.md` for the install pipeline details.
 
 ## Security Isolation During Install
 
-Zephyr uses a **clone-scan-validate-move** pipeline to ensure modules are analyzed
+Zephyr uses a **clone (no checkout) → scan → validate → checkout → move** pipeline to ensure modules are analyzed
 before they can execute:
 
-1. **Clone to temporary directory**: Module is cloned to a temp location outside your modules directory
+1. **Clone to temporary directory (no checkout)**: Repository cloned without checking out files (hooks cannot execute)
 2. **Security scan**: All files are scanned for dangerous patterns while isolated
 3. **Validation**: Manifest and dependencies are validated
-4. **Move to final location**: Only if all checks pass, module is moved to `~/.zsh/modules/`
+4. **Controlled checkout**: Files are checked out after scan + validation
+5. **Move to final location**: Only if all checks pass, module is moved to `~/.zsh/modules/`
 
 This ensures that:
 - Malicious code cannot execute during the scan
@@ -31,9 +32,7 @@ This ensures that:
 - Git hooks in the module cannot run until after security approval
 - Temporary files are cleaned up on any failure
 
-**Note:** Git hooks in the cloned repository may execute during the clone operation
-itself, before the scan runs. This is a limitation of git's design. Always clone
-from trusted sources.
+**Note:** Zephyr clones without checkout, so hooks cannot execute during the clone operation.
 
 ## Scanner Behavior Details
 

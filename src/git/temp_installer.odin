@@ -54,13 +54,27 @@ install_to_temp :: proc(url: string, expected_name: string) -> Temp_Install_Resu
 	}
 	result.temp_path = temp_dir
 
-	clone_result := clone_repository(url, temp_dir)
+	clone_result := clone_repository_no_checkout(url, temp_dir)
 	defer cleanup_git_result(&clone_result)
 	if !clone_result.success {
 		if clone_result.message != "" {
 			result.error_message = strings.clone(clone_result.message)
 		} else {
 			result.error_message = strings.clone("clone failed")
+		}
+		cleanup_temp(temp_dir)
+		delete(temp_dir)
+		result.temp_path = ""
+		return result
+	}
+
+	checkout_result := checkout_repository_head(temp_dir)
+	defer cleanup_git_result(&checkout_result)
+	if !checkout_result.success {
+		if checkout_result.message != "" {
+			result.error_message = strings.clone(checkout_result.message)
+		} else {
+			result.error_message = strings.clone("checkout failed")
 		}
 		cleanup_temp(temp_dir)
 		delete(temp_dir)
@@ -85,13 +99,26 @@ scan_source :: proc(url: string) -> (security.Scan_Result, string, string) {
 		return result, "", ""
 	}
 
-	clone_result := clone_repository(url, temp_dir)
+	clone_result := clone_repository_no_checkout(url, temp_dir)
 	defer cleanup_git_result(&clone_result)
 	if !clone_result.success {
 		if clone_result.message != "" {
 			result.error_message = strings.clone(clone_result.message)
 		} else {
 			result.error_message = strings.clone("clone failed")
+		}
+		cleanup_temp(temp_dir)
+		delete(temp_dir)
+		return result, "", ""
+	}
+
+	checkout_result := checkout_repository_head(temp_dir)
+	defer cleanup_git_result(&checkout_result)
+	if !checkout_result.success {
+		if checkout_result.message != "" {
+			result.error_message = strings.clone(checkout_result.message)
+		} else {
+			result.error_message = strings.clone("checkout failed")
 		}
 		cleanup_temp(temp_dir)
 		delete(temp_dir)
