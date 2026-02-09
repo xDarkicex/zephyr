@@ -67,6 +67,10 @@ Scan_Options :: struct {
 	verbose:     bool,
 }
 
+MAX_LINE_LENGTH :: 100_000
+MAX_FILE_SIZE :: 1_048_576
+MAX_TOTAL_PATTERN_SIZE :: 10_000_000
+
 Input_Reader :: proc() -> string
 input_reader_override: Input_Reader
 
@@ -384,6 +388,22 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, result: ^Scan
 
 		lines_scanned += 1
 
+		if len(line) > MAX_LINE_LENGTH {
+			if result != nil {
+				oversize := Finding{
+					pattern = Pattern{severity = .Warning, pattern = "line_length", description = "Line exceeds max scan length"},
+					severity = .Warning,
+					file_path = strings.clone(file_path),
+					line_number = line_number,
+					line_text = strings.clone(fmt.tprintf("len=%d bytes", len(line))),
+				}
+				append(&result.findings, oversize)
+				result.warning_count += 1
+			}
+			line_number += 1
+			continue
+		}
+
 		if in_heredoc {
 			trimmed := strings.trim_space(line)
 			if trimmed == heredoc_marker {
@@ -462,7 +482,18 @@ is_scannable_file :: proc(file_path: string, module_root: string, result: ^Scan_
 		}
 	}
 
-	if fi.size > 1_048_576 {
+	if fi.size > MAX_FILE_SIZE {
+		if result != nil {
+			oversize := Finding{
+				pattern = Pattern{severity = .Warning, pattern = "file_size", description = "File exceeds max scan size (1MB)"},
+				severity = .Warning,
+				file_path = strings.clone(file_path),
+				line_number = 0,
+				line_text = strings.clone(fmt.tprintf("size=%d bytes", fi.size)),
+			}
+			append(&result.findings, oversize)
+			result.warning_count += 1
+		}
 		debug.debug_warn("security scan: skipping large file %s", file_path)
 		return false
 	}
@@ -708,6 +739,14 @@ get_module_directory :: proc(file_path: string) -> string {
 }
 
 compile_patterns :: proc(patterns: []Pattern) -> ([dynamic]Compiled_Pattern, string) {
+	total_size := 0
+	for pattern in patterns {
+		total_size += len(pattern.pattern)
+		if total_size > MAX_TOTAL_PATTERN_SIZE {
+			message := strings.clone(fmt.tprintf("pattern set too large: %d bytes (max %d)", total_size, MAX_TOTAL_PATTERN_SIZE))
+			return nil, message
+		}
+	}
 	compiled := make([dynamic]Compiled_Pattern, 0, len(patterns))
 	for pattern in patterns {
 		re, err := regex.create(pattern.pattern)

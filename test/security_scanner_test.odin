@@ -288,11 +288,30 @@ test_is_scannable_file_binary_and_large :: proc(t: ^testing.T) {
 	defer delete(binary_path)
 	testing.expect(t, !security.is_scannable_file(binary_path, temp_dir, &result), "binary files should not be scannable")
 
-	large := make([]u8, 1_048_577)
+	large := make([]u8, security.MAX_FILE_SIZE+1)
 	large_path := write_test_file(temp_dir, "large.sh", large)
 	defer delete(large_path)
 	testing.expect(t, !security.is_scannable_file(large_path, temp_dir, &result), "large files should not be scannable")
 	delete(large)
+}
+
+@(test)
+test_scanner_skips_long_lines :: proc(t: ^testing.T) {
+	set_test_timeout(t)
+	reset_test_state(t)
+
+	temp_dir := setup_test_environment("security_long_line")
+	defer teardown_test_environment(temp_dir)
+
+	long_line := strings.repeat("a", security.MAX_LINE_LENGTH+1)
+	path := write_test_file(temp_dir, "long.txt", transmute([]u8)long_line)
+	delete(long_line)
+	defer delete(path)
+
+	result := security.scan_module(temp_dir, security.Scan_Options{})
+	defer security.cleanup_scan_result(&result)
+
+	testing.expect(t, result.warning_count > 0, "long lines should emit a warning")
 }
 
 @(test)
