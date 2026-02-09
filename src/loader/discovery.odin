@@ -2,7 +2,6 @@ package loader
 
 import "../debug"
 import "../manifest"
-import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -175,7 +174,7 @@ discover_with_cache :: proc(base_path: string) -> [dynamic]manifest.Module {
 
 				// Cache gets a clone, caller gets the original
 				cache_module(&global_cache, manifest_path, module)
-				
+
 				append(&modules, module)
 				cache_misses += 1
 				debug.debug_module_discovered(module.name, module_dir)
