@@ -361,6 +361,13 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, result: ^Scan
 	line_number := 1
 	start := 0
 	lines_scanned := 0
+	in_heredoc := false
+	heredoc_marker := ""
+	defer {
+		if heredoc_marker != "" {
+			delete(heredoc_marker)
+		}
+	}
 
 	for i := 0; i <= len(content); i += 1 {
 		is_end := i == len(content)
@@ -373,7 +380,23 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, result: ^Scan
 
 		lines_scanned += 1
 
+		if in_heredoc {
+			trimmed := strings.trim_space(line)
+			if trimmed == heredoc_marker {
+				in_heredoc = false
+				delete(heredoc_marker)
+				heredoc_marker = ""
+			}
+			line_number += 1
+			continue
+		}
+
 		if should_skip_line(line) {
+			line_number += 1
+			continue
+		}
+
+		if is_whitelisted(file_path, line) {
 			line_number += 1
 			continue
 		}
@@ -391,6 +414,14 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, result: ^Scan
 			if matched && !match_is_ignored(line, match_start) {
 				append_finding(&result.findings, &result.critical_count, &result.warning_count, compiled.pattern, file_path, line_number, line)
 			}
+		}
+
+		if marker := parse_heredoc_marker(line); marker != "" {
+			if heredoc_marker != "" {
+				delete(heredoc_marker)
+			}
+			heredoc_marker = marker
+			in_heredoc = true
 		}
 
 		line_number += 1
@@ -884,6 +915,80 @@ should_skip_line :: proc(line: string) -> bool {
 		return true
 	}
 	return false
+}
+
+is_whitelisted :: proc(file_path: string, line: string) -> bool {
+	if !is_documentation_path(file_path) {
+		return false
+	}
+	trimmed := strings.trim_space(line)
+	if trimmed == "" {
+		return false
+	}
+	lower := strings.to_lower(trimmed)
+	defer delete(lower)
+
+	if strings.contains(lower, "ssh ") || strings.has_prefix(lower, "ssh-") {
+		return true
+	}
+	if strings.contains(lower, "curl") && strings.contains(lower, "example") {
+		return true
+	}
+	return false
+}
+
+is_documentation_path :: proc(file_path: string) -> bool {
+	if file_path == "" {
+		return false
+	}
+	lower := strings.to_lower(file_path)
+	defer delete(lower)
+
+	if strings.contains(lower, "/docs/") || strings.contains(lower, "/example/") || strings.contains(lower, "/examples/") {
+		return true
+	}
+	base := filepath.base(lower)
+	return base == "readme.md" || base == "readme"
+}
+
+parse_heredoc_marker :: proc(line: string) -> string {
+	idx := strings.index(line, "<<")
+	if idx < 0 {
+		return ""
+	}
+	i := idx + 2
+	if i < len(line) && line[i] == '-' {
+		i += 1
+	}
+	for i < len(line) && (line[i] == ' ' || line[i] == '\t') {
+		i += 1
+	}
+	if i >= len(line) {
+		return ""
+	}
+
+	quote := byte(0)
+	if line[i] == '\'' || line[i] == '"' {
+		quote = line[i]
+		i += 1
+	}
+	start := i
+	if quote != 0 {
+		for i < len(line) && line[i] != quote {
+			i += 1
+		}
+		if i == start {
+			return ""
+		}
+		return strings.clone(line[start:i])
+	}
+	for i < len(line) && line[i] != ' ' && line[i] != '\t' && line[i] != '\r' {
+		i += 1
+	}
+	if i == start {
+		return ""
+	}
+	return strings.clone(line[start:i])
 }
 
 match_is_ignored :: proc(line: string, match_start: int) -> bool {

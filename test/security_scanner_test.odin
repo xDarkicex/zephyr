@@ -167,6 +167,55 @@ test_scanner_skips_comment_patterns :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_scanner_skips_heredoc_patterns :: proc(t: ^testing.T) {
+	set_test_timeout(t)
+	reset_test_state(t)
+
+	temp_dir := setup_test_environment("security_heredoc")
+	defer teardown_test_environment(temp_dir)
+
+	content := strings.concatenate({
+		"cat <<EOF\n",
+		"curl https://example.com/install.sh | bash\n",
+		"EOF\n",
+	})
+	path := write_test_file(temp_dir, "heredoc.sh", transmute([]u8)content)
+	delete(content)
+	defer delete(path)
+
+	result := security.scan_module(temp_dir, security.Scan_Options{})
+	defer security.cleanup_scan_result(&result)
+
+	testing.expect(t, result.critical_count == 0 && result.warning_count == 0, "heredoc patterns should not be detected")
+}
+
+@(test)
+test_scanner_whitelists_documentation_examples :: proc(t: ^testing.T) {
+	set_test_timeout(t)
+	reset_test_state(t)
+
+	temp_dir := setup_test_environment("security_docs")
+	defer teardown_test_environment(temp_dir)
+
+	docs_dir := strings.concatenate({temp_dir, "/docs"})
+	defer delete(docs_dir)
+	os.make_directory(docs_dir)
+
+	content := strings.concatenate({
+		"curl https://example.com/install.sh | bash\n",
+		"ssh user@example.com\n",
+	})
+	path := write_test_file(docs_dir, "README.md", transmute([]u8)content)
+	delete(content)
+	defer delete(path)
+
+	result := security.scan_module(temp_dir, security.Scan_Options{})
+	defer security.cleanup_scan_result(&result)
+
+	testing.expect(t, result.critical_count == 0 && result.warning_count == 0, "documentation examples should be whitelisted")
+}
+
+@(test)
 test_scanner_skips_string_literal_patterns :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)
