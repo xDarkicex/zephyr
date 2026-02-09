@@ -417,6 +417,7 @@ format_scan_report :: proc(result: ^Scan_Result, module_name: string) -> string 
 
 	has_critical := result.critical_count > 0
 	has_warning := result.warning_count > 0
+	has_info := result.info_count > 0
 
 	if has_critical {
 		fmt.sbprintf(&builder, "CRITICAL (blocks installation):\n")
@@ -435,6 +436,38 @@ format_scan_report :: proc(result: ^Scan_Result, module_name: string) -> string 
 			if finding.pattern.severity != .Warning do continue
 			fmt.sbprintf(&builder, "  ⚠ %s\n", finding.pattern.description)
 			fmt.sbprintf(&builder, "    Pattern: %s\n", finding.pattern.pattern)
+			fmt.sbprintf(&builder, "    File: %s:%d\n", finding.file_path, finding.line_number)
+			fmt.sbprintf(&builder, "    Line: %s\n\n", finding.line_text)
+		}
+	}
+
+	if has_info {
+		fmt.sbprintf(&builder, "INFO:\n")
+		for finding in result.findings {
+			if finding.pattern.severity != .Info do continue
+			fmt.sbprintf(&builder, "  ℹ %s\n", finding.pattern.description)
+			fmt.sbprintf(&builder, "    File: %s:%d\n", finding.file_path, finding.line_number)
+			fmt.sbprintf(&builder, "    Line: %s\n\n", finding.line_text)
+		}
+	}
+
+	if len(result.credential_findings) > 0 {
+		fmt.sbprintf(&builder, "CREDENTIAL ACCESS:\n")
+		for finding in result.credential_findings {
+			exfil_marker := ""
+			if finding.has_exfiltration {
+				exfil_marker = " (with exfiltration)"
+			}
+			fmt.sbprintf(&builder, "  🔑 %v%s\n", finding.credential_type, exfil_marker)
+			fmt.sbprintf(&builder, "    File: %s:%d\n", finding.file_path, finding.line_number)
+			fmt.sbprintf(&builder, "    Line: %s\n\n", finding.line_text)
+		}
+	}
+
+	if len(result.reverse_shell_findings) > 0 {
+		fmt.sbprintf(&builder, "REVERSE SHELLS:\n")
+		for finding in result.reverse_shell_findings {
+			fmt.sbprintf(&builder, "  🚨 %v\n", finding.shell_type)
 			fmt.sbprintf(&builder, "    File: %s:%d\n", finding.file_path, finding.line_number)
 			fmt.sbprintf(&builder, "    Line: %s\n\n", finding.line_text)
 		}
