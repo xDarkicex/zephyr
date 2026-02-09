@@ -61,4 +61,7 @@ git_install_force_*
 git_memory_safety_*
 git_update_all_*
 git_update_summary_*
-security_*
+security_critical_*
+security_prop_findings_*
+security_prop_patterns_*
+security_update_block_*
