@@ -117,6 +117,16 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 		return false, format_manager_error(.Invalid_URL, source.error, url, "parse install source")
 	}
 
+	source_type := detect_module_source(source)
+	if source_type == .Signed_Tarball {
+		tar_result := install_from_tarball(source, options)
+		defer cleanup_tarball_install_result(&tar_result)
+		if !tar_result.success {
+			return false, format_manager_error(.Clone_Failed, tar_result.message, url, "signed install")
+		}
+		return true, tar_result.message
+	}
+
 	is_local := source.source_type == .Local_Path
 	module_name := ""
 	owned_name := false

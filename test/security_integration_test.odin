@@ -6,18 +6,53 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 import "core:time"
+import "core:sync"
 
 import "../src/colors"
 import "../src/git"
 import "../src/security"
 
+_warning_messages: map[int]string
+_warning_messages_mutex: sync.Mutex
+_next_warning_id: int
 unsafe_warning_capture: string
 
-capture_unsafe_warning :: proc(message: string) {
+capture_unsafe_warning :: proc(id: int, message: string) {
+	_ = id
 	if unsafe_warning_capture != "" {
 		delete(unsafe_warning_capture)
 	}
 	unsafe_warning_capture = strings.clone(message)
+}
+
+init_warning_test :: proc() -> int {
+	if _warning_messages == nil {
+		_warning_messages = make(map[int]string)
+	}
+	sync.mutex_lock(&_warning_messages_mutex)
+	id := _next_warning_id
+	_next_warning_id += 1
+    _warning_messages[id] = ""
+    sync.mutex_unlock(&_warning_messages_mutex)
+    return id
+}
+
+cleanup_warning_test :: proc(id: int) {
+    sync.mutex_lock(&_warning_messages_mutex)
+    if msg, ok := _warning_messages[id]; ok {
+        if msg != "" {
+            delete(msg)
+        }
+        delete_key(&_warning_messages, id)
+    }
+    sync.mutex_unlock(&_warning_messages_mutex)
+}
+
+get_warning_message :: proc(id: int) -> string {
+    sync.mutex_lock(&_warning_messages_mutex)
+    msg := _warning_messages[id] or_else ""
+    sync.mutex_unlock(&_warning_messages_mutex)
+    return msg
 }
 
 // **Integration 11.1: End-to-end install with malicious module**
@@ -184,8 +219,10 @@ test_security_integration_install_unsafe_allows_malicious :: proc(t: ^testing.T)
 	defer restore_modules_env(original_env)
 	os.set_env("ZSH_MODULES_DIR", modules_dir)
 
-	colors.set_warning_hook(capture_unsafe_warning)
-	defer colors.clear_warning_hook()
+	hook_id := colors.set_warning_hook(proc(id: int, message: string) {
+		capture_unsafe_warning(id, message)
+	})
+	defer colors.clear_warning_hook(hook_id)
 
 	bare_dir, module_name := create_bare_repo_with_init(
 		t,

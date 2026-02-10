@@ -128,6 +128,7 @@ Scan_Result :: struct {
 	git_hooks:      [dynamic]Git_Hook_Finding,
 	reverse_shell_findings: [dynamic]Reverse_Shell_Finding,
 	credential_findings: [dynamic]Credential_Finding,
+	trusted_module: bool,
 	trusted_module_applied: bool,
 	error_message:  string,
 	summary:        Scan_Summary,
@@ -142,6 +143,7 @@ Scan_Summary :: struct {
 Scan_Options :: struct {
 	unsafe_mode: bool,
 	verbose:     bool,
+	trusted:     bool,
 }
 
 Command_Scan_Result :: struct {
@@ -388,9 +390,16 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	duration := time.since(start_time)
 	result.summary.duration_ms = i64(duration / time.Millisecond)
 
-	trusted_config := load_trusted_modules()
-	defer cleanup_trusted_modules(&trusted_config)
-	apply_trusted_module_relaxation(&result, module_root_real, &trusted_config)
+	if options.trusted {
+		result.trusted_module = true
+		result.trusted_module_applied = true
+		result.critical_count = 0
+		result.warning_count = 0
+	} else {
+		trusted_config := load_trusted_modules()
+		defer cleanup_trusted_modules(&trusted_config)
+		apply_trusted_module_relaxation(&result, module_root_real, &trusted_config)
+	}
 
 	return result
 }
@@ -1062,6 +1071,7 @@ apply_trusted_module_relaxation :: proc(result: ^Scan_Result, module_path: strin
 		return
 	}
 
+	result.trusted_module = true
 	result.trusted_module_applied = true
 
 	for i in 0..<len(result.findings) {

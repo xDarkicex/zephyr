@@ -3,6 +3,7 @@ package colors
 
 import "core:fmt"
 import "core:os"
+import "core:sync"
 
 // ANSI color codes for terminal output
 Color :: enum {
@@ -35,13 +36,24 @@ color_codes := map[Color]string{
 // Global flag to control colored output
 colored_output_enabled := true
 
-Warning_Hook :: proc(message: string)
-warning_hook: Warning_Hook
+Warning_Hook :: proc(id: int, message: string)
+MAX_WARNING_HOOKS :: 16
+_warning_hooks: [MAX_WARNING_HOOKS]Warning_Hook
+_warning_hook_active: [MAX_WARNING_HOOKS]bool
+_warning_hook_mutex: sync.Mutex
+
+init_warning_hooks :: proc() {
+	for i in 0..<MAX_WARNING_HOOKS {
+		_warning_hooks[i] = nil
+		_warning_hook_active[i] = false
+	}
+}
 
 // init_colors initializes the colors module and detects terminal capabilities
 init_colors :: proc() {
-    // Check if we're in a terminal that supports colors
-    // For now, we'll assume colors are supported unless NO_COLOR is set
+	// Check if we're in a terminal that supports colors
+	// For now, we'll assume colors are supported unless NO_COLOR is set
+	init_warning_hooks()
     
     no_color := os.get_env("NO_COLOR")
     if no_color != "" {
@@ -100,11 +112,15 @@ print_error :: proc(format: string, args: ..any) {
 }
 
 print_warning :: proc(format: string, args: ..any) {
-    colored_text := warning(fmt.tprintf(format, ..args))
-    if warning_hook != nil {
-        warning_hook(colored_text)
-    }
-    fmt.println(colored_text)
+	colored_text := warning(fmt.tprintf(format, ..args))
+	sync.mutex_lock(&_warning_hook_mutex)
+	for i in 0..<MAX_WARNING_HOOKS {
+		if _warning_hook_active[i] && _warning_hooks[i] != nil {
+			_warning_hooks[i](i, colored_text)
+		}
+	}
+	sync.mutex_unlock(&_warning_hook_mutex)
+	fmt.println(colored_text)
 }
 
 print_success :: proc(format: string, args: ..any) {
@@ -150,11 +166,28 @@ colors_enabled :: proc() -> bool {
 }
 
 // set_warning_hook installs an optional test hook for warning messages.
-set_warning_hook :: proc(hook: Warning_Hook) {
-    warning_hook = hook
+set_warning_hook :: proc(hook: Warning_Hook) -> int {
+	init_warning_hooks()
+	sync.mutex_lock(&_warning_hook_mutex)
+	for i in 0..<MAX_WARNING_HOOKS {
+		if !_warning_hook_active[i] {
+			_warning_hooks[i] = hook
+			_warning_hook_active[i] = true
+			sync.mutex_unlock(&_warning_hook_mutex)
+			return i
+		}
+	}
+	sync.mutex_unlock(&_warning_hook_mutex)
+	return -1
 }
 
 // clear_warning_hook removes the warning hook.
-clear_warning_hook :: proc() {
-    warning_hook = nil
+clear_warning_hook :: proc(id: int) {
+	if id < 0 || id >= MAX_WARNING_HOOKS {
+		return
+	}
+	sync.mutex_lock(&_warning_hook_mutex)
+	_warning_hooks[id] = nil
+	_warning_hook_active[id] = false
+	sync.mutex_unlock(&_warning_hook_mutex)
 }

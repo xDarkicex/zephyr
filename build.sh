@@ -57,13 +57,16 @@ else
 fi
 
 # Detect libmagic via pkg-config (or use LIBMAGIC_LIBS override)
+# Note: Odin's `foreign import "system:magic"` already links -lmagic.
+# We only need library search paths to avoid duplicate library warnings.
 if [ -n "${LIBMAGIC_LIBS:-}" ]; then
-    LINKER_FLAGS="${LINKER_FLAGS} ${LIBMAGIC_LIBS}"
+    LIBMAGIC_LIBS_CLEAN=$(echo "${LIBMAGIC_LIBS}" | tr ' ' '\n' | grep -v '^-lmagic$' | tr '\n' ' ')
+    LINKER_FLAGS="${LINKER_FLAGS} ${LIBMAGIC_LIBS_CLEAN}"
     BUILD_FLAGS+=("-define:ZEPHYR_HAS_MAGIC=true")
-    echo "✓ libmagic flags from LIBMAGIC_LIBS: ${LIBMAGIC_LIBS}"
+    echo "✓ libmagic flags from LIBMAGIC_LIBS: ${LIBMAGIC_LIBS_CLEAN}"
 elif command -v pkg-config &> /dev/null; then
-    LIBMAGIC_LIBS=$(pkg-config --libs libmagic 2>/dev/null || true)
-    if [ -n "${LIBMAGIC_LIBS:-}" ]; then
+    LIBMAGIC_LIBS=$(pkg-config --libs-only-L --libs-only-other libmagic 2>/dev/null || true)
+    if [ -n "${LIBMAGIC_LIBS:-}" ] || pkg-config --exists libmagic 2>/dev/null; then
         LINKER_FLAGS="${LINKER_FLAGS} ${LIBMAGIC_LIBS}"
         BUILD_FLAGS+=("-define:ZEPHYR_HAS_MAGIC=true")
         echo "✓ libmagic detected: ${LIBMAGIC_LIBS}"
@@ -78,13 +81,16 @@ else
 fi
 
 # Detect OpenSSL via pkg-config (or use OPENSSL_LIBS override). OpenSSL is required.
+# Note: Odin's `foreign import "system:ssl"` already links -lssl/-lcrypto.
+# We only need library search paths to avoid duplicate library warnings.
 if [ -n "${OPENSSL_LIBS:-}" ]; then
-    LINKER_FLAGS="${LINKER_FLAGS} ${OPENSSL_LIBS}"
+    OPENSSL_LIBS_CLEAN=$(echo "${OPENSSL_LIBS}" | tr ' ' '\n' | grep -v '^-lssl$' | grep -v '^-lcrypto$' | tr '\n' ' ')
+    LINKER_FLAGS="${LINKER_FLAGS} ${OPENSSL_LIBS_CLEAN}"
     BUILD_FLAGS+=("-define:ZEPHYR_HAS_OPENSSL=true")
-    echo "✓ OpenSSL flags from OPENSSL_LIBS: ${OPENSSL_LIBS}"
+    echo "✓ OpenSSL flags from OPENSSL_LIBS: ${OPENSSL_LIBS_CLEAN}"
 elif command -v pkg-config &> /dev/null; then
-    OPENSSL_LIBS=$(pkg-config --libs openssl 2>/dev/null || true)
-    if [ -n "${OPENSSL_LIBS:-}" ]; then
+    OPENSSL_LIBS=$(pkg-config --libs-only-L --libs-only-other openssl 2>/dev/null || true)
+    if [ -n "${OPENSSL_LIBS:-}" ] || pkg-config --exists openssl 2>/dev/null; then
         LINKER_FLAGS="${LINKER_FLAGS} ${OPENSSL_LIBS}"
         BUILD_FLAGS+=("-define:ZEPHYR_HAS_OPENSSL=true")
         echo "✓ OpenSSL detected: ${OPENSSL_LIBS}"
@@ -101,13 +107,16 @@ else
 fi
 
 # Detect libcurl via pkg-config (or use LIBCURL_LIBS override). libcurl is required.
+# Note: Odin's `foreign import "system:curl"` already links -lcurl.
+# We only need library search paths to avoid duplicate library warnings.
 if [ -n "${LIBCURL_LIBS:-}" ]; then
-    LINKER_FLAGS="${LINKER_FLAGS} ${LIBCURL_LIBS}"
+    LIBCURL_LIBS_CLEAN=$(echo "${LIBCURL_LIBS}" | tr ' ' '\n' | grep -v '^-lcurl$' | tr '\n' ' ')
+    LINKER_FLAGS="${LINKER_FLAGS} ${LIBCURL_LIBS_CLEAN}"
     BUILD_FLAGS+=("-define:ZEPHYR_HAS_CURL=true")
-    echo "✓ libcurl flags from LIBCURL_LIBS: ${LIBCURL_LIBS}"
+    echo "✓ libcurl flags from LIBCURL_LIBS: ${LIBCURL_LIBS_CLEAN}"
 elif command -v pkg-config &> /dev/null; then
-    LIBCURL_LIBS=$(pkg-config --libs libcurl 2>/dev/null || true)
-    if [ -n "${LIBCURL_LIBS:-}" ]; then
+    LIBCURL_LIBS=$(pkg-config --libs-only-L --libs-only-other libcurl 2>/dev/null || true)
+    if [ -n "${LIBCURL_LIBS:-}" ] || pkg-config --exists libcurl 2>/dev/null; then
         LINKER_FLAGS="${LINKER_FLAGS} ${LIBCURL_LIBS}"
         BUILD_FLAGS+=("-define:ZEPHYR_HAS_CURL=true")
         echo "✓ libcurl detected: ${LIBCURL_LIBS}"
@@ -121,6 +130,38 @@ else
     echo "Error: pkg-config not available. libcurl is required."
     echo "  Install pkg-config and libcurl, or set LIBCURL_LIBS."
     exit 1
+fi
+
+# Detect libarchive via pkg-config (or use LIBARCHIVE_LIBS override). Optional.
+if [ -n "${LIBARCHIVE_LIBS:-}" ]; then
+    LINKER_FLAGS="${LINKER_FLAGS} ${LIBARCHIVE_LIBS}"
+    BUILD_FLAGS+=("-define:ZEPHYR_HAS_ARCHIVE=true")
+    echo "✓ libarchive flags from LIBARCHIVE_LIBS: ${LIBARCHIVE_LIBS}"
+elif command -v pkg-config &> /dev/null; then
+    LIBARCHIVE_LIBS=$(pkg-config --libs-only-L --libs-only-other libarchive 2>/dev/null || true)
+    if pkg-config --exists libarchive 2>/dev/null; then
+        LINKER_FLAGS="${LINKER_FLAGS} ${LIBARCHIVE_LIBS}"
+        BUILD_FLAGS+=("-define:ZEPHYR_HAS_ARCHIVE=true")
+        echo "✓ libarchive detected: ${LIBARCHIVE_LIBS}"
+    else
+        for keg_path in "/opt/homebrew/opt/libarchive" "/usr/local/opt/libarchive"; do
+            if [ -f "${keg_path}/lib/libarchive.dylib" ] || [ -f "${keg_path}/lib/libarchive.so" ]; then
+                LINKER_FLAGS="${LINKER_FLAGS} -L${keg_path}/lib"
+                BUILD_FLAGS+=("-define:ZEPHYR_HAS_ARCHIVE=true")
+                echo "✓ libarchive detected (keg-only): -L${keg_path}/lib"
+                break
+            fi
+        done
+        if [ -z "${LINKER_FLAGS##*libarchive*}" ] || [ -z "${LINKER_FLAGS##*-L*libarchive*}" ]; then
+            :
+        elif ! echo "$LINKER_FLAGS" | grep -q "libarchive"; then
+            BUILD_FLAGS+=("-define:ZEPHYR_HAS_ARCHIVE=false")
+            echo "ℹ libarchive not detected; tarball extraction disabled"
+        fi
+    fi
+else
+    BUILD_FLAGS+=("-define:ZEPHYR_HAS_ARCHIVE=false")
+    echo "ℹ pkg-config not available; libarchive auto-detect skipped"
 fi
 
 if [ -n "${LINKER_FLAGS// }" ]; then
