@@ -115,6 +115,11 @@ Scan_Options :: struct {
 	verbose:     bool,
 }
 
+Command_Scan_Result :: struct {
+	severity:     Severity,
+	has_findings: bool,
+}
+
 Build_Context :: enum {
 	None,
 	Makefile,
@@ -138,6 +143,14 @@ Compiled_Pattern :: struct {
 	pattern: Pattern,
 	re:      regex.Regular_Expression,
 }
+
+Pattern_Cache :: struct {
+	compiled: bool,
+	patterns: [dynamic]Compiled_Pattern,
+}
+
+@(private = "file")
+global_pattern_cache: Pattern_Cache
 
 get_critical_patterns :: proc() -> [dynamic]Pattern {
 	patterns := make([dynamic]Pattern)
@@ -261,6 +274,35 @@ get_reverse_shell_patterns :: proc() -> [dynamic]Pattern {
 	return patterns
 }
 
+get_all_patterns :: proc() -> [dynamic]Pattern {
+	patterns := make([dynamic]Pattern)
+
+	critical_patterns := get_critical_patterns()
+	warning_patterns := get_warning_patterns()
+	cicd_patterns := get_cicd_patterns()
+	reverse_shell_patterns := get_reverse_shell_patterns()
+
+	for pattern in critical_patterns {
+		append(&patterns, pattern)
+	}
+	for pattern in warning_patterns {
+		append(&patterns, pattern)
+	}
+	for pattern in cicd_patterns {
+		append(&patterns, pattern)
+	}
+	for pattern in reverse_shell_patterns {
+		append(&patterns, pattern)
+	}
+
+	delete(critical_patterns)
+	delete(warning_patterns)
+	delete(cicd_patterns)
+	delete(reverse_shell_patterns)
+
+	return patterns
+}
+
 scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	result := Scan_Result{success = true}
 	if module_path == "" {
@@ -289,22 +331,7 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 		return result
 	}
 
-	all_patterns := make([dynamic]Pattern)
-	critical_patterns := get_critical_patterns()
-	warning_patterns := get_warning_patterns()
-	cicd_patterns := get_cicd_patterns()
-	for p in critical_patterns {
-		append(&all_patterns, p)
-	}
-	for p in warning_patterns {
-		append(&all_patterns, p)
-	}
-	for p in cicd_patterns {
-		append(&all_patterns, p)
-	}
-	delete(critical_patterns)
-	delete(warning_patterns)
-	delete(cicd_patterns)
+	all_patterns := get_all_patterns()
 
 	compiled, err := compile_patterns(all_patterns[:])
 	delete(all_patterns)
@@ -336,6 +363,139 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 	defer cleanup_trusted_modules(&trusted_config)
 	apply_trusted_module_relaxation(&result, module_root_real, &trusted_config)
 
+	return result
+}
+
+init_pattern_cache :: proc() -> string {
+	if global_pattern_cache.compiled {
+		return ""
+	}
+	all_patterns := get_all_patterns()
+	compiled, err := compile_patterns(all_patterns[:])
+	delete(all_patterns)
+	if err != "" {
+		return err
+	}
+	global_pattern_cache.patterns = compiled
+	global_pattern_cache.compiled = true
+	return ""
+}
+
+get_cached_patterns :: proc() -> ([dynamic]Compiled_Pattern, string) {
+	err := init_pattern_cache()
+	if err != "" {
+		return nil, err
+	}
+	return global_pattern_cache.patterns, ""
+}
+
+cleanup_pattern_cache :: proc() {
+	if global_pattern_cache.compiled {
+		cleanup_compiled_patterns(global_pattern_cache.patterns)
+		global_pattern_cache.patterns = nil
+		global_pattern_cache.compiled = false
+	}
+}
+
+severity_max :: proc(a: Severity, b: Severity) -> Severity {
+	if a == .Critical || b == .Critical {
+		return .Critical
+	}
+	if a == .Warning || b == .Warning {
+		return .Warning
+	}
+	return .Info
+}
+
+Scan_Command_Text :: proc(command: string) -> (Command_Scan_Result, string) {
+	result := Command_Scan_Result{severity = .Info, has_findings = false}
+	if command == "" {
+		return result, ""
+	}
+	if len(command) > 10 * 1024 {
+		result.severity = .Critical
+		result.has_findings = true
+		return result, ""
+	}
+
+	patterns, err := get_cached_patterns()
+	if err != "" {
+		return result, err
+	}
+
+	credential_patterns := get_credential_patterns()
+	defer delete(credential_patterns)
+
+	lines := strings.split_lines(command)
+	defer delete(lines)
+
+	for line in lines {
+		trimmed := strings.trim_space(line)
+		if trimmed == "" {
+			continue
+		}
+		if should_skip_line(line) {
+			continue
+		}
+
+		for cred in credential_patterns {
+			if cred.pattern == "" {
+				continue
+			}
+			if !strings.contains(line, cred.pattern) {
+				continue
+			}
+			match_start := strings.index(line, cred.pattern)
+			if match_start >= 0 && !match_is_ignored(line, match_start) {
+				has_exfiltration := check_exfiltration(line)
+				severity := cred.severity
+				if has_exfiltration {
+					severity = .Critical
+				}
+				result.severity = severity_max(result.severity, severity)
+				result.has_findings = true
+				if result.severity == .Critical {
+					return result, ""
+				}
+			}
+		}
+
+		for compiled in patterns {
+			if len(compiled.re.program) == 0 {
+				continue
+			}
+			capture, matched := regex.match_and_allocate_capture(compiled.re, line)
+			match_start := 0
+			if len(capture.pos) > 0 {
+				match_start = capture.pos[0][0]
+			}
+			if capture.groups != nil || capture.pos != nil {
+				regex.destroy_capture(capture)
+			}
+
+			if matched && !match_is_ignored(line, match_start) {
+				applied := compiled.pattern
+				if !is_coupled_pattern(applied, line) {
+					applied = downgrade_severity(applied)
+				}
+				result.severity = severity_max(result.severity, applied.severity)
+				result.has_findings = true
+				if result.severity == .Critical {
+					return result, ""
+				}
+			}
+		}
+	}
+
+	return result, ""
+}
+
+Scan_Command_Safe :: proc(command: string) -> Command_Scan_Result {
+	result, err := Scan_Command_Text(command)
+	if err != "" {
+		debug.debug_warn("command scan failed: %s", err)
+		return Command_Scan_Result{severity = .Info, has_findings = false}
+	}
 	return result
 }
 

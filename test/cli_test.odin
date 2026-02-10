@@ -6,10 +6,98 @@ import "core:os"
 import "core:strings"
 import "core:path/filepath"
 import "core:encoding/json"
+import "core:c"
 
 import "../src/cli"
 import "../src/loader"
 import "../src/manifest"
+
+cstring_buffer :: proc(s: string) -> ([]u8, cstring) {
+	if s == "" do return nil, nil
+	buf := make([]u8, len(s)+1)
+	copy(buf[:len(s)], s)
+	buf[len(s)] = 0
+	return buf, cast(cstring)&buf[0]
+}
+
+run_shell_command :: proc(command: string) -> bool {
+	cmd_buf, cmd_c := cstring_buffer(command)
+	defer if cmd_buf != nil { delete(cmd_buf) }
+	if cmd_c == nil do return false
+	return system(cmd_c) == 0
+}
+
+// Use system() for invoking shell commands in tests.
+when ODIN_OS == .Darwin {
+	foreign import libSystem "system:System"
+	foreign libSystem {
+		system :: proc(command: cstring) -> c.int ---
+	}
+} else {
+	foreign import "system:libc"
+	foreign libc {
+		system :: proc(command: cstring) -> c.int ---
+	}
+}
+
+shell_escape_single :: proc(s: string) -> string {
+	if s == "" do return strings.clone("")
+	parts := strings.split(s, "'")
+	defer delete(parts)
+	if len(parts) == 1 {
+		return strings.clone(s)
+	}
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	for i, part in parts {
+		if i > 0 {
+			strings.builder_write_string(&builder, "'\"'\"'")
+		}
+		strings.builder_write_string(&builder, part)
+	}
+	return strings.clone(strings.to_string(builder))
+}
+
+run_scan_command := proc(t: ^testing.T, command: string) -> (int, string, string) {
+	temp_dir := setup_test_environment("scan_command_cli")
+	defer teardown_test_environment(temp_dir)
+
+	out_path := filepath.join({temp_dir, "stdout.txt"})
+	err_path := filepath.join({temp_dir, "stderr.txt"})
+	code_path := filepath.join({temp_dir, "code.txt"})
+
+	defer {
+		delete(out_path)
+		delete(err_path)
+		delete(code_path)
+	}
+
+	root := os.get_current_directory()
+	defer delete(root)
+
+	escaped := shell_escape_single(command)
+	defer delete(escaped)
+
+	script := fmt.tprintf("cd '%s' && ./zephyr scan '%s' > '%s' 2> '%s'; printf \"%%d\" $? > '%s'",
+		root, escaped, out_path, err_path, code_path)
+	defer delete(script)
+
+	ok := run_shell_command(script)
+	testing.expect(t, ok, "shell command should run")
+
+	code_data, _ := os.read_entire_file(code_path)
+	defer delete(code_data)
+	code_str := strings.trim_space(string(code_data))
+	defer delete(code_str)
+	code := strings.to_int(code_str)
+
+	out_data, _ := os.read_entire_file(out_path)
+	defer delete(out_data)
+	err_data, _ := os.read_entire_file(err_path)
+	defer delete(err_data)
+
+	return code, string(out_data), string(err_data)
+}
 
 // **Validates: Requirements 1.1, 1.2, 6.1**
 @(test)
@@ -1012,4 +1100,25 @@ test_backward_compatibility_list_without_json :: proc(t: ^testing.T) {
         // This behavior should be the same whether --json is used or not
         // (Actual exit code testing requires integration tests or subprocess execution)
     }
+}
+
+@(test)
+test_scan_command_exit_codes :: proc(t: ^testing.T) {
+	set_test_timeout(t)
+	reset_test_state(t)
+
+	code_safe, out_safe, err_safe := run_scan_command(t, "ls -la")
+	testing.expect(t, code_safe == 0, "safe command should exit 0")
+	testing.expect(t, len(out_safe) == 0, "safe command should be silent on stdout")
+	testing.expect(t, len(err_safe) == 0, "safe command should be silent on stderr")
+
+	code_critical, out_critical, err_critical := run_scan_command(t, "rm -rf /")
+	testing.expect(t, code_critical == 1, "critical command should exit 1")
+	testing.expect(t, len(out_critical) == 0, "critical command should be silent on stdout")
+	testing.expect(t, len(err_critical) == 0, "critical command should be silent on stderr")
+
+	code_warning, out_warning, err_warning := run_scan_command(t, "cat ~/.aws/credentials")
+	testing.expect(t, code_warning == 2, "warning command should exit 2")
+	testing.expect(t, len(out_warning) == 0, "warning command should be silent on stdout")
+	testing.expect(t, len(err_warning) == 0, "warning command should be silent on stderr")
 }

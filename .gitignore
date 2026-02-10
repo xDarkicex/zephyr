@@ -65,3 +65,23 @@ security_critical_*
 security_prop_findings_*
 security_prop_patterns_*
 security_update_block_*
+# temp repos / test artifacts
+security_unsafe_warning_*
+security_unsafe_audit_*
+security_install_block_*
+security_critical_block_*
+security_update_block_*
+security_warning_prompt_*
+security_integration_*
+security_scan_json_*
+cli_git_commands_*
+git_fetch_pull_*
+git_update_all_*
+git_update_summary_*
+git_update_fetch_fail_*
+git_update_rollback_*
+git_update_single_*
+git_temp_install_pipeline_*
+test_temp_benchmark_suite_*
+test_temp_comprehensive_benchmark_*
+zephyr_test_load_*

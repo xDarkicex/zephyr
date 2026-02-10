@@ -9,6 +9,7 @@ This document provides comprehensive usage examples for all Zephyr commands with
 - [zephyr list](#zephyr-list)
   - [JSON Output](#json-output)
 - [zephyr validate](#zephyr-validate)
+- [zephyr scan](#zephyr-scan)
 - [zephyr install](#zephyr-install)
 - [zephyr update](#zephyr-update)
 - [zephyr uninstall](#zephyr-uninstall)
@@ -26,6 +27,7 @@ Zephyr provides several main commands:
 | `load` | Generate shell code for loading modules (default) | `zephyr load` |
 | `list` | Show discovered modules and load order | `zephyr list` |
 | `validate` | Validate module manifests | `zephyr validate` |
+| `scan` | Security scan a module or command | `zephyr scan <source-or-command>` |
 | `install` | Install a module from git | `zephyr install <source>` |
 | `update` | Update installed modules | `zephyr update [module-name]` |
 | `uninstall` | Remove an installed module | `zephyr uninstall <module-name>` |
@@ -666,6 +668,37 @@ Validating git-helpers:
 Validating broken-module:
   ✗ TOML parse error: expected '=' after key at line 3
 ```
+
+## zephyr scan
+
+The `scan` command can scan either a module source or a **command string**.
+
+### Module Scan (Human or JSON)
+
+```bash
+# Human-friendly report
+zephyr scan https://github.com/user/zephyr-git-helpers
+
+# Machine-readable JSON report
+zephyr scan https://github.com/user/zephyr-git-helpers --json
+```
+
+### Command Scan (Silent Exit Code)
+
+If the argument is not a git URL or local path, Zephyr treats it as a command string and returns a **silent** exit code:
+
+```bash
+zephyr scan "ls -la"                 # exit 0 (safe)
+zephyr scan "rm -rf /"               # exit 1 (critical)
+zephyr scan "cat ~/.aws/credentials" # exit 2 (warning)
+```
+
+**Exit codes (command mode):**
+- `0`: Safe / no findings
+- `1`: Critical findings
+- `2`: Warning findings
+
+This mode is designed for shell-guard style tooling where you want a fast, silent safety check.
 
 ## zephyr install
 

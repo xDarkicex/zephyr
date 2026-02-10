@@ -19,6 +19,7 @@ Zephyr is a shell module loader system that manages dependencies, load order, an
 - 🎨 **Beautiful Output**: Colored terminal output with clear formatting
 - 🤖 **Machine Readable**: JSON security scan output for AI assistants and automation tools
 - 🧪 **Security Scanning**: Language-agnostic scanning with CVE coverage, credential and reverse shell detection, and git hook blocking
+- 🛡️ **Command Scanning**: Silent safety check for runtime commands via `zephyr scan "cmd"`
 
 ## Security Model
 
@@ -566,6 +567,21 @@ See [docs/SECURITY_SCAN.md](docs/SECURITY_SCAN.md) for the full schema and exit 
 - `2`: Critical findings present
 - `3`: Scan failed (I/O error, timeout, or other scan error)
 - `4`: Invalid arguments
+
+### `zephyr scan "<command>"`
+
+If the argument is **not** a git URL or local path, `zephyr scan` treats it as a command string and returns a **silent** exit code:
+
+```bash
+zephyr scan "ls -la"          # exit 0 (safe)
+zephyr scan "rm -rf /"        # exit 1 (critical)
+zephyr scan "cat ~/.aws/credentials"  # exit 2 (warning)
+```
+
+**Exit codes (command mode):**
+- `0`: Safe / no findings
+- `1`: Critical findings
+- `2`: Warning findings
 
 ### `zephyr update [module-name]`
 
