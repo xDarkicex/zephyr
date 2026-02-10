@@ -101,6 +101,7 @@ Signing details are documented in `docs/SECURITY.md` and `docs/MODULE_DEVELOPMEN
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Commands](#commands)
+- [Agent Roles](#agent-roles)
 - [Module Development](#module-development)
 - [Configuration Reference](#configuration-reference)
 - [Examples](#examples)
@@ -1243,6 +1244,12 @@ make benchmark-scale
 **Note:** Performance may vary based on hardware, module complexity, and shell configuration. The benchmarks above represent typical usage on modern hardware.
 
 ## Contributing
+
+## Agent Roles
+
+Zephyr supports role-based controls for AI agents and session auditing. See:
+
+`docs/AGENT_ROLES.md`
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
