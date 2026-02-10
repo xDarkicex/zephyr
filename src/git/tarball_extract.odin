@@ -35,8 +35,10 @@ when #config(ZEPHYR_HAS_ARCHIVE, false) {
 	ARCHIVE_EOF   :: 1
 	ARCHIVE_WARN  :: -20
 
-	ARCHIVE_EXTRACT_TIME               :: 0x0001
+	ARCHIVE_EXTRACT_OWNER              :: 0x0001
 	ARCHIVE_EXTRACT_PERM               :: 0x0002
+	ARCHIVE_EXTRACT_TIME               :: 0x0004
+	ARCHIVE_EXTRACT_SECURE_SYMLINKS    :: 0x0100
 	ARCHIVE_EXTRACT_SECURE_NODOTDOT    :: 0x0200
 	ARCHIVE_EXTRACT_SECURE_NOABSOLUTEPATHS :: 0x0400
 
@@ -74,9 +76,14 @@ when #config(ZEPHYR_HAS_ARCHIVE, false) {
 		}
 		defer archive_write_free(writer)
 		_ = archive_write_disk_set_standard_lookup(writer)
-		_ = archive_write_disk_set_options(writer,
-			ARCHIVE_EXTRACT_SECURE_NODOTDOT|
-				ARCHIVE_EXTRACT_SECURE_NOABSOLUTEPATHS)
+		flags: c.int = ARCHIVE_EXTRACT_PERM |
+			ARCHIVE_EXTRACT_TIME |
+			ARCHIVE_EXTRACT_SECURE_NODOTDOT |
+			ARCHIVE_EXTRACT_SECURE_NOABSOLUTEPATHS
+		when ODIN_OS != .Darwin {
+			flags |= ARCHIVE_EXTRACT_OWNER
+		}
+		_ = archive_write_disk_set_options(writer, flags)
 
 		for {
 			entry: ^archive_entry
