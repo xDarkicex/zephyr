@@ -581,9 +581,10 @@ print_audit_events :: proc(events: []Audit_Entry) {
 }
 
 print_session_event :: proc(entry: Audit_Entry) {
-	fmt.printf("%s %s session %s (%s) role=%s\n",
+	fmt.printf("%s %s session=%s agent=%s (%s) role=%s\n",
 		colors.info_symbol(),
 		entry.started_at,
+		entry.session_id,
 		entry.agent_id,
 		entry.agent_type,
 		entry.role,
