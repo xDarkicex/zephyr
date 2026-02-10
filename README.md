@@ -68,6 +68,13 @@ See [docs/SECURITY_PIPELINE.md](docs/SECURITY_PIPELINE.md) for a technical break
 - 👁️ **For humans**: Review source before approving warnings or using `--unsafe`.
 - 📜 **For compliance**: Treat `zephyr scan` as a *risk assessment tool*, not a security boundary.
 
+### Audit Logs & SIEM Integration
+Zephyr writes **JSON Lines (NDJSON)** audit logs under `~/.zephyr/audit/` with stable fields
+(`schema_version`, `@timestamp`, `agent_id`, `session_id`, `event_action`, `event_outcome`).
+These are directly ingestible by Wazuh, ELK, and OpenSearch.
+
+See [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md) for schema and SIEM mapping notes.
+
 ### Trusted Modules
 Zephyr supports a trusted module allowlist to reduce false positives for known frameworks
 (`oh-my-zsh`, `zinit`, `nvm`, `rbenv`, `pyenv`, `asdf`). You can extend this list via:

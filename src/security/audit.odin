@@ -10,6 +10,8 @@ import "core:os/os2"
 
 import "../debug"
 
+AUDIT_SCHEMA_VERSION :: "1.0"
+
 ensure_directory :: proc(path: string) -> bool {
 	if path == "" {
 		return false
@@ -186,6 +188,8 @@ format_session_json :: proc(info: Session_Info) -> string {
 	started := escape_json_string(info.started_at)
 	role := escape_json_string(info.role)
 	session_id := escape_json_string(info.session_id)
+	user_name := escape_json_string(os.get_env("USER"))
+	host_name := escape_json_string(os.get_env("HOSTNAME"))
 	defer {
 		delete(agent_id)
 		delete(agent_type)
@@ -193,17 +197,27 @@ format_session_json :: proc(info: Session_Info) -> string {
 		delete(started)
 		delete(role)
 		delete(session_id)
+		delete(user_name)
+		delete(host_name)
 	}
 
 	builder := strings.builder_make()
 	defer strings.builder_destroy(&builder)
 	fmt.sbprintf(&builder, "{")
+	fmt.sbprintf(&builder, "\"schema_version\":\"%s\",", AUDIT_SCHEMA_VERSION)
+	fmt.sbprintf(&builder, "\"@timestamp\":\"%s\",", started)
 	fmt.sbprintf(&builder, "\"session_id\":\"%s\",", session_id)
 	fmt.sbprintf(&builder, "\"agent_id\":\"%s\",", agent_id)
 	fmt.sbprintf(&builder, "\"agent_type\":\"%s\",", agent_type)
+	fmt.sbprintf(&builder, "\"user_name\":\"%s\",", user_name)
+	fmt.sbprintf(&builder, "\"host_name\":\"%s\",", host_name)
 	fmt.sbprintf(&builder, "\"parent_process\":\"%s\",", parent)
 	fmt.sbprintf(&builder, "\"started_at\":\"%s\",", started)
 	fmt.sbprintf(&builder, "\"role\":\"%s\"", role)
+	fmt.sbprintf(&builder, ",\"action\":\"session_registered\"")
+	fmt.sbprintf(&builder, ",\"event_action\":\"session_registered\"")
+	fmt.sbprintf(&builder, ",\"event_outcome\":\"success\"")
+	fmt.sbprintf(&builder, ",\"event_category\":\"session\"")
 	fmt.sbprintf(&builder, "}")
 	return strings.clone(strings.to_string(builder))
 }
@@ -219,6 +233,9 @@ format_audit_json :: proc(event: Audit_Event) -> string {
 	source := escape_json_string(event.source)
 	result := escape_json_string(event.result)
 	reason := escape_json_string(event.reason)
+	user_name := escape_json_string(os.get_env("USER"))
+	host_name := escape_json_string(os.get_env("HOSTNAME"))
+	event_category := escape_json_string(event_category_for_action(event.action))
 	defer {
 		delete(timestamp)
 		delete(session_id)
@@ -230,21 +247,31 @@ format_audit_json :: proc(event: Audit_Event) -> string {
 		delete(source)
 		delete(result)
 		delete(reason)
+		delete(user_name)
+		delete(host_name)
+		delete(event_category)
 	}
 
 	builder := strings.builder_make()
 	defer strings.builder_destroy(&builder)
 	fmt.sbprintf(&builder, "{")
+	fmt.sbprintf(&builder, "\"schema_version\":\"%s\",", AUDIT_SCHEMA_VERSION)
+	fmt.sbprintf(&builder, "\"@timestamp\":\"%s\",", timestamp)
 	fmt.sbprintf(&builder, "\"timestamp\":\"%s\",", timestamp)
 	fmt.sbprintf(&builder, "\"session_id\":\"%s\",", session_id)
 	fmt.sbprintf(&builder, "\"agent_id\":\"%s\",", agent_id)
 	fmt.sbprintf(&builder, "\"agent_type\":\"%s\",", agent_type)
+	fmt.sbprintf(&builder, "\"user_name\":\"%s\",", user_name)
+	fmt.sbprintf(&builder, "\"host_name\":\"%s\",", host_name)
 	fmt.sbprintf(&builder, "\"role\":\"%s\",", role)
 	fmt.sbprintf(&builder, "\"action\":\"%s\",", action)
 	fmt.sbprintf(&builder, "\"module\":\"%s\",", module)
 	fmt.sbprintf(&builder, "\"source\":\"%s\",", source)
 	fmt.sbprintf(&builder, "\"result\":\"%s\",", result)
 	fmt.sbprintf(&builder, "\"reason\":\"%s\",", reason)
+	fmt.sbprintf(&builder, "\"event_action\":\"%s\",", action)
+	fmt.sbprintf(&builder, "\"event_outcome\":\"%s\",", result)
+	fmt.sbprintf(&builder, "\"event_category\":\"%s\",", event_category)
 	fmt.sbprintf(&builder, "\"signature_verified\":%v", event.signature_verified)
 	fmt.sbprintf(&builder, "}")
 	return strings.clone(strings.to_string(builder))
@@ -259,6 +286,8 @@ format_command_scan_json :: proc(event: Audit_Event, command: string, exit_code:
 	command_escaped := escape_json_string(command)
 	result := escape_json_string(event.result)
 	reason := escape_json_string(event.reason)
+	user_name := escape_json_string(os.get_env("USER"))
+	host_name := escape_json_string(os.get_env("HOSTNAME"))
 	defer {
 		delete(timestamp)
 		delete(session_id)
@@ -268,23 +297,46 @@ format_command_scan_json :: proc(event: Audit_Event, command: string, exit_code:
 		delete(command_escaped)
 		delete(result)
 		delete(reason)
+		delete(user_name)
+		delete(host_name)
 	}
 
 	builder := strings.builder_make()
 	defer strings.builder_destroy(&builder)
 	fmt.sbprintf(&builder, "{")
+	fmt.sbprintf(&builder, "\"schema_version\":\"%s\",", AUDIT_SCHEMA_VERSION)
+	fmt.sbprintf(&builder, "\"@timestamp\":\"%s\",", timestamp)
 	fmt.sbprintf(&builder, "\"timestamp\":\"%s\",", timestamp)
 	fmt.sbprintf(&builder, "\"session_id\":\"%s\",", session_id)
 	fmt.sbprintf(&builder, "\"agent_id\":\"%s\",", agent_id)
 	fmt.sbprintf(&builder, "\"agent_type\":\"%s\",", agent_type)
+	fmt.sbprintf(&builder, "\"user_name\":\"%s\",", user_name)
+	fmt.sbprintf(&builder, "\"host_name\":\"%s\",", host_name)
 	fmt.sbprintf(&builder, "\"role\":\"%s\",", role)
 	fmt.sbprintf(&builder, "\"action\":\"command_scan\",")
 	fmt.sbprintf(&builder, "\"command\":\"%s\",", command_escaped)
 	fmt.sbprintf(&builder, "\"result\":\"%s\",", result)
 	fmt.sbprintf(&builder, "\"reason\":\"%s\",", reason)
+	fmt.sbprintf(&builder, "\"event_action\":\"command_scan\",")
+	fmt.sbprintf(&builder, "\"event_outcome\":\"%s\",", result)
+	fmt.sbprintf(&builder, "\"event_category\":\"process\",")
 	fmt.sbprintf(&builder, "\"exit_code\":%d", exit_code)
 	fmt.sbprintf(&builder, "}")
 	return strings.clone(strings.to_string(builder))
+}
+
+event_category_for_action :: proc(action: string) -> string {
+	switch action {
+	case "command_scan":
+		return "process"
+	case "install", "uninstall":
+		return "package"
+	case "permission_denied":
+		return "security"
+	case "config_modify":
+		return "configuration"
+	}
+	return "zephyr"
 }
 
 append_line :: proc(path: string, line: string) {

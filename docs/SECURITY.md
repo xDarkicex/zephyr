@@ -47,3 +47,8 @@ If the signing key is compromised:
 - Runtime shell execution (no sandboxing)
 
 Treat signed modules as **trusted code** and apply operational controls accordingly.
+
+## Audit Logs & SIEM
+
+Zephyr emits JSON Lines audit logs for session activity and operations in `~/.zephyr/audit/`.
+See [SECURITY_AUDIT.md](SECURITY_AUDIT.md) for schema and SIEM mapping guidance.
