@@ -132,7 +132,6 @@ install_from_tarball :: proc(source: Install_Source, options: Manager_Options) -
 		result.message = strings.clone("failed to extract tarball")
 		return result
 	}
-
 	module_root, root_err := find_module_root(extract_dir)
 	if root_err != "" {
 		result.message = root_err

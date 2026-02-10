@@ -75,9 +75,7 @@ when #config(ZEPHYR_HAS_ARCHIVE, false) {
 		defer archive_write_free(writer)
 		_ = archive_write_disk_set_standard_lookup(writer)
 		_ = archive_write_disk_set_options(writer,
-			ARCHIVE_EXTRACT_TIME|
-				ARCHIVE_EXTRACT_PERM|
-				ARCHIVE_EXTRACT_SECURE_NODOTDOT|
+			ARCHIVE_EXTRACT_SECURE_NODOTDOT|
 				ARCHIVE_EXTRACT_SECURE_NOABSOLUTEPATHS)
 
 		for {
@@ -112,15 +110,16 @@ when #config(ZEPHYR_HAS_ARCHIVE, false) {
 
 			full_path_c := strings.clone_to_cstring(full_path)
 			archive_entry_set_pathname(entry, full_path_c)
-			delete(full_path_c)
 
 			if archive_read_extract2(reader, entry, writer) != ARCHIVE_OK {
 				err := archive_error_string(reader)
 				if err != nil {
 					debug.debug_warn("libarchive extract error: %s", string(err))
 				}
+				delete(full_path_c)
 				return false
 			}
+			delete(full_path_c)
 		}
 
 		return true

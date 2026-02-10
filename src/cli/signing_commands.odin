@@ -35,21 +35,21 @@ verify_module_command :: proc(module_path: string) {
 
 	tarball_path := find_tarball_in_module(module_path)
 	if tarball_path == "" {
-		fmt.println(colors.yellow("⚠") + " Module is not signed (no tarball found)")
+		fmt.println(fmt.tprintf("%s Module is not signed (no tarball found)", colors.warning_symbol()))
 		return
 	}
 	defer delete(tarball_path)
 
-	sig_path := tarball_path + ".sig"
-	hash_path := tarball_path + ".sha256"
+	sig_path := strings.concatenate({tarball_path, ".sig"})
+	hash_path := strings.concatenate({tarball_path, ".sha256"})
 	if !os.exists(sig_path) {
-		fmt.println(colors.red("✗") + " No signature file found")
+		fmt.println(fmt.tprintf("%s No signature file found", colors.error_symbol()))
 		delete(sig_path)
 		delete(hash_path)
 		return
 	}
 	if !os.exists(hash_path) {
-		fmt.println(colors.red("✗") + " No hash file found")
+		fmt.println(fmt.tprintf("%s No hash file found", colors.error_symbol()))
 		delete(sig_path)
 		delete(hash_path)
 		return
@@ -58,11 +58,11 @@ verify_module_command :: proc(module_path: string) {
 	result := security.verify_signature(tarball_path, sig_path)
 	defer security.cleanup_verification_result(&result)
 	if result.success {
-		fmt.println(colors.green("✓") + " Signature verified")
-		fmt.println("  Method: " + fmt.tprintf("%v", result.method))
+		fmt.println(fmt.tprintf("%s Signature verified", colors.success_symbol()))
+		fmt.println(fmt.tprintf("  Method: %v", result.method))
 	} else {
-		fmt.println(colors.red("✗") + " Signature verification failed")
-		fmt.println("  Error: " + result.error_message)
+		fmt.println(fmt.tprintf("%s Signature verification failed", colors.error_symbol()))
+		fmt.println(fmt.tprintf("  Error: %s", result.error_message))
 	}
 
 	hash_ok, hash_err := security.verify_hash(tarball_path, hash_path)
@@ -70,11 +70,11 @@ verify_module_command :: proc(module_path: string) {
 		defer delete(hash_err)
 	}
 	if hash_ok {
-		fmt.println(colors.green("✓") + " Hash verified")
+		fmt.println(fmt.tprintf("%s Hash verified", colors.success_symbol()))
 	} else {
-		fmt.println(colors.red("✗") + " Hash verification failed")
+		fmt.println(fmt.tprintf("%s Hash verification failed", colors.error_symbol()))
 		if hash_err != "" {
-			fmt.println("  Error: " + hash_err)
+			fmt.println(fmt.tprintf("  Error: %s", hash_err))
 		}
 	}
 
@@ -111,7 +111,7 @@ find_tarball_in_module :: proc(module_path: string) -> string {
 	}
 	defer os.file_info_slice_delete(entries)
 
-	var candidate string
+	candidate: string
 	for entry in entries {
 		if entry.is_dir {
 			continue

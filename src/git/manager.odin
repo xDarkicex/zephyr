@@ -124,7 +124,9 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 		if !tar_result.success {
 			return false, format_manager_error(.Clone_Failed, tar_result.message, url, "signed install")
 		}
-		return true, tar_result.message
+		message := tar_result.message
+		tar_result.message = ""
+		return true, message
 	}
 
 	is_local := source.source_type == .Local_Path

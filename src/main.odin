@@ -68,10 +68,9 @@ main :: proc() {
 
 	debug.debug_info("Processing command: %s", command)
 
-	cli.run_first_time_setup()
-
 	// Command routing logic
 	if command == "" {
+		cli.run_first_time_setup()
 		// Default behavior: run load command
 		debug.debug_info("No command specified, defaulting to load")
 		run_load()

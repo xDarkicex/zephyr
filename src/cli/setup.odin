@@ -66,7 +66,7 @@ run_first_time_setup :: proc() {
 	fmt.println("Zephyr modules execute with full shell privileges.")
 	fmt.println("For safety with AI assistants, we recommend the 'guardrails' module.")
 	fmt.println("")
-	fmt.println(colors.bold("Guardrails module") + " (cryptographically signed):")
+	fmt.println(fmt.tprintf("%s (cryptographically signed):", colors.bold("Guardrails module")))
 	fmt.println("  • Replaces 'rm' with 'trash' (reversible deletion)")
 	fmt.println("  • Blocks dangerous commands like 'dd'")
 	fmt.println("  • Protects sensitive files from AI access")
@@ -75,23 +75,40 @@ run_first_time_setup :: proc() {
 	if prompt_yes_no("Install guardrails module?", true) {
 		fmt.println("")
 		fmt.println("> Downloading signed module...")
-		options := git.Manager_Options{
-			verbose = false,
-			force = false,
-			confirm = false,
-			allow_local = false,
-			check_dependencies = false,
-			unsafe = false,
-		}
-		success, msg := git.install_module("xDarkicex/zephyr-guardrails-module", options)
-		if success {
-			fmt.println(colors.green("✓") + " Guardrails installed successfully!")
-			fmt.println("")
-			fmt.println("Note: Install trash-cli for full protection:")
-			fmt.println("  macOS:  brew install trash-cli")
-			fmt.println("  Linux:  apt-get install trash-cli")
+		if !git.libgit2_enabled() {
+			fmt.println(fmt.tprintf("%s Git support not available; skipping guardrails install.", colors.warning_symbol()))
 		} else {
-			fmt.println(colors.red("✗") + " Failed to install guardrails: " + msg)
+			init_result := git.init_libgit2()
+			defer git.cleanup_git_result(&init_result)
+			if !init_result.success {
+				fmt.println(fmt.tprintf("%s Failed to initialize git: %s", colors.error_symbol(), init_result.message))
+			} else {
+				defer {
+					shutdown_result := git.shutdown_libgit2()
+					defer git.cleanup_git_result(&shutdown_result)
+				}
+				options := git.Manager_Options{
+					verbose = false,
+					force = false,
+					confirm = false,
+					allow_local = false,
+					check_dependencies = false,
+					unsafe = false,
+				}
+				success, msg := git.install_module("xDarkicex/zephyr-guardrails-module", options)
+				if success {
+					fmt.println(fmt.tprintf("%s Guardrails installed successfully!", colors.success_symbol()))
+					fmt.println("")
+					fmt.println("Note: Install trash-cli for full protection:")
+					fmt.println("  macOS:  brew install trash-cli")
+					fmt.println("  Linux:  apt-get install trash-cli")
+				} else {
+					fmt.println(fmt.tprintf("%s Failed to install guardrails: %s", colors.error_symbol(), msg))
+				}
+				if msg != "" {
+					delete(msg)
+				}
+			}
 		}
 	}
 
@@ -105,9 +122,9 @@ run_first_time_setup :: proc() {
 prompt_yes_no :: proc(question: string, default_yes: bool) -> bool {
 	prompt := question
 	if default_yes {
-		prompt += " [Y/n]: "
+		prompt = fmt.tprintf("%s [Y/n]: ", question)
 	} else {
-		prompt += " [y/N]: "
+		prompt = fmt.tprintf("%s [y/N]: ", question)
 	}
 
 	fmt.print(prompt)

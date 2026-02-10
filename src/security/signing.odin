@@ -148,11 +148,6 @@ verify_hash :: proc(file_path: string, hash_path: string) -> (bool, string) {
 		return false, strings.clone("invalid hash file format")
 	}
 	expected := strings.to_lower(fields[0])
-	for field in fields {
-		if field != "" {
-			delete(field)
-		}
-	}
 	delete(fields)
 	defer delete(expected)
 
