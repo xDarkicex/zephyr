@@ -98,6 +98,14 @@ main :: proc() {
 		run_show_signing_key()
 	case "verify":
 		run_verify()
+	case "session":
+		run_session()
+	case "sessions":
+		run_sessions()
+	case "audit":
+		run_audit()
+	case "register-session":
+		run_register_session()
 	case "help", "--help", "-h":
 		print_usage()
 	case:
@@ -182,6 +190,22 @@ run_verify :: proc() {
 		break
 	}
 	cli.verify_module_command(module_path)
+}
+
+run_session :: proc() {
+	cli.session_command()
+}
+
+run_sessions :: proc() {
+	cli.sessions_command()
+}
+
+run_audit :: proc() {
+	cli.audit_command()
+}
+
+run_register_session :: proc() {
+	cli.register_session_command()
 }
 
 // run_load implements the default load behavior
@@ -336,6 +360,10 @@ print_usage :: proc() {
 	fmt.println("    uninstall   Remove an installed module")
 	fmt.println("    show-signing-key  Show the official Zephyr signing key")
 	fmt.println("    verify      Verify a signed module tarball")
+	fmt.println("    session     Show current session info")
+	fmt.println("    sessions    List active sessions")
+	fmt.println("    audit       Show audit log entries")
+	fmt.println("    register-session  Register a session (used by zephyr load)")
 	fmt.println("    help        Show this help message")
 	fmt.println("")
 	fmt.println("EXAMPLES:")
@@ -355,6 +383,9 @@ print_usage :: proc() {
 	fmt.println("    zephyr uninstall my-module   # Remove a module")
 	fmt.println("    zephyr show-signing-key      # Display Zephyr signing key")
 	fmt.println("    zephyr verify <path>         # Verify a signed tarball")
+	fmt.println("    zephyr session               # Show current agent session")
+	fmt.println("    zephyr sessions              # List active sessions")
+	fmt.println("    zephyr audit --type=commands # Show command scan audit logs")
 	fmt.println("")
 	fmt.println("ENVIRONMENT:")
 	fmt.println(

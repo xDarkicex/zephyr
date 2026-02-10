@@ -101,9 +101,12 @@ get_default_security_config :: proc() -> Security_Config {
 load_role_config :: proc(role: string) -> Role_Config {
 	config := load_security_config()
 	if role_config, ok := config.roles[role]; ok {
+		delete(config.roles)
 		return role_config
 	}
-	return config.roles["agent"]
+	fallback := config.roles["agent"]
+	delete(config.roles)
+	return fallback
 }
 
 get_security_config_path :: proc() -> string {
