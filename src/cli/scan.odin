@@ -22,7 +22,7 @@ Scan_Mode :: enum {
 }
 
 parse_scan_options :: proc() -> Scan_Options {
-	options := Scan_Options{}
+	options := Scan_Options{mode = .Command}
 
 	non_flag_args := make([dynamic]string)
 	args := os.args[1:]
