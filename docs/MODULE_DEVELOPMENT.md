@@ -15,6 +15,7 @@ This guide provides best practices, conventions, and patterns for developing hig
 - [Performance Considerations](#performance-considerations)
 - [Security Guidelines](#security-guidelines)
 - [Distribution and Sharing](#distribution-and-sharing)
+- [Signed Modules](#signed-modules)
 
 ## Module Design Principles
 
@@ -889,3 +890,38 @@ When sharing modules:
 - Maintain backward compatibility when possible
 
 This guide provides a foundation for creating high-quality, maintainable Zephyr modules that integrate well with the ecosystem and provide value to users.
+
+## Signed Modules
+
+First-party Zephyr modules can be distributed as **signed tarballs** for stronger
+integrity guarantees. Signed modules are verified with OpenSSL during installation
+and may be trusted to perform privileged actions.
+
+### Signing a Release Tarball
+
+1. Create a tarball:
+   ```bash
+   tar -czf my-module-v1.0.0.tar.gz my-module/
+   ```
+
+2. Sign and hash:
+   ```bash
+   export ZEPHYR_SIGNING_KEY=/path/to/private_key.pem
+   ./scripts/sign-module.sh my-module-v1.0.0.tar.gz
+   ```
+
+3. Publish the `.tar.gz`, `.tar.gz.sig`, and `.tar.gz.sha256` assets in your release.
+
+### Verification
+
+Users can verify a signed module locally:
+
+```bash
+zephyr verify /path/to/module-or-tarball
+```
+
+### Notes
+
+- Signed modules are intended for **first-party** or **official** modules.
+- If signature or hash verification fails, installation is blocked.
+- Keep private signing keys offline and backed up securely.

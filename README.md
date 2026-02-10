@@ -20,6 +20,7 @@ Zephyr is a shell module loader system that manages dependencies, load order, an
 - 🤖 **Machine Readable**: JSON security scan output for AI assistants and automation tools
 - 🧪 **Security Scanning**: Language-agnostic scanning with CVE coverage, credential and reverse shell detection, and git hook blocking
 - 🛡️ **Command Scanning**: Silent safety check for runtime commands via `zephyr scan "cmd"`
+- 🔏 **Signed Modules**: First-party modules can be distributed as signed tarballs with OpenSSL verification
 
 ## Security Model
 
@@ -73,6 +74,16 @@ Zephyr supports a trusted module allowlist to reduce false positives for known f
 
 `~/.zephyr/trusted_modules.toml`
 
+### Signed Modules
+Zephyr can install **signed first-party modules** from release tarballs. Signed modules are
+verified with OpenSSL before install and may be allowed to perform privileged actions.
+
+Key commands:
+- `zephyr show-signing-key`
+- `zephyr verify <path>`
+
+Signing details are documented in `docs/SECURITY.md` and `docs/MODULE_DEVELOPMENT.md`.
+
 ## Table of Contents
 
 - [Installation](#installation)
@@ -92,6 +103,7 @@ Zephyr supports a trusted module allowlist to reduce false positives for known f
 - libgit2 (required for git-based module management)
 - OpenSSL (required for security scanning and module signing)
 - libcurl (required for signed module release discovery)
+- libarchive (required for signed module tarball extraction)
 - pkg-config (recommended for auto-detection of dependencies)
 - libmagic (optional, improves binary detection in security scans)
 - ZSH shell or Bash shell
@@ -126,9 +138,9 @@ cd zephyr
 
 # Install dependencies (examples)
 # macOS (Homebrew)
-brew install libgit2 pkg-config openssl curl
+brew install libgit2 pkg-config openssl curl libarchive
 # Ubuntu/Debian
-sudo apt-get install -y libgit2-dev pkg-config libssl-dev libcurl4-openssl-dev
+sudo apt-get install -y libgit2-dev pkg-config libssl-dev libcurl4-openssl-dev libarchive-dev
 
 # Build and install (recommended)
 make install

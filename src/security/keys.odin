@@ -13,7 +13,7 @@ MCowBQYDK2VwAyEA5cIomVSD7t0Rk6HiblBZ8jQl8bSRpsh9E98vcp9Vmfs=
 -----END PUBLIC KEY-----`
 } else {
 	ZEPHYR_SIGNING_KEY :: `-----BEGIN PUBLIC KEY-----
-[Placeholder - will be replaced with actual key]
+MCowBQYDK2VwAyEA9Kmh8sJzPLZY4F0TtkEsX4i3BhoUkmHx63KqTEcRCao=
 -----END PUBLIC KEY-----`
 }
 

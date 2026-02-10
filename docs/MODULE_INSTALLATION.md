@@ -5,6 +5,9 @@ This guide explains how to install, update, and remove Zephyr modules using the 
 ## Requirements
 
 - libgit2 (required for git operations)
+- OpenSSL (required for signed module verification)
+- libcurl (required for signed module release discovery)
+- libarchive (required for signed module extraction)
 - pkg-config (recommended for build-time auto-detection)
 - A working git remote or local repository
 
@@ -54,10 +57,23 @@ If the name is invalid, installation fails with a descriptive error.
 
 ## Installation Flow
 
+### Git-Based Modules
+
 1. Clone to a temporary directory
 2. Validate `module.toml` and load files
 3. Move the module into your modules directory
 4. Print next steps (`zephyr load`)
+
+### Signed Modules (Tarball Releases)
+
+For official/signed modules distributed as release tarballs:
+
+1. Download `.tar.gz`, `.sig`, `.sha256`
+2. Verify signature (OpenSSL)
+3. Verify hash (SHA-256)
+4. Extract tarball (libarchive)
+5. Scan with trusted flag
+6. Move module into your modules directory
 
 A failed validation prevents installation and cleans up the temp directory.
 
@@ -94,6 +110,14 @@ zephyr install --local /path/to/module-repo
 ```
 
 When installing from a local path, Zephyr derives the module name from the module manifest rather than the path.
+
+## Verify a Signed Module
+
+You can verify a signed module locally:
+
+```bash
+zephyr verify /path/to/module-or-tarball
+```
 
 ## Troubleshooting
 
