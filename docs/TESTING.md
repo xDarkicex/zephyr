@@ -59,6 +59,19 @@ Zephyr has two test suites:
 odin test test
 ```
 
+**Run specific unit tests:**
+```bash
+# Filter tests by fully-qualified name (compile-time define)
+ODIN_TEST_NAMES=test.test_audit_cleanup_removes_old_entries ./test_runner
+
+# Multiple tests (comma-separated)
+ODIN_TEST_NAMES=test.test_audit_cleanup_removes_old_entries,test.test_audit_session_log_written ./test_runner
+```
+
+**Notes:**
+- `ODIN_TEST_NAMES` is a compile-time define, not a runtime filter.
+- The `test_runner`/`make test` targets forward `ODIN_TEST_NAMES` automatically.
+
 **What's included:**
 - Unit tests for individual components
 - Property-based tests for algorithmic correctness

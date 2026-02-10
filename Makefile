@@ -114,7 +114,7 @@ clean: ## Remove build artifacts
 
 test: build ## Run test suite
 	@echo "$(BLUE)Running tests...$(NC)"
-	@odin test test $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) $(ARCHIVE_FLAGS) -define:ZEPHYR_TEST_SIGNING_KEY=true
+	@odin test test $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) $(ARCHIVE_FLAGS) -define:ZEPHYR_TEST_SIGNING_KEY=true $(if $(ODIN_TEST_NAMES),-define:ODIN_TEST_NAMES="$(ODIN_TEST_NAMES)",)
 	@echo "$(GREEN)✓ Tests passed$(NC)"
 
 benchmark: build ## Run performance benchmark
