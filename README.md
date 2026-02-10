@@ -3,7 +3,7 @@
 A fast, dependency-aware shell module loader written in Odin that brings order to your shell configuration.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](https://github.com/xDarkicex/zephyr)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](https://github.com/zephyr-systems/zephyr)
 
 ## Overview
 
@@ -101,12 +101,12 @@ If you use a zsh plugin manager (Oh My Zsh, Zinit, Antigen, etc.):
 
 ```bash
 # 1. Build and install zephyr
-git clone https://github.com/xDarkicex/zephyr.git
+git clone https://github.com/zephyr-systems/zephyr.git
 cd zephyr
 make install
 
 # 2. Add as plugin (example for Oh My Zsh)
-git clone https://github.com/xDarkicex/zephyr.git \
+git clone https://github.com/zephyr-systems/zephyr.git \
     ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zephyr
 
 # 3. Add to ~/.zshrc plugins list
@@ -119,7 +119,7 @@ See [zsh_plugin/README.md](zsh_plugin/README.md) for detailed instructions for a
 
 ```bash
 # Clone the repository
-git clone https://github.com/xDarkicex/zephyr.git
+git clone https://github.com/zephyr-systems/zephyr.git
 cd zephyr
 
 # Install libgit2 (examples)
