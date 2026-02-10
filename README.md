@@ -7,7 +7,7 @@ A fast, dependency-aware shell module loader written in Odin that brings order t
 
 ## Overview
 
-Zephyr is a shell module loader system that manages dependencies, load order, and configuration for shell modules (primarily ZSH). It reads TOML manifests, resolves dependencies using topological sorting, and emits shell code for sourcing modules in the correct order.
+Zephyr is a shell module loader system that manages dependencies, load order, and configuration for shell modules (ZSH and Bash). It reads TOML manifests, resolves dependencies using topological sorting, and emits shell code for sourcing modules in the correct order.
 
 **Why Zephyr?**
 - 🚀 **Fast**: Written in Odin for minimal startup overhead
@@ -91,6 +91,7 @@ Zephyr supports a trusted module allowlist to reduce false positives for known f
 - [Odin compiler](https://odin-lang.org/docs/install/) (for building from source)
 - libgit2 (required for git-based module management)
 - OpenSSL (required for security scanning and module signing)
+- libcurl (required for signed module release discovery)
 - pkg-config (recommended for auto-detection of dependencies)
 - libmagic (optional, improves binary detection in security scans)
 - ZSH shell
@@ -125,9 +126,9 @@ cd zephyr
 
 # Install dependencies (examples)
 # macOS (Homebrew)
-brew install libgit2 pkg-config openssl
+brew install libgit2 pkg-config openssl curl
 # Ubuntu/Debian
-sudo apt-get install -y libgit2-dev pkg-config libssl-dev
+sudo apt-get install -y libgit2-dev pkg-config libssl-dev libcurl4-openssl-dev
 
 # Build and install (recommended)
 make install
@@ -152,15 +153,20 @@ make benchmark      # Run performance benchmark
 make clean          # Remove build artifacts
 ```
 
-Note: `make build` and `make test` will automatically link libgit2 if it is
-available via `pkg-config`.
+Note: `make build` and `make test` will automatically link libgit2, OpenSSL,
+and libcurl if they are available via `pkg-config`.
 
 ### Shell Integration
 
-Add this line to your `.zshrc`:
+Zephyr supports both **ZSH** and **Bash**. It automatically detects your shell from the `$SHELL` environment variable.
 
+**For ZSH** - add to your `.zshrc`:
 ```bash
-# Load Zephyr modules
+eval "$($HOME/.zsh/bin/zephyr load)"
+```
+
+**For Bash** - add to your `.bashrc`:
+```bash
 eval "$($HOME/.zsh/bin/zephyr load)"
 ```
 
@@ -170,6 +176,23 @@ Or if you prefer to add the bin directory to your PATH:
 export PATH="$HOME/.zsh/bin:$PATH"
 eval "$(zephyr load)"
 ```
+
+#### Force Shell Type
+
+You can override automatic detection with the `--shell` flag:
+
+```bash
+# Force Bash output (even when running in ZSH)
+zephyr load --shell=bash
+
+# Force ZSH output (even when running in Bash)
+zephyr load --shell=zsh
+
+# Generate a Bash script from a ZSH environment
+zephyr load --shell=bash > /tmp/modules.sh
+```
+
+**Note:** Environment variables use the `ZSH_MODULE_*` prefix for historical reasons, but work perfectly in both ZSH and Bash.
 
 ### Verify Installation
 

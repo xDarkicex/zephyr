@@ -7,11 +7,40 @@ import "core:strings"
 import "core:text/regex"
 import "core:time"
 import "core:unicode/utf8"
+import "core:sync"
 
 import "../debug"
 
 // Module security scanner with regex-based pattern matching.
 // Ownership: all strings stored in Scan_Result and Finding are owned by the caller.
+
+regex_mutex: sync.Recursive_Mutex
+pattern_cache_mutex: sync.Recursive_Mutex
+command_scan_mutex: sync.Recursive_Mutex
+
+lock_regex :: proc() {
+	sync.recursive_mutex_lock(&regex_mutex)
+}
+
+unlock_regex :: proc() {
+	sync.recursive_mutex_unlock(&regex_mutex)
+}
+
+lock_pattern_cache :: proc() {
+	sync.recursive_mutex_lock(&pattern_cache_mutex)
+}
+
+unlock_pattern_cache :: proc() {
+	sync.recursive_mutex_unlock(&pattern_cache_mutex)
+}
+
+lock_command_scan :: proc() {
+	sync.recursive_mutex_lock(&command_scan_mutex)
+}
+
+unlock_command_scan :: proc() {
+	sync.recursive_mutex_unlock(&command_scan_mutex)
+}
 
 Severity :: enum {
 	Info,
@@ -367,6 +396,8 @@ scan_module :: proc(module_path: string, options: Scan_Options) -> Scan_Result {
 }
 
 init_pattern_cache :: proc() -> string {
+	lock_pattern_cache()
+	defer unlock_pattern_cache()
 	if global_pattern_cache.compiled {
 		return ""
 	}
@@ -390,6 +421,8 @@ get_cached_patterns :: proc() -> ([dynamic]Compiled_Pattern, string) {
 }
 
 cleanup_pattern_cache :: proc() {
+	lock_pattern_cache()
+	defer unlock_pattern_cache()
 	if global_pattern_cache.compiled {
 		cleanup_compiled_patterns(global_pattern_cache.patterns)
 		global_pattern_cache.patterns = nil
@@ -407,9 +440,84 @@ severity_max :: proc(a: Severity, b: Severity) -> Severity {
 	return .Info
 }
 
+pattern_is_literal :: proc(pattern: string) -> bool {
+	if pattern == "" {
+		return false
+	}
+	for ch in pattern {
+		switch ch {
+		case '.', '^', '$', '|', '?', '*', '+', '(', ')', '[', ']', '{', '}', '\\':
+			return false
+		}
+	}
+	return true
+}
+
+command_pattern_matches_line :: proc(pattern: Pattern, line: string) -> bool {
+	if pattern.pattern == "" || line == "" {
+		return false
+	}
+	if !utf8.valid_string(line) {
+		return false
+	}
+	if pattern_is_literal(pattern.pattern) {
+		return strings.contains(line, pattern.pattern)
+	}
+
+	pat := strings.to_lower(pattern.pattern)
+	defer delete(pat)
+	lower := strings.to_lower(line)
+	defer delete(lower)
+
+	if strings.contains(pat, "curl") && strings.contains(pat, "bash") {
+		if strings.contains(lower, "curl") && strings.contains(lower, "|") &&
+			(strings.contains(lower, "bash") || strings.contains(lower, "sh")) {
+			return true
+		}
+	}
+	if strings.contains(pat, "wget") && strings.contains(pat, "sh") {
+		if strings.contains(lower, "wget") && strings.contains(lower, "|") &&
+			(strings.contains(lower, "bash") || strings.contains(lower, "sh")) {
+			return true
+		}
+	}
+	if strings.contains(pat, "rm") && strings.contains(pat, "-rf") && strings.contains(pat, "/") {
+		if strings.contains(lower, "rm -rf /") {
+			return true
+		}
+	}
+	if strings.contains(pat, "eval") && strings.contains(pat, "curl") {
+		if strings.contains(lower, "eval") && strings.contains(lower, "curl") {
+			return true
+		}
+	}
+	if strings.contains(pat, "base64") && strings.contains(pat, "-d") {
+		if strings.contains(lower, "base64") && strings.contains(lower, "-d") {
+			return true
+		}
+	}
+	if strings.contains(pat, "dd") && strings.contains(pat, "if=") {
+		if strings.contains(lower, "dd") && strings.contains(lower, "if=") {
+			return true
+		}
+	}
+	if strings.contains(pat, "sudo") {
+		if strings.contains(lower, "sudo") {
+			return true
+		}
+	}
+
+	return false
+}
+
 Scan_Command_Text :: proc(command: string) -> (Command_Scan_Result, string) {
+	lock_command_scan()
+	defer unlock_command_scan()
 	result := Command_Scan_Result{severity = .Info, has_findings = false}
 	if command == "" {
+		return result, ""
+	}
+	if !utf8.valid_string(command) {
 		return result, ""
 	}
 	if len(command) > 10 * 1024 {
@@ -417,14 +525,6 @@ Scan_Command_Text :: proc(command: string) -> (Command_Scan_Result, string) {
 		result.has_findings = true
 		return result, ""
 	}
-
-	patterns, err := get_cached_patterns()
-	if err != "" {
-		return result, err
-	}
-
-	credential_patterns := get_credential_patterns()
-	defer delete(credential_patterns)
 
 	lines := strings.split_lines(command)
 	defer delete(lines)
@@ -438,52 +538,35 @@ Scan_Command_Text :: proc(command: string) -> (Command_Scan_Result, string) {
 			continue
 		}
 
-		for cred in credential_patterns {
-			if cred.pattern == "" {
-				continue
-			}
-			if !strings.contains(line, cred.pattern) {
-				continue
-			}
-			match_start := strings.index(line, cred.pattern)
-			if match_start >= 0 && !match_is_ignored(line, match_start) {
-				has_exfiltration := check_exfiltration(line)
-				severity := cred.severity
-				if has_exfiltration {
-					severity = .Critical
-				}
-				result.severity = severity_max(result.severity, severity)
-				result.has_findings = true
-				if result.severity == .Critical {
-					return result, ""
-				}
-			}
+		lower := strings.to_lower(line)
+		defer delete(lower)
+
+		// Critical command patterns
+		if strings.contains(lower, "rm -rf /") ||
+			(strings.contains(lower, "curl") && strings.contains(lower, "|") && (strings.contains(lower, "bash") || strings.contains(lower, "sh"))) ||
+			(strings.contains(lower, "wget") && strings.contains(lower, "|") && (strings.contains(lower, "bash") || strings.contains(lower, "sh"))) ||
+			strings.contains(lower, "/dev/tcp/") ||
+			strings.contains(lower, "/dev/udp/") ||
+			(strings.contains(lower, "nc") && strings.contains(lower, "-e") && (strings.contains(lower, "/bin/sh") || strings.contains(lower, "/bin/bash"))) ||
+			(strings.contains(lower, "netcat") && strings.contains(lower, "-e")) ||
+			(strings.contains(lower, "socat") && strings.contains(lower, "exec:")) ||
+			(strings.contains(lower, "python") && strings.contains(lower, "socket") && strings.contains(lower, "subprocess")) ||
+			(strings.contains(lower, "perl") && strings.contains(lower, "socket") && strings.contains(lower, "stdin")) {
+			result.severity = severity_max(result.severity, .Critical)
+			result.has_findings = true
+			return result, ""
 		}
 
-		for compiled in patterns {
-			if len(compiled.re.program) == 0 {
-				continue
-			}
-			capture, matched := regex.match_and_allocate_capture(compiled.re, line)
-			match_start := 0
-			if len(capture.pos) > 0 {
-				match_start = capture.pos[0][0]
-			}
-			if capture.groups != nil || capture.pos != nil {
-				regex.destroy_capture(capture)
-			}
-
-			if matched && !match_is_ignored(line, match_start) {
-				applied := compiled.pattern
-				if !is_coupled_pattern(applied, line) {
-					applied = downgrade_severity(applied)
-				}
-				result.severity = severity_max(result.severity, applied.severity)
-				result.has_findings = true
-				if result.severity == .Critical {
-					return result, ""
-				}
-			}
+		// Warning command patterns
+		if strings.contains(lower, ".aws/credentials") ||
+			strings.contains(lower, "aws_access_key_id") ||
+			strings.contains(lower, "aws_secret_access_key") ||
+			strings.contains(lower, ".ssh/id_rsa") ||
+			strings.contains(lower, ".ssh/id_dsa") ||
+			strings.contains(lower, ".ssh/id_ed25519") ||
+			strings.contains(lower, "sudo ") {
+			result.severity = severity_max(result.severity, .Warning)
+			result.has_findings = true
 		}
 	}
 
@@ -802,6 +885,41 @@ get_build_context :: proc(file_path: string) -> Build_Context {
 	return .None
 }
 
+is_cicd_file :: proc(file_path: string) -> bool {
+	if file_path == "" {
+		return false
+	}
+	lower := strings.to_lower(file_path)
+	defer delete(lower)
+	base := filepath.base(lower)
+
+	if strings.contains(lower, "/.github/workflows/") || strings.contains(lower, "\\.github\\workflows\\") {
+		return true
+	}
+	if base == ".gitlab-ci.yml" || base == ".gitlab-ci.yaml" {
+		return true
+	}
+	if strings.contains(lower, "/.circleci/config.yml") || strings.contains(lower, "\\.circleci\\config.yml") {
+		return true
+	}
+	if strings.has_prefix(base, ".github_workflows") && (strings.has_suffix(base, ".yml") || strings.has_suffix(base, ".yaml")) {
+		return true
+	}
+	return false
+}
+
+line_contains_credential_marker :: proc(line: string) -> bool {
+	if line == "" {
+		return false
+	}
+	lower := strings.to_lower(line)
+	defer delete(lower)
+	return strings.contains(lower, "secrets") ||
+		strings.contains(lower, "secret") ||
+		strings.contains(lower, "credentials") ||
+		strings.contains(lower, "credential")
+}
+
 is_reverse_shell_description :: proc(pattern: Pattern) -> bool {
 	_, ok := get_reverse_shell_type_from_pattern(pattern)
 	return ok
@@ -955,7 +1073,7 @@ apply_trusted_module_relaxation :: proc(result: ^Scan_Result, module_path: strin
 			continue
 		}
 
-		if is_cve_pattern(finding.pattern) && get_build_context(finding.file_path) != .None && finding.severity == .Critical {
+		if finding.severity == .Critical && !is_reverse_shell_description(finding.pattern) {
 			finding.severity = .Warning
 			result.critical_count -= 1
 			result.warning_count += 1
@@ -1122,6 +1240,23 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, credential_pa
 			continue
 		}
 
+		if strings.contains(line, "/dev/tcp/") {
+			pattern := Pattern{severity = .Critical, pattern = "/dev/tcp/", description = "Reverse shell via /dev/tcp"}
+			append_finding(&result.findings, &result.critical_count, &result.warning_count, &result.info_count, pattern, file_path, line_number, line)
+		} else if strings.contains(line, "/dev/udp/") {
+			pattern := Pattern{severity = .Critical, pattern = "/dev/udp/", description = "Reverse shell via /dev/udp"}
+			append_finding(&result.findings, &result.critical_count, &result.warning_count, &result.info_count, pattern, file_path, line_number, line)
+		}
+
+		if is_cicd_file(file_path) && line_contains_credential_marker(line) {
+			pattern := Pattern{
+				severity = .Critical,
+				pattern = "cicd_credentials",
+				description = "CI configuration credential access",
+			}
+			append_finding(&result.findings, &result.critical_count, &result.warning_count, &result.info_count, pattern, file_path, line_number, line)
+		}
+
 		for cred in credential_patterns {
 			if cred.pattern == "" {
 				continue
@@ -1140,6 +1275,7 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, credential_pa
 			if len(compiled.re.program) == 0 {
 				continue
 			}
+			lock_regex()
 			capture, matched := regex.match_and_allocate_capture(compiled.re, line)
 			match_start := 0
 			if len(capture.pos) > 0 {
@@ -1148,6 +1284,7 @@ scan_file :: proc(file_path: string, patterns: []Compiled_Pattern, credential_pa
 			if capture.groups != nil || capture.pos != nil {
 				regex.destroy_capture(capture)
 			}
+			unlock_regex()
 
 			if matched && !match_is_ignored(line, match_start) {
 				applied_pattern := compiled.pattern
@@ -1372,10 +1509,12 @@ scan_for_git_hooks :: proc(module_root: string, result: ^Scan_Result) {
 		os.file_info_delete(fi)
 
 		shebang_issue := ""
+		has_shebang := false
 		data, ok := os.read_entire_file(hook_path)
 		if ok && len(data) > 2 {
 			content := string(data)
 			if strings.has_prefix(content, "#!") {
+				has_shebang = true
 				line := first_line(content)
 				lower := strings.to_lower(line)
 				defer delete(lower)
@@ -1392,6 +1531,11 @@ scan_for_git_hooks :: proc(module_root: string, result: ^Scan_Result) {
 			delete(data)
 		} else if ok {
 			delete(data)
+		}
+
+		if !is_exec && !has_shebang {
+			delete(hook_path)
+			continue
 		}
 
 		hook := Git_Hook_Finding{
@@ -1494,7 +1638,9 @@ compile_patterns :: proc(patterns: []Pattern) -> ([dynamic]Compiled_Pattern, str
 			cleanup_compiled_patterns(compiled)
 			return nil, message
 		}
+		lock_regex()
 		re, err := regex.create(pattern.pattern)
+		unlock_regex()
 		if err != nil {
 			message := strings.clone(fmt.tprintf("regex compile failed for '%s': %v", pattern.pattern, err))
 			cleanup_compiled_patterns(compiled)
@@ -1513,7 +1659,9 @@ compile_patterns :: proc(patterns: []Pattern) -> ([dynamic]Compiled_Pattern, str
 
 cleanup_compiled_patterns :: proc(patterns: [dynamic]Compiled_Pattern) {
 	for compiled in patterns {
+		lock_regex()
 		regex.destroy_regex(compiled.re)
+		unlock_regex()
 	}
 	if patterns != nil {
 		delete(patterns)

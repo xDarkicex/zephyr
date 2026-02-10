@@ -6,9 +6,18 @@ import "core:strings"
 import "core:path/filepath"
 import "../manifest"
 
-// emit generates shell code for sourcing modules in dependency order
+_emit_config: Shell_Config
+
+set_emit_config :: proc(config: Shell_Config) {
+    _emit_config = config
+    reset_shell_backend_cache()
+}
+
+get_emit_config :: proc() -> Shell_Config {
+    return _emit_config
+}
+
 emit :: proc(modules: [dynamic]manifest.Module) {
-    // Use optimized batch emission for large module sets
     if len(modules) > 20 {
         emit_batch_optimized(modules)
     } else {
@@ -152,8 +161,11 @@ build_pre_load_hook :: proc(module: manifest.Module) -> string {
         return fmt.tprintf("# WARNING: Skipping unsafe pre-load hook name: %s\n\n", hook_name)
     }
     
-    return fmt.tprintf("# Pre-load hook for %s\nif typeset -f %s >/dev/null 2>&1; then\n    %s\nelse\n    echo \"Warning: Pre-load hook '%s' not found for module %s\" >&2\nfi\n\n", 
-                      module.name, hook_name, hook_name, hook_name, module.name)
+    backend := get_shell_backend(&_emit_config)
+    fn_check := backend.function_exists_check(hook_name)
+    
+    return fmt.tprintf("# Pre-load hook for %s\nif %s >/dev/null 2>&1; then\n    %s\nelse\n    echo \"Warning: Pre-load hook '%s' not found for module %s\" >&2\nfi\n\n", 
+                      module.name, fn_check, hook_name, hook_name, module.name)
 }
 
 // build_post_load_hook builds the post-load hook code
@@ -164,8 +176,11 @@ build_post_load_hook :: proc(module: manifest.Module) -> string {
         return fmt.tprintf("# WARNING: Skipping unsafe post-load hook name: %s\n\n", hook_name)
     }
     
-    return fmt.tprintf("# Post-load hook for %s\nif typeset -f %s >/dev/null 2>&1; then\n    %s\nelse\n    echo \"Warning: Post-load hook '%s' not found for module %s\" >&2\nfi\n\n", 
-                      module.name, hook_name, hook_name, hook_name, module.name)
+    backend := get_shell_backend(&_emit_config)
+    fn_check := backend.function_exists_check(hook_name)
+    
+    return fmt.tprintf("# Post-load hook for %s\nif %s >/dev/null 2>&1; then\n    %s\nelse\n    echo \"Warning: Post-load hook '%s' not found for module %s\" >&2\nfi\n\n", 
+                      module.name, fn_check, hook_name, hook_name, module.name)
 }
 
 // build_source_file_code builds the source file code
@@ -282,18 +297,18 @@ emit_pre_load_hook :: proc(module: manifest.Module) {
     
     fmt.printf("# Pre-load hook for %s\n", module.name)
     
-    // Safety check: verify the function exists before calling it
-    // This prevents errors if the hook function is not defined
     hook_name := strings.trim_space(module.hooks.pre_load)
     
-    // Validate hook name contains only safe characters (alphanumeric, underscore, dash)
     if !is_safe_hook_name(hook_name) {
         fmt.printf("# WARNING: Skipping unsafe pre-load hook name: %s\n", hook_name)
         fmt.println()
         return
     }
     
-    fmt.printf("if typeset -f %s >/dev/null 2>&1; then\n", hook_name)
+    backend := get_shell_backend(&_emit_config)
+    fn_check := backend.function_exists_check(hook_name)
+    
+    fmt.printf("if %s >/dev/null 2>&1; then\n", fn_check)
     fmt.printf("    %s\n", hook_name)
     fmt.printf("else\n")
     fmt.printf("    echo \"Warning: Pre-load hook '%s' not found for module %s\" >&2\n", hook_name, module.name)
@@ -375,17 +390,18 @@ emit_post_load_hook :: proc(module: manifest.Module) {
     
     fmt.printf("# Post-load hook for %s\n", module.name)
     
-    // Safety check: verify the function exists before calling it
     hook_name := strings.trim_space(module.hooks.post_load)
     
-    // Validate hook name contains only safe characters
     if !is_safe_hook_name(hook_name) {
         fmt.printf("# WARNING: Skipping unsafe post-load hook name: %s\n", hook_name)
         fmt.println()
         return
     }
     
-    fmt.printf("if typeset -f %s >/dev/null 2>&1; then\n", hook_name)
+    backend := get_shell_backend(&_emit_config)
+    fn_check := backend.function_exists_check(hook_name)
+    
+    fmt.printf("if %s >/dev/null 2>&1; then\n", fn_check)
     fmt.printf("    %s\n", hook_name)
     fmt.printf("else\n")
     fmt.printf("    echo \"Warning: Post-load hook '%s' not found for module %s\" >&2\n", hook_name, module.name)

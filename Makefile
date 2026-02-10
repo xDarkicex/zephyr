@@ -7,28 +7,45 @@
 BINARY := zephyr
 
 # Optional libgit2 flags (auto-detected via pkg-config)
-LIBGIT2_LIBS ?= $(shell pkg-config --libs libgit2 2>/dev/null)
-ifneq ($(strip $(LIBGIT2_LIBS)),)
+# Note: Odin's `foreign import "system:git2"` already links -lgit2.
+# We only need library search paths/other flags here to avoid duplicate -lgit2 warnings.
+LIBGIT2_LIBS ?= $(shell pkg-config --libs-only-L --libs-only-other libgit2 2>/dev/null)
+LIBGIT2_FOUND := $(shell pkg-config --exists libgit2 2>/dev/null && echo yes)
+ifneq ($(strip $(LIBGIT2_FOUND)),)
 LIBGIT2_FLAGS :=
 endif
 
 # Optional libmagic flags (auto-detected via pkg-config)
-LIBMAGIC_LIBS ?= $(shell pkg-config --libs libmagic 2>/dev/null)
-ifneq ($(strip $(LIBMAGIC_LIBS)),)
+# Odin links -lmagic; pass only search paths/other flags.
+LIBMAGIC_LIBS ?= $(shell pkg-config --libs-only-L --libs-only-other libmagic 2>/dev/null)
+LIBMAGIC_FOUND := $(shell pkg-config --exists libmagic 2>/dev/null && echo yes)
+ifneq ($(strip $(LIBMAGIC_FOUND)),)
 LIBMAGIC_FLAGS := -define:ZEPHYR_HAS_MAGIC=true
 else
 LIBMAGIC_FLAGS := -define:ZEPHYR_HAS_MAGIC=false
 endif
 
 # OpenSSL (required)
-OPENSSL_LIBS ?= $(shell pkg-config --libs openssl 2>/dev/null)
-ifneq ($(strip $(OPENSSL_LIBS)),)
+# Odin links -lssl/-lcrypto; pass only search paths/other flags.
+OPENSSL_LIBS ?= $(shell pkg-config --libs-only-L --libs-only-other openssl 2>/dev/null)
+OPENSSL_FOUND := $(shell pkg-config --exists openssl 2>/dev/null && echo yes)
+ifneq ($(strip $(OPENSSL_FOUND)),)
 OPENSSL_FLAGS := -define:ZEPHYR_HAS_OPENSSL=true
 else
 $(error OpenSSL not found - install OpenSSL (brew install openssl / apt install libssl-dev) or set OPENSSL_LIBS)
 endif
 
-LINKER_FLAGS := $(strip $(LIBGIT2_LIBS) $(LIBMAGIC_LIBS) $(OPENSSL_LIBS))
+# libcurl (required)
+# Odin links -lcurl; pass only search paths/other flags.
+LIBCURL_LIBS ?= $(shell pkg-config --libs-only-L --libs-only-other libcurl 2>/dev/null)
+LIBCURL_FOUND := $(shell pkg-config --exists libcurl 2>/dev/null && echo yes)
+ifneq ($(strip $(LIBCURL_FOUND)),)
+LIBCURL_FLAGS := -define:ZEPHYR_HAS_CURL=true
+else
+$(error libcurl not found - install curl (brew install curl / apt install libcurl4-openssl-dev) or set LIBCURL_LIBS)
+endif
+
+LINKER_FLAGS := $(strip $(LIBGIT2_LIBS) $(LIBMAGIC_LIBS) $(OPENSSL_LIBS) $(LIBCURL_LIBS))
 ifneq ($(LINKER_FLAGS),)
 EXTRA_LINKER_FLAGS := -extra-linker-flags:"$(LINKER_FLAGS)"
 endif
@@ -78,7 +95,7 @@ clean: ## Remove build artifacts
 
 test: build ## Run test suite
 	@echo "$(BLUE)Running tests...$(NC)"
-	@odin test test $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) -define:ZEPHYR_TEST_SIGNING_KEY=true
+	@odin test test $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) -define:ZEPHYR_TEST_SIGNING_KEY=true
 	@echo "$(GREEN)✓ Tests passed$(NC)"
 
 benchmark: build ## Run performance benchmark
@@ -102,12 +119,12 @@ run: build ## Build and run with test modules
 
 dev: ## Build with debug flags
 	@echo "$(BLUE)Building $(BINARY) in debug mode...$(NC)"
-	@odin build src -o:none -debug -out:$(BINARY) $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS)
+	@odin build src -o:none -debug -out:$(BINARY) $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS)
 	@echo "$(GREEN)✓ Debug build complete$(NC)"
 
 check: ## Validate code (odin check)
 	@echo "$(BLUE)Checking code...$(NC)"
-	@odin check src $(OPENSSL_FLAGS)
+	@odin check src $(OPENSSL_FLAGS) $(LIBCURL_FLAGS)
 	@echo "$(GREEN)✓ Code check passed$(NC)"
 
 fmt: ## Format code (if odin fmt exists)

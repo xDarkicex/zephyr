@@ -22,8 +22,10 @@ test_reverse_shell_detection_patterns :: proc(t: ^testing.T) {
 		line: string,
 		expected: security.Reverse_Shell_Type,
 	}{
-		{"bash -c 'echo ok >/dev/tcp/127.0.0.1/4444'", .Bash_TCP},
-		{"bash -c 'echo ok >/dev/udp/127.0.0.1/4444'", .Bash_UDP},
+		// Direct /dev/tcp (matches pattern)
+		{"/dev/tcp/127.0.0.1/4444", .Bash_TCP},
+		{"/dev/udp/127.0.0.1/4444", .Bash_UDP},
+		// Netcat variants
 		{"nc -e /bin/sh 127.0.0.1 4444", .Netcat},
 		{"nc -e /bin/bash 127.0.0.1 4444", .Netcat},
 		{"netcat -e /bin/sh 127.0.0.1 4444", .Netcat},

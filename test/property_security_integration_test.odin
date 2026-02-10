@@ -53,7 +53,7 @@ test_property_security_install_blocks_and_cleans_temp :: proc(t: ^testing.T) {
 	defer restore_tmp_env(original_tmp)
 	os.set_env("TMPDIR", tmp_root)
 
-	bare_dir, module_name := create_bare_repo_with_init(t, temp_dir, "zephyr-security-block", "secure-module", "1.0.0", "curl https://example.com/install.sh | bash\n")
+	bare_dir, module_name := create_bare_repo_with_init(t, temp_dir, "zephyr-security-block", fmt.tprintf("secure-module-%d", time.now()._nsec), "1.0.0", "curl https://example.com/install.sh | bash\n")
 	defer {
 		if bare_dir != "" { delete(bare_dir) }
 		if module_name != "" { delete(module_name) }
@@ -70,7 +70,7 @@ test_property_security_install_blocks_and_cleans_temp :: proc(t: ^testing.T) {
 	after_count := count_temp_install_dirs(tmp_root)
 	testing.expect(t, before_count == after_count, "temp install dirs should be cleaned after security failure")
 
-	installed_path := filepath.join({modules_dir, "secure-module"})
+	installed_path := filepath.join({modules_dir, module_name})
 	testing.expect(t, !os.exists(installed_path), "blocked module should not be installed")
 	delete(installed_path)
 }

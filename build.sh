@@ -34,12 +34,17 @@ if ! command -v odin &> /dev/null; then
     exit 1
 fi
 
-# Detect libgit2 via pkg-config (or use LIBGIT2_LIBS override)
+# Detect libgit2 via pkg-config (or use LIBGIT2_LIBS override).
+# Note: Odin's `foreign import "system:git2"` already links -lgit2.
+# We only need library search paths here to avoid duplicate -lgit2 warnings.
 if [ -n "${LIBGIT2_LIBS:-}" ]; then
-    LINKER_FLAGS="${LINKER_FLAGS} ${LIBGIT2_LIBS}"
-    echo "✓ libgit2 flags from LIBGIT2_LIBS: ${LIBGIT2_LIBS}"
+    # Strip any explicit -lgit2 to avoid duplicate linking.
+    LIBGIT2_LIBS_CLEAN=$(echo "${LIBGIT2_LIBS}" | tr ' ' '\n' | grep -v '^-lgit2$' | tr '\n' ' ')
+    LINKER_FLAGS="${LINKER_FLAGS} ${LIBGIT2_LIBS_CLEAN}"
+    echo "✓ libgit2 flags from LIBGIT2_LIBS: ${LIBGIT2_LIBS_CLEAN}"
 elif command -v pkg-config &> /dev/null; then
-    LIBGIT2_LIBS=$(pkg-config --libs libgit2 2>/dev/null || true)
+    # Use only search paths to avoid duplicate -lgit2.
+    LIBGIT2_LIBS=$(pkg-config --libs-only-L libgit2 2>/dev/null || true)
     if [ -n "${LIBGIT2_LIBS:-}" ]; then
         LINKER_FLAGS="${LINKER_FLAGS} ${LIBGIT2_LIBS}"
         echo "✓ libgit2 detected: ${LIBGIT2_LIBS}"
@@ -95,7 +100,40 @@ else
     exit 1
 fi
 
+# Detect libcurl via pkg-config (or use LIBCURL_LIBS override). libcurl is required.
+if [ -n "${LIBCURL_LIBS:-}" ]; then
+    LINKER_FLAGS="${LINKER_FLAGS} ${LIBCURL_LIBS}"
+    BUILD_FLAGS+=("-define:ZEPHYR_HAS_CURL=true")
+    echo "✓ libcurl flags from LIBCURL_LIBS: ${LIBCURL_LIBS}"
+elif command -v pkg-config &> /dev/null; then
+    LIBCURL_LIBS=$(pkg-config --libs libcurl 2>/dev/null || true)
+    if [ -n "${LIBCURL_LIBS:-}" ]; then
+        LINKER_FLAGS="${LINKER_FLAGS} ${LIBCURL_LIBS}"
+        BUILD_FLAGS+=("-define:ZEPHYR_HAS_CURL=true")
+        echo "✓ libcurl detected: ${LIBCURL_LIBS}"
+    else
+        echo "Error: libcurl not detected. Install libcurl or set LIBCURL_LIBS."
+        echo "  macOS: brew install curl"
+        echo "  Linux: apt install libcurl4-openssl-dev"
+        exit 1
+    fi
+else
+    echo "Error: pkg-config not available. libcurl is required."
+    echo "  Install pkg-config and libcurl, or set LIBCURL_LIBS."
+    exit 1
+fi
+
 if [ -n "${LINKER_FLAGS// }" ]; then
+    # De-duplicate linker flags to avoid ld warnings (e.g., duplicate -lgit2).
+    declare -A _seen_flags=()
+    _deduped_flags=()
+    for _flag in ${LINKER_FLAGS}; do
+        if [ -z "${_seen_flags[${_flag}]:-}" ]; then
+            _seen_flags["${_flag}"]=1
+            _deduped_flags+=("${_flag}")
+        fi
+    done
+    LINKER_FLAGS="${_deduped_flags[*]}"
     BUILD_FLAGS+=("-extra-linker-flags:${LINKER_FLAGS}")
 fi
 

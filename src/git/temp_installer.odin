@@ -93,7 +93,7 @@ scan_source :: proc(url: string) -> (security.Scan_Result, string, string) {
 		return result, "", ""
 	}
 
-	if os.exists(url) && os.is_dir(url) {
+	if os.exists(url) && os.is_dir(url) && !is_bare_git_repo(url) {
 		scan_options := security.Scan_Options{}
 		scan_result := security.scan_module(url, scan_options)
 		return scan_result, "", ""
@@ -145,6 +145,21 @@ scan_source :: proc(url: string) -> (security.Scan_Result, string, string) {
 	scan_options := security.Scan_Options{}
 	scan_result := security.scan_module(temp_dir, scan_options)
 	return scan_result, temp_dir, commit
+}
+
+is_bare_git_repo :: proc(path: string) -> bool {
+	if path == "" {
+		return false
+	}
+	if os.exists(filepath.join({path, ".git"})) {
+		return false
+	}
+	head_path := filepath.join({path, "HEAD"})
+	objects_path := filepath.join({path, "objects"})
+	defer delete(head_path)
+	defer delete(objects_path)
+
+	return os.exists(head_path) && os.exists(objects_path)
 }
 
 // move_to_final moves a temp install into the modules directory.
