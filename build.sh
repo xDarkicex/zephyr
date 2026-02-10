@@ -72,6 +72,29 @@ else
     echo "  Install pkg-config or set LIBMAGIC_LIBS if libmagic is not on the default linker path"
 fi
 
+# Detect OpenSSL via pkg-config (or use OPENSSL_LIBS override). OpenSSL is required.
+if [ -n "${OPENSSL_LIBS:-}" ]; then
+    LINKER_FLAGS="${LINKER_FLAGS} ${OPENSSL_LIBS}"
+    BUILD_FLAGS+=("-define:ZEPHYR_HAS_OPENSSL=true")
+    echo "✓ OpenSSL flags from OPENSSL_LIBS: ${OPENSSL_LIBS}"
+elif command -v pkg-config &> /dev/null; then
+    OPENSSL_LIBS=$(pkg-config --libs openssl 2>/dev/null || true)
+    if [ -n "${OPENSSL_LIBS:-}" ]; then
+        LINKER_FLAGS="${LINKER_FLAGS} ${OPENSSL_LIBS}"
+        BUILD_FLAGS+=("-define:ZEPHYR_HAS_OPENSSL=true")
+        echo "✓ OpenSSL detected: ${OPENSSL_LIBS}"
+    else
+        echo "Error: OpenSSL not detected. Install OpenSSL or set OPENSSL_LIBS."
+        echo "  macOS: brew install openssl"
+        echo "  Linux: apt install libssl-dev"
+        exit 1
+    fi
+else
+    echo "Error: pkg-config not available. OpenSSL is required."
+    echo "  Install pkg-config and OpenSSL, or set OPENSSL_LIBS."
+    exit 1
+fi
+
 if [ -n "${LINKER_FLAGS// }" ]; then
     BUILD_FLAGS+=("-extra-linker-flags:${LINKER_FLAGS}")
 fi

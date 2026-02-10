@@ -20,7 +20,15 @@ else
 LIBMAGIC_FLAGS := -define:ZEPHYR_HAS_MAGIC=false
 endif
 
-LINKER_FLAGS := $(strip $(LIBGIT2_LIBS) $(LIBMAGIC_LIBS))
+# OpenSSL (required)
+OPENSSL_LIBS ?= $(shell pkg-config --libs openssl 2>/dev/null)
+ifneq ($(strip $(OPENSSL_LIBS)),)
+OPENSSL_FLAGS := -define:ZEPHYR_HAS_OPENSSL=true
+else
+$(error OpenSSL not found - install OpenSSL (brew install openssl / apt install libssl-dev) or set OPENSSL_LIBS)
+endif
+
+LINKER_FLAGS := $(strip $(LIBGIT2_LIBS) $(LIBMAGIC_LIBS) $(OPENSSL_LIBS))
 ifneq ($(LINKER_FLAGS),)
 EXTRA_LINKER_FLAGS := -extra-linker-flags:"$(LINKER_FLAGS)"
 endif
@@ -70,7 +78,7 @@ clean: ## Remove build artifacts
 
 test: build ## Run test suite
 	@echo "$(BLUE)Running tests...$(NC)"
-	@odin test test $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS)
+	@odin test test $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS)
 	@echo "$(GREEN)✓ Tests passed$(NC)"
 
 benchmark: build ## Run performance benchmark
@@ -94,12 +102,12 @@ run: build ## Build and run with test modules
 
 dev: ## Build with debug flags
 	@echo "$(BLUE)Building $(BINARY) in debug mode...$(NC)"
-	@odin build src -o:none -debug -out:$(BINARY) $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS)
+	@odin build src -o:none -debug -out:$(BINARY) $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS)
 	@echo "$(GREEN)✓ Debug build complete$(NC)"
 
 check: ## Validate code (odin check)
 	@echo "$(BLUE)Checking code...$(NC)"
-	@odin check src
+	@odin check src $(OPENSSL_FLAGS)
 	@echo "$(GREEN)✓ Code check passed$(NC)"
 
 fmt: ## Format code (if odin fmt exists)

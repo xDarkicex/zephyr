@@ -90,7 +90,8 @@ Zephyr supports a trusted module allowlist to reduce false positives for known f
 
 - [Odin compiler](https://odin-lang.org/docs/install/) (for building from source)
 - libgit2 (required for git-based module management)
-- pkg-config (recommended for auto-detection of libgit2)
+- OpenSSL (required for security scanning and module signing)
+- pkg-config (recommended for auto-detection of dependencies)
 - libmagic (optional, improves binary detection in security scans)
 - ZSH shell
 - macOS or Linux
@@ -122,11 +123,11 @@ See [zsh_plugin/README.md](zsh_plugin/README.md) for detailed instructions for a
 git clone https://github.com/zephyr-systems/zephyr.git
 cd zephyr
 
-# Install libgit2 (examples)
+# Install dependencies (examples)
 # macOS (Homebrew)
-brew install libgit2 pkg-config
+brew install libgit2 pkg-config openssl
 # Ubuntu/Debian
-sudo apt-get install -y libgit2-dev pkg-config
+sudo apt-get install -y libgit2-dev pkg-config libssl-dev
 
 # Build and install (recommended)
 make install
