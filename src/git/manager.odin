@@ -114,16 +114,40 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 	source := parse_install_source(url, options.allow_local)
 	defer cleanup_install_source(&source)
 	if !source.valid {
+		security.log_module_install("", url, false, "invalid install source", false)
 		return false, format_manager_error(.Invalid_URL, source.error, url, "parse install source")
 	}
 
 	source_type := detect_module_source(source)
+	is_signed := source_type == .Signed_Tarball
+	audit_name := derive_audit_module_name(source.url, "")
+	defer {
+		if audit_name != "" {
+			delete(audit_name)
+		}
+	}
+
+	if !security.require_permission(.Install, "install module") {
+		security.log_module_install(audit_name, source.url, false, "permission denied", is_signed)
+		return false, format_manager_error(.Validation_Failed, "Permission denied", url, "install")
+	}
+	if options.unsafe && !security.require_permission(.Use_Unsafe, "use --unsafe") {
+		security.log_module_install(audit_name, source.url, false, "permission denied", is_signed)
+		return false, format_manager_error(.Validation_Failed, "Permission denied", url, "unsafe")
+	}
+	if !is_signed && !security.require_permission(.Install_Unsigned, "install unsigned module") {
+		security.log_module_install(audit_name, source.url, false, "permission denied", is_signed)
+		return false, format_manager_error(.Validation_Failed, "Permission denied", url, "install unsigned")
+	}
+
 	if source_type == .Signed_Tarball {
 		tar_result := install_from_tarball(source, options)
 		defer cleanup_tarball_install_result(&tar_result)
 		if !tar_result.success {
+			security.log_module_install(audit_name, source.url, false, tar_result.message, true)
 			return false, format_manager_error(.Clone_Failed, tar_result.message, url, "signed install")
 		}
+		security.log_module_install(audit_name, source.url, true, tar_result.message, true)
 		message := tar_result.message
 		tar_result.message = ""
 		return true, message
@@ -141,11 +165,15 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 		name_result := parse_module_name_from_url(source.url)
 		defer cleanup_url_parse_result(&name_result)
 		if !name_result.valid {
+			security.log_module_install(audit_name, source.url, false, "invalid module name", false)
 			return false, format_manager_error(.Invalid_Module_Name, name_result.error, url, "parse module name")
 		}
 		module_name = name_result.module_name
 		name_result.module_name = ""
 		owned_name = true
+		if audit_name == "" {
+			audit_name = strings.clone(module_name)
+		}
 	}
 
 	debug.debug_info("Installing module: %s", module_name)
@@ -170,6 +198,7 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 	install_result := install_to_temp(source.url, module_name)
 	defer cleanup_temp_install_result(&install_result)
 	if !install_result.success {
+		security.log_module_install(audit_name, source.url, false, install_result.error_message, false)
 		return false, format_manager_error(.Clone_Failed, install_result.error_message, module_name, "git clone")
 	}
 
@@ -182,6 +211,7 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 	defer security.cleanup_scan_result(&scan_result)
 	if !scan_result.success {
 		cleanup_temp(install_result.temp_path)
+		security.log_module_install(audit_name, source.url, false, scan_result.error_message, false)
 		return false, format_manager_error(.Validation_Failed, scan_result.error_message, module_name, "security scan")
 	}
 	if scan_result.critical_count > 0 || scan_result.warning_count > 0 {
@@ -191,11 +221,13 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 	}
 	if security.should_block_install(&scan_result, options.unsafe) {
 		cleanup_temp(install_result.temp_path)
+		security.log_module_install(audit_name, source.url, false, "Critical security issues detected", false)
 		return false, format_manager_error(.Validation_Failed, "Critical security issues detected. Use --unsafe to override.", module_name, "security scan")
 	}
 	if scan_result.warning_count > 0 && !options.unsafe {
 		if !security.prompt_user_for_warnings(&scan_result, module_name) {
 			cleanup_temp(install_result.temp_path)
+			security.log_module_install(audit_name, source.url, false, "Installation cancelled by user", false)
 			return false, format_manager_error(.Validation_Failed, "Installation cancelled by user", module_name, "security scan")
 		}
 	}
@@ -227,6 +259,7 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 
 	if !validation.valid {
 		cleanup_temp(install_result.temp_path)
+		security.log_module_install(audit_name, source.url, false, "manifest validation failed", false)
 		return false, format_manager_validation_error(&validation, module_name)
 	}
 
@@ -246,6 +279,7 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 
 		if os.exists(final_path) && !options.force {
 			cleanup_temp(install_result.temp_path)
+			security.log_module_install(audit_name, source.url, false, "module already exists", false)
 			return false, format_manager_error(.Already_Exists, "module already exists", module_name, "install")
 		}
 	}
@@ -259,6 +293,7 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 		if move_info != "" {
 			delete(move_info)
 		}
+		security.log_module_install(audit_name, source.url, false, "move to final failed", false)
 		return false, formatted
 	}
 
@@ -266,6 +301,7 @@ install_module :: proc(url: string, options: Manager_Options) -> (bool, string) 
 		delete(move_info)
 	}
 
+	security.log_module_install(audit_name, source.url, true, "installed", false)
 	return true, format_install_success(module_name)
 }
 
@@ -353,10 +389,16 @@ uninstall_module :: proc(module_name: string, options: Manager_Options) -> (bool
 		return false, format_manager_error(.Invalid_Module_Name, "module name is required", "", "uninstall")
 	}
 
+	if !security.require_permission(.Uninstall, "uninstall module") {
+		security.log_module_uninstall(module_name, false, "permission denied")
+		return false, format_manager_error(.Validation_Failed, "Permission denied", module_name, "uninstall")
+	}
+
 	modules_dir := loader.get_modules_dir()
 	defer delete(modules_dir)
 
 	if modules_dir == "" || !os.exists(modules_dir) {
+		security.log_module_uninstall(module_name, false, "modules directory not found")
 		return false, format_manager_error(.Not_Found, "modules directory not found", module_name, "uninstall")
 	}
 
@@ -367,6 +409,7 @@ uninstall_module :: proc(module_name: string, options: Manager_Options) -> (bool
 	defer delete(module_path)
 
 	if !os.exists(module_path) {
+		security.log_module_uninstall(module_name, false, "module not found")
 		return false, format_manager_error(.Not_Found, "module not found", module_name, "uninstall")
 	}
 
@@ -379,6 +422,7 @@ uninstall_module :: proc(module_name: string, options: Manager_Options) -> (bool
 			if message != "" {
 				delete(message)
 			}
+			security.log_module_uninstall(module_name, false, "dependents found")
 			return false, formatted
 		}
 		if dependents != nil {
@@ -390,10 +434,33 @@ uninstall_module :: proc(module_name: string, options: Manager_Options) -> (bool
 
 	cleanup_temp(module_path)
 	if os.exists(module_path) {
+		security.log_module_uninstall(module_name, false, "failed to remove module directory")
 		return false, format_manager_error(.Cleanup_Failed, "failed to remove module directory", module_name, "uninstall")
 	}
 
+	security.log_module_uninstall(module_name, true, "uninstalled")
 	return true, format_uninstall_success(module_name)
+}
+
+derive_audit_module_name :: proc(source_url: string, fallback: string) -> string {
+	if fallback != "" {
+		return strings.clone(fallback)
+	}
+	if source_url == "" {
+		return ""
+	}
+	base := filepath.base(source_url)
+	trimmed := strings.trim_suffix(base, ".git")
+	trimmed = strings.trim_suffix(trimmed, ".tar.gz")
+	if strings.has_prefix(trimmed, "zephyr-module-") {
+		trimmed = strings.trim_prefix(trimmed, "zephyr-module-")
+	} else if strings.has_prefix(trimmed, "zephyr-") {
+		trimmed = strings.trim_prefix(trimmed, "zephyr-")
+	}
+	if trimmed == "" {
+		return ""
+	}
+	return strings.clone(trimmed)
 }
 
 find_module_dependents :: proc(modules_dir: string, target_name: string) -> [dynamic]string {

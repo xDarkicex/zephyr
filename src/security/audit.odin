@@ -137,6 +137,69 @@ log_module_install :: proc(module: string, source: string, success: bool, reason
 	log_audit_event(event)
 }
 
+log_module_uninstall :: proc(module: string, success: bool, reason: string) {
+	session, ok := get_current_session()
+	if !ok {
+		session = Session_Info{
+			session_id = "unknown",
+			agent_id = os.get_env("USER"),
+			agent_type = "human",
+			role = "user",
+		}
+	}
+
+	result := "success"
+	if !success {
+		result = "failed"
+	}
+
+	event := Audit_Event{
+		timestamp = current_timestamp(),
+		session_id = session.session_id,
+		agent_id = session.agent_id,
+		agent_type = session.agent_type,
+		role = session.role,
+		action = "uninstall",
+		module = module,
+		result = result,
+		reason = reason,
+		signature_verified = false,
+	}
+
+	log_audit_event(event)
+}
+
+log_config_modify :: proc(success: bool, reason: string) {
+	session, ok := get_current_session()
+	if !ok {
+		session = Session_Info{
+			session_id = "unknown",
+			agent_id = os.get_env("USER"),
+			agent_type = "human",
+			role = "user",
+		}
+	}
+
+	result := "success"
+	if !success {
+		result = "failed"
+	}
+
+	event := Audit_Event{
+		timestamp = current_timestamp(),
+		session_id = session.session_id,
+		agent_id = session.agent_id,
+		agent_type = session.agent_type,
+		role = session.role,
+		action = "config_modify",
+		result = result,
+		reason = reason,
+		signature_verified = false,
+	}
+
+	log_audit_event(event)
+}
+
 get_session_log_path :: proc(session_id: string, timestamp: string) -> string {
 	home := os.get_env("HOME")
 	defer delete(home)

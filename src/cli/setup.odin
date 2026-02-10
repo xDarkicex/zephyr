@@ -7,6 +7,7 @@ import "core:strings"
 
 import "../colors"
 import "../git"
+import "../security"
 
 setup_already_done :: proc() -> bool {
 	config_path := get_config_path()
@@ -27,14 +28,20 @@ get_config_path :: proc() -> string {
 }
 
 create_config_file :: proc() {
+	if !security.require_permission(.Modify_Config, "modify configuration") {
+		security.log_config_modify(false, "permission denied")
+		return
+	}
 	config_path := get_config_path()
 	if config_path == "" {
+		security.log_config_modify(false, "config path unavailable")
 		return
 	}
 	defer delete(config_path)
 
 	config_dir := filepath.dir(config_path)
 	if config_dir == "" {
+		security.log_config_modify(false, "config directory unavailable")
 		return
 	}
 	defer delete(config_dir)
@@ -43,6 +50,7 @@ create_config_file :: proc() {
 		os.make_directory(config_dir, 0o755)
 	}
 	if !os.exists(config_dir) {
+		security.log_config_modify(false, "failed to create config directory")
 		return
 	}
 
@@ -52,7 +60,17 @@ create_config_file :: proc() {
 [core]
 setup_complete = true
 `
-	os.write_entire_file(config_path, transmute([]u8)config)
+	success := os.write_entire_file(config_path, transmute([]u8)config)
+	if success {
+		security.log_config_modify(true, "config written")
+	} else {
+		security.log_config_modify(false, "failed to write config")
+	}
+}
+
+// Create_Config_File_For_Test exposes config creation for integration tests.
+Create_Config_File_For_Test :: proc() {
+	create_config_file()
 }
 
 run_first_time_setup :: proc() {

@@ -119,8 +119,13 @@ get_security_config_path :: proc() -> string {
 }
 
 create_default_security_config :: proc() {
+	if !require_permission(.Modify_Config, "modify configuration") {
+		log_config_modify(false, "permission denied")
+		return
+	}
 	config_path := get_security_config_path()
 	if config_path == "" {
+		log_config_modify(false, "config path unavailable")
 		return
 	}
 	defer delete(config_path)
@@ -128,6 +133,7 @@ create_default_security_config :: proc() {
 	config_dir := filepath.dir(config_path)
 	defer delete(config_dir)
 	if !ensure_directory(config_dir) {
+		log_config_modify(false, "failed to create config directory")
 		return
 	}
 
@@ -162,5 +168,9 @@ can_modify_config = true
 require_confirmation = false
 `
 
-	_ = os.write_entire_file(config_path, transmute([]byte)config_toml)
+	if os.write_entire_file(config_path, transmute([]byte)config_toml) {
+		log_config_modify(true, "security config written")
+	} else {
+		log_config_modify(false, "failed to write security config")
+	}
 }
