@@ -94,7 +94,7 @@ Zephyr supports a trusted module allowlist to reduce false positives for known f
 - libcurl (required for signed module release discovery)
 - pkg-config (recommended for auto-detection of dependencies)
 - libmagic (optional, improves binary detection in security scans)
-- ZSH shell
+- ZSH shell or Bash shell
 - macOS or Linux
 
 ### Quick Install (Plugin Manager)
