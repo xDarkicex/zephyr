@@ -75,6 +75,11 @@ These are directly ingestible by Wazuh, ELK, and OpenSearch.
 
 See [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md) for schema and SIEM mapping notes.
 
+**Example log line (operations):**
+```json
+{"schema_version":"1.0","@timestamp":"2026-02-10T22:20:49Z","timestamp":"2026-02-10T22:20:49Z","session_id":"session-5","agent_id":"agent-5","agent_type":"cursor","user_name":"z3robit","host_name":"Gentrys-MacBook-Pro.local","role":"agent","action":"install","module":"demo-module","source":"local-test","result":"blocked","reason":"test-seed","event_action":"install","event_outcome":"blocked","event_category":"package","signature_verified":false}
+```
+
 ### Trusted Modules
 Zephyr supports a trusted module allowlist to reduce false positives for known frameworks
 (`oh-my-zsh`, `zinit`, `nvm`, `rbenv`, `pyenv`, `asdf`). You can extend this list via:

@@ -60,3 +60,13 @@ If you use Elastic Common Schema (ECS), you can map:
 ## Retention
 
 Audit logs are pruned by date via `cleanup_old_audit_logs` (default retention: 30 days). Adjust retention in code or via your log shipper.
+
+## macOS Notes (Extended Attributes)
+
+Some macOS setups apply `com.apple.provenance` extended attributes to newly created
+directories, which can block writes to `~/.zephyr/audit/**` with “Operation not permitted”.
+If you see that error, clear the xattr once:
+
+```bash
+xattr -c ~/.zephyr ~/.zephyr/audit ~/.zephyr/audit/operations
+```
