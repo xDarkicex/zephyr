@@ -59,6 +59,17 @@ HTTP_Buffer :: struct {
 	data: [dynamic]u8,
 }
 
+Http_Get_Override :: proc(url: string, headers: []string, timeout_seconds: int) -> HTTP_Result
+http_get_override: Http_Get_Override
+
+set_http_get_override :: proc(override: Http_Get_Override) {
+	http_get_override = override
+}
+
+clear_http_get_override :: proc() {
+	http_get_override = nil
+}
+
 // write_callback appends response data into the buffer.
 write_callback :: proc "c" (ptr: rawptr, size: u64, nmemb: u64, userdata: rawptr) -> u64 {
 	context = runtime.default_context()
@@ -78,6 +89,10 @@ write_callback :: proc "c" (ptr: rawptr, size: u64, nmemb: u64, userdata: rawptr
 // get performs a simple HTTP GET request and returns response body.
 get :: proc(url: string, headers: []string = nil, timeout_seconds: int = 10) -> HTTP_Result {
 	result := HTTP_Result{}
+
+	if http_get_override != nil {
+		return http_get_override(url, headers, timeout_seconds)
+	}
 
 	when !HAS_CURL {
 		result.error = strings.clone("libcurl not available")

@@ -1,14 +1,15 @@
 package test
 
-import "core:c"
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
+import "base:runtime"
 
 import "../src/security"
 import "../src/git"
+import "../src/http"
 
 TEST_DATA :: "zephyr-signing-test"
 TEST_PRIVATE_KEY :: `-----BEGIN PRIVATE KEY-----
@@ -29,33 +30,6 @@ temp_path :: proc(name: string) -> string {
 
 	path := fmt.aprintf("%s/%s", base, name)
 	return path
-}
-
-cstring_buffer :: proc(s: string) -> ([]u8, cstring) {
-	if s == "" do return nil, nil
-	buf := make([]u8, len(s)+1)
-	copy(buf[:len(s)], s)
-	buf[len(s)] = 0
-	return buf, cast(cstring)&buf[0]
-}
-
-run_shell_command :: proc(command: string) -> bool {
-	cmd_buf, cmd_c := cstring_buffer(command)
-	defer if cmd_buf != nil { delete(cmd_buf) }
-	if cmd_c == nil do return false
-	return system(cmd_c) == 0
-}
-
-when ODIN_OS == .Darwin {
-	foreign import libSystem "system:System"
-	foreign libSystem {
-		system :: proc(command: cstring) -> c.int ---
-	}
-} else {
-	foreign import "system:libc"
-	foreign libc {
-		system :: proc(command: cstring) -> c.int ---
-	}
 }
 
 write_temp_file :: proc(path: string, content: string) -> bool {
@@ -209,7 +183,7 @@ test_verify_hash_invalid_format :: proc(t: ^testing.T) {
 	ok := os.write_entire_file(data_path, transmute([]u8)payload)
 	testing.expect(t, ok, "failed to write test data")
 
-	ok = os.write_entire_file(hash_path, transmute([]u8)"")
+	ok = os.write_entire_file(hash_path, make([]u8, 0))
 	testing.expect(t, ok, "failed to write empty hash file")
 
 	valid, err := security.verify_hash(data_path, hash_path)
@@ -250,22 +224,26 @@ test_parse_github_url :: proc(t: ^testing.T) {
 	testing.expect(t, repo2 == "zephyr", "expected repo parsed from ssh url")
 }
 
-shell_escape_single :: proc(s: string) -> string {
-	if s == "" do return strings.clone("")
-	parts := strings.split(s, "'")
-	defer delete(parts)
-	if len(parts) == 1 {
-		return strings.clone(s)
+@(test)
+test_detect_module_source_github_release :: proc(t: ^testing.T) {
+	http.set_http_get_override(proc(url: string, headers: []string, timeout_seconds: int) -> http.HTTP_Result {
+		result := http.HTTP_Result{ok = true, status_code = 200}
+		body := `{"tag_name":"v1.0.0","assets":[{"browser_download_url":"https://github.com/zephyr-systems/zephyr/releases/download/v1.0.0/zephyr-module.tar.gz"}]}`
+		result.body = make([]u8, len(body))
+		copy(result.body[:], transmute([]u8)body)
+		return result
+	})
+	defer http.clear_http_get_override()
+
+	source := git.Install_Source{
+		source_type = .Git_URL,
+		url = strings.clone("https://github.com/zephyr-systems/zephyr"),
+		valid = true,
 	}
-	builder := strings.builder_make()
-	defer strings.builder_destroy(&builder)
-	for part, i in parts {
-		if i > 0 {
-			strings.write_string(&builder, "'\"'\"'")
-		}
-		strings.write_string(&builder, part)
-	}
-	return strings.clone(strings.to_string(builder))
+	defer git.cleanup_install_source(&source)
+
+	source_type := git.detect_module_source(source)
+	testing.expect(t, source_type == .Signed_Tarball, "expected signed tarball detection for release assets")
 }
 
 write_module_files :: proc(module_dir: string, module_name: string, init_contents: string) -> bool {
@@ -353,7 +331,8 @@ create_signed_fixture :: proc(t: ^testing.T, module_name: string, init_contents:
 	key_path := filepath.join({base_dir, "test_key.pem"})
 	testing.expect(t, write_temp_file(key_path, TEST_PRIVATE_KEY), "failed to write test private key")
 
-	sig_path := tarball + ".sig"
+	sig_path := strings.concatenate({tarball, ".sig"})
+	defer delete(sig_path)
 	testing.expect(t, sign_with_openssl(tarball, sig_path, key_path), "failed to sign tarball")
 
 	ok, hash_path := write_hash_file(tarball)
@@ -420,7 +399,7 @@ test_signed_install_tampered_tarball :: proc(t: ^testing.T) {
 		if ok {
 			tampered := make([]u8, len(data)+5)
 			copy(tampered[:len(data)], data)
-			copy(tampered[len(data):], transmute([]u8)"evil")
+			_ = runtime.copy_from_string(tampered[len(data):], "evil")
 			_ = os.write_entire_file(tarball, tampered)
 			delete(tampered)
 		}

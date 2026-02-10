@@ -20,6 +20,86 @@ ParseResult :: struct {
     message: string,
 }
 
+// Toml_Sections is a lightweight map of section -> key -> value for TOML-like files.
+Toml_Sections :: distinct map[string]map[string]string
+
+parse_toml_sections :: proc(file_path: string) -> (Toml_Sections, bool) {
+	if !os.exists(file_path) {
+		return nil, false
+	}
+
+	data, read_ok := os.read_entire_file(file_path)
+	if !read_ok {
+		return nil, false
+	}
+	defer delete(data)
+
+	sections := make(map[string]map[string]string)
+
+	content := string(data)
+	lines := strings.split_lines(content)
+	defer delete(lines)
+
+	current_section := ""
+
+	for line in lines {
+		trimmed := strings.trim_space(line)
+		if len(trimmed) == 0 || strings.has_prefix(trimmed, "#") {
+			continue
+		}
+
+		if strings.has_prefix(trimmed, "[") && strings.has_suffix(trimmed, "]") {
+			current_section = strings.trim(trimmed, "[]")
+			if current_section not_in sections {
+				sections[current_section] = make(map[string]string)
+			}
+			continue
+		}
+
+		if !strings.contains(trimmed, "=") {
+			continue
+		}
+
+		parts := strings.split(trimmed, "=")
+		defer delete(parts)
+		if len(parts) < 2 {
+			continue
+		}
+
+		key := strings.trim_space(parts[0])
+		value_part := strings.join(parts[1:], "=")
+		defer delete(value_part)
+		value := strings.trim_space(value_part)
+
+		if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
+			value = value[1:len(value)-1]
+		}
+
+		if current_section not_in sections {
+			sections[current_section] = make(map[string]string)
+		}
+		sections[current_section][strings.clone(key)] = strings.clone(value)
+	}
+
+	return Toml_Sections(sections), true
+}
+
+delete_toml_sections :: proc(sections: Toml_Sections) {
+	if sections == nil {
+		return
+	}
+
+	for section, pairs in sections {
+		for key, value in pairs {
+			delete(key)
+			delete(value)
+		}
+		delete(section)
+		delete(pairs)
+	}
+	delete(sections)
+}
+
 // parse reads and parses a TOML manifest file into a Module struct
 // Note: This is a simplified implementation until core:encoding/toml is available
 parse :: proc(file_path: string) -> (Module, bool) {

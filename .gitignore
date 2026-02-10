@@ -2,7 +2,7 @@
 # Memory debugging memo (internal development notes)
 MEMORY_DEBUGGING_MEMO.md
 SECURITY_SPEC.md
-
+scripts/
 # Odin build artifacts
 zephyr
 acceptance_test
