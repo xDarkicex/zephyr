@@ -135,6 +135,8 @@ run_first_time_setup :: proc() {
 	fmt.println("")
 
 	create_config_file()
+
+	run_agent_roles_setup()
 }
 
 prompt_yes_no :: proc(question: string, default_yes: bool) -> bool {
@@ -160,4 +162,31 @@ prompt_yes_no :: proc(question: string, default_yes: bool) -> bool {
 	lower := strings.to_lower(response)
 	defer delete(lower)
 	return lower == "y" || lower == "yes"
+}
+
+run_agent_roles_setup :: proc() {
+	fmt.println("")
+	fmt.println(colors.bold("Agent Permissions"))
+	fmt.println("")
+	fmt.println("Zephyr can enforce permissions for AI agents (install, uninstall, config).")
+	fmt.println("This creates ~/.zephyr/security.toml with default roles for user/agent/admin.")
+	fmt.println("")
+
+	if prompt_yes_no("Configure agent permissions?", true) {
+		security.create_default_security_config()
+		fmt.println("")
+		fmt.println("Agent permissions configured.")
+	} else {
+		fmt.println("")
+		fmt.println("Skipped agent permissions setup.")
+	}
+
+	session, ok := security.get_current_session()
+	if ok {
+		fmt.println("")
+		fmt.println("Current session:")
+		fmt.printf("  Agent: %s (%s)\n", session.agent_id, session.agent_type)
+		fmt.printf("  Role: %s\n", session.role)
+		fmt.printf("  Session ID: %s\n", session.session_id)
+	}
 }

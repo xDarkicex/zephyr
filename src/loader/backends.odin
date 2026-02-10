@@ -64,6 +64,7 @@ _cached_backend: ^Shell_Backend = nil
 
 Shell_Config :: struct {
     force_shell: string,
+    zephyr_path: string,
 }
 
 get_shell_backend :: proc(config: ^Shell_Config = nil) -> ^Shell_Backend {

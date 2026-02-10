@@ -4,6 +4,7 @@ import "cli"
 import "colors"
 import "core:fmt"
 import "core:os"
+import "core:path/filepath"
 import "core:strings"
 import "debug"
 import "errors"
@@ -63,7 +64,11 @@ main :: proc() {
 	}
 
 	// Configure shell backend before any emission
-	shell_config := loader.Shell_Config{force_shell = force_shell}
+	zephyr_path := resolve_zephyr_path()
+	shell_config := loader.Shell_Config{
+		force_shell = force_shell,
+		zephyr_path = zephyr_path,
+	}
 	loader.set_emit_config(shell_config)
 
 	debug.debug_info("Processing command: %s", command)
@@ -113,6 +118,24 @@ main :: proc() {
 		print_usage()
 		os.exit(1)
 	}
+}
+
+resolve_zephyr_path :: proc() -> string {
+	if len(os.args) == 0 {
+		return ""
+	}
+	arg0 := os.args[0]
+	if arg0 == "" {
+		return ""
+	}
+	if filepath.is_abs(arg0) {
+		return arg0
+	}
+	cwd := os.get_current_directory()
+	if cwd != "" {
+		return filepath.join({cwd, arg0})
+	}
+	return arg0
 }
 
 // Placeholder functions for CLI commands - will be implemented in Phase 2

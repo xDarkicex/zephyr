@@ -229,7 +229,15 @@ emit_module :: proc(module: manifest.Module) {
 }
 
 build_session_registration_code :: proc() -> string {
-    return `# Agent session registration
+    config := get_emit_config()
+    zephyr_bin := config.zephyr_path
+    escaped := shell_escape_single(zephyr_bin)
+    zephyr_bin_line := "ZEPHYR_BIN=\"\"\n"
+    if escaped != "" {
+        zephyr_bin_line = fmt.tprintf("ZEPHYR_BIN='%s'\n", escaped)
+    }
+
+    return strings.concatenate({`# Agent session registration
 detect_agent_type() {
     if [[ -n "$ANTHROPIC_API_KEY" ]] || [[ -n "$ANTHROPIC_AGENT_ID" ]]; then
         echo "claude-code"
@@ -275,21 +283,36 @@ get_agent_id() {
 ZEPHYR_AGENT_TYPE="$(detect_agent_type)"
 ZEPHYR_AGENT_ID="$(get_agent_id "$ZEPHYR_AGENT_TYPE")"
 ZEPHYR_SESSION_ID="$$"
-ZEPHYR_PARENT_PROCESS="$(ps -o comm= -p $PPID 2>/dev/null || echo 'unknown')"
+ZEPHYR_PARENT_PROCESS="$(/bin/ps -p "$PPID" -o comm= 2>/dev/null | head -n 1 || echo 'unknown')"
 
 export ZEPHYR_AGENT_ID
 export ZEPHYR_AGENT_TYPE
 export ZEPHYR_SESSION_ID
 
-if command -v zephyr >/dev/null 2>&1; then
-    zephyr register-session \
+`, zephyr_bin_line, `
+if [[ -z "$ZEPHYR_BIN" ]]; then
+    if command -v zephyr >/dev/null 2>&1; then
+        ZEPHYR_BIN="$(command -v zephyr)"
+    fi
+fi
+
+if [[ -n "$ZEPHYR_BIN" ]]; then
+    "$ZEPHYR_BIN" register-session \
         --agent-id="$ZEPHYR_AGENT_ID" \
         --agent-type="$ZEPHYR_AGENT_TYPE" \
         --session-id="$ZEPHYR_SESSION_ID" \
         --parent="$ZEPHYR_PARENT_PROCESS" >/dev/null 2>&1
 fi
 
-`
+`})
+}
+
+shell_escape_single :: proc(value: string) -> string {
+    if value == "" {
+        return ""
+    }
+    escaped, _ := strings.replace_all(value, "'", "'\"'\"'")
+    return escaped
 }
 
 // emit_module_header generates module separation comments

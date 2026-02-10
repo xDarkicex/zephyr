@@ -61,6 +61,7 @@ odin test test
 
 **Run specific unit tests:**
 ```bash
+# Odin's test runner does not accept file arguments; filter by test name instead.
 # Filter tests by fully-qualified name (compile-time define)
 ODIN_TEST_NAMES=test.test_audit_cleanup_removes_old_entries ./test_runner
 
