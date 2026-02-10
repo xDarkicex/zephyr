@@ -109,6 +109,12 @@ Signing details are documented in `docs/SECURITY.md` and `docs/MODULE_DEVELOPMEN
 - ZSH shell or Bash shell
 - macOS or Linux
 
+**Signed Modules Behavior (End Users):**
+- Official modules may install from **signed tarball releases** (not git clones).
+- If signature or hash verification fails, install is **blocked**.
+- You can verify a tarball yourself with `zephyr verify <path>`.
+- If `libarchive` or `openssl` is missing, signed installs will fail.
+
 ### Quick Install (Plugin Manager)
 
 If you use a zsh plugin manager (Oh My Zsh, Zinit, Antigen, etc.):
