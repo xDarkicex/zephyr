@@ -95,6 +95,10 @@ main :: proc() {
 		run_update()
 	case "uninstall":
 		run_uninstall()
+	case "show-signing-key":
+		run_show_signing_key()
+	case "verify":
+		run_verify()
 	case "help", "--help", "-h":
 		print_usage()
 	case:
@@ -159,6 +163,26 @@ run_update :: proc() {
 
 run_uninstall :: proc() {
 	cli.uninstall_command()
+}
+
+run_show_signing_key :: proc() {
+	cli.show_signing_key_command()
+}
+
+run_verify :: proc() {
+	args := os.args[1:]
+	module_path := ""
+	for arg in args {
+		if arg == "verify" {
+			continue
+		}
+		if strings.has_prefix(arg, "-") {
+			continue
+		}
+		module_path = arg
+		break
+	}
+	cli.verify_module_command(module_path)
 }
 
 // run_load implements the default load behavior
@@ -311,6 +335,8 @@ print_usage :: proc() {
 	fmt.println("    install     Install a module from a git repository")
 	fmt.println("    update      Update installed modules")
 	fmt.println("    uninstall   Remove an installed module")
+	fmt.println("    show-signing-key  Show the official Zephyr signing key")
+	fmt.println("    verify      Verify a signed module tarball")
 	fmt.println("    help        Show this help message")
 	fmt.println("")
 	fmt.println("EXAMPLES:")
@@ -328,6 +354,8 @@ print_usage :: proc() {
 	fmt.println("    zephyr update                # Update all modules")
 	fmt.println("    zephyr update my-module      # Update a single module")
 	fmt.println("    zephyr uninstall my-module   # Remove a module")
+	fmt.println("    zephyr show-signing-key      # Display Zephyr signing key")
+	fmt.println("    zephyr verify <path>         # Verify a signed tarball")
 	fmt.println("")
 	fmt.println("ENVIRONMENT:")
 	fmt.println(
