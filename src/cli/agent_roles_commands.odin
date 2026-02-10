@@ -592,9 +592,11 @@ print_session_event :: proc(entry: Audit_Entry) {
 
 print_command_event :: proc(entry: Audit_Entry) {
 	label := event_label(entry)
-	fmt.printf("%s %s command \"%s\" result=%s exit=%d\n",
+	fmt.printf("%s %s agent=%s session=%s command \"%s\" result=%s exit=%d\n",
 		label,
 		entry.timestamp,
+		entry.agent_id,
+		entry.session_id,
 		entry.command,
 		entry.result,
 		entry.exit_code,
@@ -604,17 +606,21 @@ print_command_event :: proc(entry: Audit_Entry) {
 print_operation_event :: proc(entry: Audit_Entry) {
 	label := event_label(entry)
 	if entry.module != "" {
-		fmt.printf("%s %s %s module=%s result=%s\n",
+		fmt.printf("%s %s agent=%s session=%s %s module=%s result=%s\n",
 			label,
 			entry.timestamp,
+			entry.agent_id,
+			entry.session_id,
 			entry.action,
 			entry.module,
 			entry.result,
 		)
 	} else {
-		fmt.printf("%s %s %s result=%s\n",
+		fmt.printf("%s %s agent=%s session=%s %s result=%s\n",
 			label,
 			entry.timestamp,
+			entry.agent_id,
+			entry.session_id,
 			entry.action,
 			entry.result,
 		)
