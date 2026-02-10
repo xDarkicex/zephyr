@@ -16,12 +16,75 @@ DEFAULT_TEST_TIMEOUT :: 30 * time.Second
 // home_env_mutex serializes HOME mutations across tests.
 home_env_mutex: sync.Mutex
 
+Agent_Env_Snapshot :: struct {
+	anthropic_api_key:      string,
+	anthropic_agent_id:     string,
+	cursor_agent_id:        string,
+	github_copilot_token:   string,
+	github_copilot_session: string,
+	windsurf_session:       string,
+	aider_session:          string,
+	term_program:           string,
+}
+
 lock_home_env :: proc() {
     sync.mutex_lock(&home_env_mutex)
 }
 
 unlock_home_env :: proc() {
     sync.mutex_unlock(&home_env_mutex)
+}
+
+capture_agent_env :: proc() -> Agent_Env_Snapshot {
+	return Agent_Env_Snapshot{
+		anthropic_api_key      = os.get_env("ANTHROPIC_API_KEY"),
+		anthropic_agent_id     = os.get_env("ANTHROPIC_AGENT_ID"),
+		cursor_agent_id        = os.get_env("CURSOR_AGENT_ID"),
+		github_copilot_token   = os.get_env("GITHUB_COPILOT_TOKEN"),
+		github_copilot_session = os.get_env("GITHUB_COPILOT_SESSION"),
+		windsurf_session       = os.get_env("WINDSURF_SESSION"),
+		aider_session          = os.get_env("AIDER_SESSION"),
+		term_program           = os.get_env("TERM_PROGRAM"),
+	}
+}
+
+clear_agent_env :: proc() {
+	os.unset_env("ANTHROPIC_API_KEY")
+	os.unset_env("ANTHROPIC_AGENT_ID")
+	os.unset_env("CURSOR_AGENT_ID")
+	os.unset_env("GITHUB_COPILOT_TOKEN")
+	os.unset_env("GITHUB_COPILOT_SESSION")
+	os.unset_env("WINDSURF_SESSION")
+	os.unset_env("AIDER_SESSION")
+	os.unset_env("TERM_PROGRAM")
+}
+
+restore_agent_env :: proc(snapshot: Agent_Env_Snapshot) {
+	restore_env := proc(key: string, value: string) {
+		if value == "" {
+			os.unset_env(key)
+			return
+		}
+		os.set_env(key, value)
+	}
+
+	restore_env("ANTHROPIC_API_KEY", snapshot.anthropic_api_key)
+	restore_env("ANTHROPIC_AGENT_ID", snapshot.anthropic_agent_id)
+	restore_env("CURSOR_AGENT_ID", snapshot.cursor_agent_id)
+	restore_env("GITHUB_COPILOT_TOKEN", snapshot.github_copilot_token)
+	restore_env("GITHUB_COPILOT_SESSION", snapshot.github_copilot_session)
+	restore_env("WINDSURF_SESSION", snapshot.windsurf_session)
+	restore_env("AIDER_SESSION", snapshot.aider_session)
+	restore_env("TERM_PROGRAM", snapshot.term_program)
+
+	delete(snapshot.anthropic_api_key)
+	delete(snapshot.anthropic_agent_id)
+	delete(snapshot.cursor_agent_id)
+	delete(snapshot.github_copilot_token)
+	delete(snapshot.github_copilot_session)
+	delete(snapshot.windsurf_session)
+	delete(snapshot.aider_session)
+	delete(snapshot.term_program)
 }
 
 set_test_timeout :: proc(t: ^testing.T, duration: time.Duration = DEFAULT_TEST_TIMEOUT) {

@@ -233,7 +233,7 @@ test_git_hooks_not_executed_on_checkout :: proc(t: ^testing.T) {
 	hooks_dir := filepath.join({clone_dir, ".git", "hooks"})
 	os.make_directory(hooks_dir, 0o755)
 	hook_path := filepath.join({hooks_dir, "post-checkout"})
-	hook_script := fmt.tprintf("#!/bin/sh\ntouch %s\n", hook_marker)
+	hook_script := fmt.aprintf("#!/bin/sh\ntouch %s\n", hook_marker)
 	os.write_entire_file(hook_path, transmute([]u8)hook_script)
 	_ = run_git_cmd(fmt.tprintf("chmod +x %q", hook_path))
 	delete(hooks_dir)

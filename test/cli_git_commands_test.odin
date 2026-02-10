@@ -15,6 +15,10 @@ test_cli_git_commands_end_to_end :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)
 
+	agent_env := capture_agent_env()
+	clear_agent_env()
+	defer restore_agent_env(agent_env)
+
 	if !git.libgit2_enabled() {
 		return
 	}
