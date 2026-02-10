@@ -9,7 +9,7 @@ import "core:strings"
 // Test builds can override this with -define:ZEPHYR_TEST_SIGNING_KEY=true
 when #config(ZEPHYR_TEST_SIGNING_KEY, false) {
 	ZEPHYR_SIGNING_KEY :: `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAwHLFDGChB8zNXCa0HnAHboA6bTi8yO8cOzWLcW/yPDs=
+MCowBQYDK2VwAyEA5cIomVSD7t0Rk6HiblBZ8jQl8bSRpsh9E98vcp9Vmfs=
 -----END PUBLIC KEY-----`
 } else {
 	ZEPHYR_SIGNING_KEY :: `-----BEGIN PUBLIC KEY-----

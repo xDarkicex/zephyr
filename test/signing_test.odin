@@ -1,40 +1,19 @@
 package test
 
+import "core:c"
 import "core:fmt"
 import "core:os"
-import "core:strings"
 import "core:path/filepath"
+import "core:strings"
 import "core:testing"
 
 import "../src/security"
 import "../src/git"
 
-TEST_SIGNATURE_HEX :: "e880de93e24082f5a31c8f90a8a27f855b35cb1757797b2bbc08c82b11e2a23dcd7455adb8a773adba76c710281e92b814ca13ef496d5c771e9818d75359d309"
 TEST_DATA :: "zephyr-signing-test"
-
-hex_value :: proc(c: byte) -> int {
-	switch c {
-	case '0'..='9': return int(c - '0')
-	case 'a'..='f': return int(c - 'a') + 10
-	case 'A'..='F': return int(c - 'A') + 10
-	}
-	return -1
-}
-
-decode_hex :: proc(hex: string) -> ([]byte, bool) {
-	if len(hex)%2 != 0 do return nil, false
-	out := make([]byte, len(hex)/2)
-	for i := 0; i < len(out); i += 1 {
-		hi := hex_value(hex[i*2])
-		lo := hex_value(hex[i*2+1])
-		if hi < 0 || lo < 0 {
-			delete(out)
-			return nil, false
-		}
-		out[i] = byte((hi << 4) | lo)
-	}
-	return out, true
-}
+TEST_PRIVATE_KEY :: `-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIHwxHcTsxxj2VWtbxiu/2YAIOp7xXfBqOZkRV1ETgbTn
+-----END PRIVATE KEY-----`
 
 temp_path :: proc(name: string) -> string {
 	base_env := os.get_env("TMPDIR")
@@ -52,6 +31,56 @@ temp_path :: proc(name: string) -> string {
 	return path
 }
 
+cstring_buffer :: proc(s: string) -> ([]u8, cstring) {
+	if s == "" do return nil, nil
+	buf := make([]u8, len(s)+1)
+	copy(buf[:len(s)], s)
+	buf[len(s)] = 0
+	return buf, cast(cstring)&buf[0]
+}
+
+run_shell_command :: proc(command: string) -> bool {
+	cmd_buf, cmd_c := cstring_buffer(command)
+	defer if cmd_buf != nil { delete(cmd_buf) }
+	if cmd_c == nil do return false
+	return system(cmd_c) == 0
+}
+
+when ODIN_OS == .Darwin {
+	foreign import libSystem "system:System"
+	foreign libSystem {
+		system :: proc(command: cstring) -> c.int ---
+	}
+} else {
+	foreign import "system:libc"
+	foreign libc {
+		system :: proc(command: cstring) -> c.int ---
+	}
+}
+
+write_temp_file :: proc(path: string, content: string) -> bool {
+	if path == "" {
+		return false
+	}
+	return os.write_entire_file(path, transmute([]u8)content)
+}
+
+sign_with_openssl :: proc(data_path: string, sig_path: string, key_path: string) -> bool {
+	if data_path == "" || sig_path == "" || key_path == "" {
+		return false
+	}
+	escaped_key := shell_escape_single(key_path)
+	escaped_data := shell_escape_single(data_path)
+	escaped_sig := shell_escape_single(sig_path)
+	defer delete(escaped_key)
+	defer delete(escaped_data)
+	defer delete(escaped_sig)
+	cmd := fmt.aprintf("openssl pkeyutl -sign -rawin -inkey '%s' -in '%s' -out '%s'",
+		escaped_key, escaped_data, escaped_sig)
+	defer delete(cmd)
+	return run_shell_command(cmd)
+}
+
 @(test)
 test_verify_signature_valid :: proc(t: ^testing.T) {
 	data_path := temp_path("zephyr_signing_data.txt")
@@ -60,17 +89,16 @@ test_verify_signature_valid :: proc(t: ^testing.T) {
 	sig_path := temp_path("zephyr_signing_sig.bin")
 	defer delete(sig_path)
 	defer os.remove(sig_path)
+	key_path := temp_path("zephyr_signing_key.pem")
+	defer delete(key_path)
+	defer os.remove(key_path)
 
 	data := TEST_DATA
 	ok := os.write_entire_file(data_path, transmute([]u8)data)
 	testing.expect(t, ok, "failed to write test data")
-
-	sig_bytes, sig_ok := decode_hex(TEST_SIGNATURE_HEX)
-	testing.expect(t, sig_ok, "failed to decode signature hex")
-	defer delete(sig_bytes)
-
-	ok = os.write_entire_file(sig_path, sig_bytes)
-	testing.expect(t, ok, "failed to write signature file")
+	ok = write_temp_file(key_path, TEST_PRIVATE_KEY)
+	testing.expect(t, ok, "failed to write test key")
+	testing.expect(t, sign_with_openssl(data_path, sig_path, key_path), "failed to sign data with openssl")
 
 	result := security.verify_signature(data_path, sig_path)
 	defer security.cleanup_verification_result(&result)
@@ -85,21 +113,29 @@ test_verify_signature_invalid :: proc(t: ^testing.T) {
 	sig_path := temp_path("zephyr_signing_sig_bad.bin")
 	defer delete(sig_path)
 	defer os.remove(sig_path)
+	key_path := temp_path("zephyr_signing_key_bad.pem")
+	defer delete(key_path)
+	defer os.remove(key_path)
 
 	data_bad := strings.concatenate({TEST_DATA, "x"})
 	defer delete(data_bad)
 	ok := os.write_entire_file(data_path, transmute([]u8)data_bad)
 	testing.expect(t, ok, "failed to write test data")
+	ok = write_temp_file(key_path, TEST_PRIVATE_KEY)
+	testing.expect(t, ok, "failed to write test key")
+	testing.expect(t, sign_with_openssl(data_path, sig_path, key_path), "failed to sign data with openssl")
 
-	sig_bytes, sig_ok := decode_hex(TEST_SIGNATURE_HEX)
-	testing.expect(t, sig_ok, "failed to decode signature hex")
-	if len(sig_bytes) > 0 {
-		sig_bytes[0] = sig_bytes[0] ~ 0xff
+	// Tamper with signature to force failure.
+	if os.exists(sig_path) {
+		sig_bytes, read_ok := os.read_entire_file(sig_path)
+		if read_ok && len(sig_bytes) > 0 {
+			sig_bytes[0] = sig_bytes[0] ~ 0xff
+			_ = os.write_entire_file(sig_path, sig_bytes)
+		}
+		if sig_bytes != nil {
+			delete(sig_bytes)
+		}
 	}
-	defer delete(sig_bytes)
-
-	ok = os.write_entire_file(sig_path, sig_bytes)
-	testing.expect(t, ok, "failed to write signature file")
 
 	result := security.verify_signature(data_path, sig_path)
 	defer security.cleanup_verification_result(&result)
@@ -212,4 +248,218 @@ test_parse_github_url :: proc(t: ^testing.T) {
 	defer delete(repo2)
 	testing.expect(t, owner2 == "zephyr-systems", "expected owner parsed from ssh url")
 	testing.expect(t, repo2 == "zephyr", "expected repo parsed from ssh url")
+}
+
+shell_escape_single :: proc(s: string) -> string {
+	if s == "" do return strings.clone("")
+	parts := strings.split(s, "'")
+	defer delete(parts)
+	if len(parts) == 1 {
+		return strings.clone(s)
+	}
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	for part, i in parts {
+		if i > 0 {
+			strings.write_string(&builder, "'\"'\"'")
+		}
+		strings.write_string(&builder, part)
+	}
+	return strings.clone(strings.to_string(builder))
+}
+
+write_module_files :: proc(module_dir: string, module_name: string, init_contents: string) -> bool {
+	if module_dir == "" || module_name == "" {
+		return false
+	}
+	if !os.exists(module_dir) {
+		os.make_directory(module_dir, 0o755)
+	}
+	if !os.exists(module_dir) {
+		return false
+	}
+
+	manifest_path := filepath.join({module_dir, "module.toml"})
+	defer delete(manifest_path)
+	init_path := filepath.join({module_dir, "init.zsh"})
+	defer delete(init_path)
+
+	manifest := fmt.tprintf("[module]\nname = \"%s\"\nversion = \"1.0.0\"\n\n[load]\nfiles = [\"init.zsh\"]\n", module_name)
+	defer delete(manifest)
+
+	if !os.write_entire_file(manifest_path, transmute([]u8)manifest) {
+		return false
+	}
+	if !os.write_entire_file(init_path, transmute([]u8)init_contents) {
+		return false
+	}
+	return true
+}
+
+create_tarball := proc(base_dir: string, module_name: string, tar_name: string) -> string {
+	tarball_path := filepath.join({base_dir, tar_name})
+	if tarball_path == "" {
+		return ""
+	}
+	escaped_tar := shell_escape_single(tarball_path)
+	escaped_base := shell_escape_single(base_dir)
+	escaped_mod := shell_escape_single(module_name)
+	defer delete(escaped_tar)
+	defer delete(escaped_base)
+	defer delete(escaped_mod)
+
+	cmd := fmt.aprintf("tar -czf '%s' -C '%s' '%s'", escaped_tar, escaped_base, escaped_mod)
+	defer delete(cmd)
+	if !run_shell_command(cmd) {
+		delete(tarball_path)
+		return ""
+	}
+	return tarball_path
+}
+
+write_hash_file :: proc(tarball_path: string) -> (bool, string) {
+	if tarball_path == "" {
+		return false, ""
+	}
+	data, ok := os.read_entire_file(tarball_path)
+	if !ok {
+		return false, ""
+	}
+	defer delete(data)
+
+	hash := security.compute_sha256_bytes(data)
+	hash_hex := security.hex_encode(hash[:])
+	defer delete(hash_hex)
+	hash_path := strings.concatenate({tarball_path, ".sha256"})
+	line := fmt.aprintf("%s  %s", hash_hex, filepath.base(tarball_path))
+	defer delete(line)
+	ok = os.write_entire_file(hash_path, transmute([]u8)line)
+	return ok, hash_path
+}
+
+create_signed_fixture :: proc(t: ^testing.T, module_name: string, init_contents: string) -> (string, string) {
+	name := fmt.tprintf("signed_%s", module_name)
+	defer delete(name)
+	base_dir := setup_test_environment(name)
+	module_dir := filepath.join({base_dir, module_name})
+	defer delete(module_dir)
+	testing.expect(t, write_module_files(module_dir, module_name, init_contents), "failed to write module files")
+
+	tar_name := fmt.tprintf("%s-v1.0.0.tar.gz", module_name)
+	defer delete(tar_name)
+	tarball := create_tarball(base_dir, module_name, tar_name)
+	testing.expect(t, tarball != "", "failed to create tarball")
+
+	key_path := filepath.join({base_dir, "test_key.pem"})
+	testing.expect(t, write_temp_file(key_path, TEST_PRIVATE_KEY), "failed to write test private key")
+
+	sig_path := tarball + ".sig"
+	testing.expect(t, sign_with_openssl(tarball, sig_path, key_path), "failed to sign tarball")
+
+	ok, hash_path := write_hash_file(tarball)
+	testing.expect(t, ok, "failed to write hash file")
+
+	delete(key_path)
+	delete(hash_path)
+	return base_dir, tarball
+}
+
+@(test)
+test_signed_install_success :: proc(t: ^testing.T) {
+	modules_dir := setup_test_environment("signed_modules_dir")
+	defer teardown_test_environment(modules_dir)
+
+	original_env := os.get_env("ZSH_MODULES_DIR")
+	if original_env != "" {
+		defer os.set_env("ZSH_MODULES_DIR", original_env)
+	} else {
+		defer os.unset_env("ZSH_MODULES_DIR")
+	}
+	os.set_env("ZSH_MODULES_DIR", modules_dir)
+
+	source_dir, tarball := create_signed_fixture(t, "signed-module", "echo 'safe'")
+	defer {
+		delete(tarball)
+		teardown_test_environment(source_dir)
+	}
+
+	opts := git.Manager_Options{allow_local = true}
+	success, msg := git.install_module(source_dir, opts)
+	if msg != "" {
+		delete(msg)
+	}
+	testing.expect(t, success, "expected signed install to succeed")
+
+	installed := filepath.join({modules_dir, "signed-module", "init.zsh"})
+	defer delete(installed)
+	testing.expect(t, os.exists(installed), "expected module to be installed")
+}
+
+@(test)
+test_signed_install_tampered_tarball :: proc(t: ^testing.T) {
+	modules_dir := setup_test_environment("signed_modules_dir_bad")
+	defer teardown_test_environment(modules_dir)
+
+	original_env := os.get_env("ZSH_MODULES_DIR")
+	if original_env != "" {
+		defer os.set_env("ZSH_MODULES_DIR", original_env)
+	} else {
+		defer os.unset_env("ZSH_MODULES_DIR")
+	}
+	os.set_env("ZSH_MODULES_DIR", modules_dir)
+
+	source_dir, tarball := create_signed_fixture(t, "signed-module-bad", "echo 'safe'")
+	defer {
+		delete(tarball)
+		teardown_test_environment(source_dir)
+	}
+
+	// Tamper with tarball after signing.
+	if os.exists(tarball) {
+		data, ok := os.read_entire_file(tarball)
+		if ok {
+			tampered := make([]u8, len(data)+5)
+			copy(tampered[:len(data)], data)
+			copy(tampered[len(data):], transmute([]u8)"evil")
+			_ = os.write_entire_file(tarball, tampered)
+			delete(tampered)
+		}
+		if data != nil {
+			delete(data)
+		}
+	}
+
+	opts := git.Manager_Options{allow_local = true}
+	success, msg := git.install_module(source_dir, opts)
+	if msg != "" {
+		delete(msg)
+	}
+	testing.expect(t, !success, "expected tampered signed install to fail")
+}
+
+@(test)
+test_signed_install_allows_critical :: proc(t: ^testing.T) {
+	modules_dir := setup_test_environment("signed_modules_dir_critical")
+	defer teardown_test_environment(modules_dir)
+
+	original_env := os.get_env("ZSH_MODULES_DIR")
+	if original_env != "" {
+		defer os.set_env("ZSH_MODULES_DIR", original_env)
+	} else {
+		defer os.unset_env("ZSH_MODULES_DIR")
+	}
+	os.set_env("ZSH_MODULES_DIR", modules_dir)
+
+	source_dir, tarball := create_signed_fixture(t, "signed-module-critical", "rm -rf /")
+	defer {
+		delete(tarball)
+		teardown_test_environment(source_dir)
+	}
+
+	opts := git.Manager_Options{allow_local = true}
+	success, msg := git.install_module(source_dir, opts)
+	if msg != "" {
+		delete(msg)
+	}
+	testing.expect(t, success, "expected trusted signed module to install despite critical pattern")
 }
