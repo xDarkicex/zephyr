@@ -52,7 +52,16 @@ LIBARCHIVE_FOUND := $(shell pkg-config --exists libarchive 2>/dev/null && echo y
 ifneq ($(strip $(LIBARCHIVE_FOUND)),)
 ARCHIVE_FLAGS := -define:ZEPHYR_HAS_ARCHIVE=true
 else
+# Fallback: Homebrew keg-only libarchive
+ifneq ($(wildcard /opt/homebrew/opt/libarchive/lib/libarchive.dylib),)
+LIBARCHIVE_LIBS := -L/opt/homebrew/opt/libarchive/lib
+ARCHIVE_FLAGS := -define:ZEPHYR_HAS_ARCHIVE=true
+else ifneq ($(wildcard /usr/local/opt/libarchive/lib/libarchive.dylib),)
+LIBARCHIVE_LIBS := -L/usr/local/opt/libarchive/lib
+ARCHIVE_FLAGS := -define:ZEPHYR_HAS_ARCHIVE=true
+else
 ARCHIVE_FLAGS := -define:ZEPHYR_HAS_ARCHIVE=false
+endif
 endif
 
 LINKER_FLAGS := $(strip $(LIBGIT2_LIBS) $(LIBMAGIC_LIBS) $(OPENSSL_LIBS) $(LIBCURL_LIBS) $(LIBARCHIVE_LIBS))

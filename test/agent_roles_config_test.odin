@@ -29,14 +29,15 @@ test_default_role_config_values :: proc(t: ^testing.T) {
 
 @(test)
 test_create_default_security_config_file :: proc(t: ^testing.T) {
-	home := os.get_env("HOME")
-	defer delete(home)
-	testing.expect(t, home != "", "HOME not set")
-	if home == "" {
-		return
+	original_home := os.get_env("HOME")
+	temp_home := setup_test_environment("agent_roles_home")
+	defer teardown_test_environment(temp_home)
+	if original_home != "" {
+		defer os.set_env("HOME", original_home)
 	}
+	os.set_env("HOME", temp_home)
 
-	config_path := filepath.join({home, ".zephyr", "security.toml"})
+	config_path := filepath.join({temp_home, ".zephyr", "security.toml"})
 	defer delete(config_path)
 
 	// Clean previous file

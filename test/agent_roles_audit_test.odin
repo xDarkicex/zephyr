@@ -8,12 +8,13 @@ import "../src/security"
 
 @(test)
 test_audit_log_paths_created :: proc(t: ^testing.T) {
-	home := os.get_env("HOME")
-	defer delete(home)
-	testing.expect(t, home != "", "HOME not set")
-	if home == "" {
-		return
+	original_home := os.get_env("HOME")
+	temp_home := setup_test_environment("agent_roles_audit_home")
+	defer teardown_test_environment(temp_home)
+	if original_home != "" {
+		defer os.set_env("HOME", original_home)
 	}
+	os.set_env("HOME", temp_home)
 
 	security.init_session_registry()
 	security.register_session("tester", "human", "300", "zsh")
@@ -22,7 +23,7 @@ test_audit_log_paths_created :: proc(t: ^testing.T) {
 
 	security.log_module_install("test-module", "https://example.com/test", true, "ok", true)
 
-	base := filepath.join({home, ".zephyr", "audit", "operations"})
+	base := filepath.join({temp_home, ".zephyr", "audit", "operations"})
 	defer delete(base)
 	testing.expect(t, os.exists(base), "operations audit directory should exist")
 }

@@ -10,6 +10,24 @@ import "core:os/os2"
 
 import "../debug"
 
+ensure_directory :: proc(path: string) -> bool {
+	if path == "" {
+		return false
+	}
+	if os.exists(path) {
+		return true
+	}
+	parent := filepath.dir(path)
+	defer delete(parent)
+	if parent != "" && parent != path {
+		if !ensure_directory(parent) {
+			return false
+		}
+	}
+	_ = os.make_directory(path, 0o755)
+	return os.exists(path)
+}
+
 // Session and agent audit logging (agent roles feature).
 log_session_registration :: proc(info: Session_Info) {
 	log_path := get_session_log_path(info.session_id, info.started_at)
@@ -77,7 +95,7 @@ log_permission_denied :: proc(session: Session_Info, perm: Permission, operation
 		role = session.role,
 		action = "permission_denied",
 		result = "denied",
-		reason = fmt.tprintf("Missing permission: %v for %s", perm, operation),
+		reason = fmt.aprintf("Missing permission: %v for %s", perm, operation),
 	}
 	defer delete(event.reason)
 
@@ -124,7 +142,7 @@ get_session_log_path :: proc(session_id: string, timestamp: string) -> string {
 		return ""
 	}
 
-	filename := fmt.tprintf("%s-%s.log", session_id, timestamp)
+	filename := fmt.aprintf("%s-%s.log", session_id, timestamp)
 	defer delete(filename)
 	return filepath.join({home, ".zephyr", "audit", "sessions", filename})
 }
@@ -138,7 +156,7 @@ get_command_log_path :: proc(session_id: string) -> string {
 
 	date := get_current_date()
 	defer delete(date)
-	filename := fmt.tprintf("%s.log", session_id)
+	filename := fmt.aprintf("%s.log", session_id)
 	defer delete(filename)
 	return filepath.join({home, ".zephyr", "audit", "commands", date, filename})
 }
@@ -272,7 +290,9 @@ format_command_scan_json :: proc(event: Audit_Event, command: string, exit_code:
 append_line :: proc(path: string, line: string) {
 	dir := filepath.dir(path)
 	defer delete(dir)
-	os2.make_directory_all(dir)
+	if !ensure_directory(dir) {
+		return
+	}
 
 	data := transmute([]u8)line
 

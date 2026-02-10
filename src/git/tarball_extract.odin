@@ -44,6 +44,11 @@ when #config(ZEPHYR_HAS_ARCHIVE, false) {
 
 	extract_tarball_native :: proc(tarball_path: string, dest_dir: string) -> bool {
 		if tarball_path == "" || dest_dir == "" {
+			debug.debug_warn("libarchive: invalid tarball or destination path")
+			return false
+		}
+		if !os.exists(tarball_path) {
+			debug.debug_warn("libarchive: tarball does not exist: %s", tarball_path)
 			return false
 		}
 
@@ -118,13 +123,28 @@ when #config(ZEPHYR_HAS_ARCHIVE, false) {
 			full_path_c := strings.clone_to_cstring(full_path)
 			archive_entry_set_pathname(entry, full_path_c)
 
-			if archive_read_extract2(reader, entry, writer) != ARCHIVE_OK {
-				err := archive_error_string(reader)
+			extract_status := archive_read_extract2(reader, entry, writer)
+			if extract_status < ARCHIVE_WARN {
+				err := archive_error_string(writer)
+				if err == nil {
+					err = archive_error_string(reader)
+				}
 				if err != nil {
-					debug.debug_warn("libarchive extract error: %s", string(err))
+					debug.debug_warn("libarchive extract error for %s: %s", orig_path, string(err))
+				} else {
+					debug.debug_warn("libarchive extract error for %s", orig_path)
 				}
 				delete(full_path_c)
 				return false
+			}
+			if extract_status != ARCHIVE_OK {
+				err := archive_error_string(writer)
+				if err == nil {
+					err = archive_error_string(reader)
+				}
+				if err != nil {
+					debug.debug_warn("libarchive extract warning for %s: %s", orig_path, string(err))
+				}
 			}
 			delete(full_path_c)
 		}

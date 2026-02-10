@@ -262,7 +262,7 @@ write_module_files :: proc(module_dir: string, module_name: string, init_content
 	init_path := filepath.join({module_dir, "init.zsh"})
 	defer delete(init_path)
 
-	manifest := fmt.tprintf("[module]\nname = \"%s\"\nversion = \"1.0.0\"\n\n[load]\nfiles = [\"init.zsh\"]\n", module_name)
+	manifest := fmt.aprintf("[module]\nname = \"%s\"\nversion = \"1.0.0\"\n\n[load]\nfiles = [\"init.zsh\"]\n", module_name)
 	defer delete(manifest)
 
 	if !os.write_entire_file(manifest_path, transmute([]u8)manifest) {
@@ -316,14 +316,14 @@ write_hash_file :: proc(tarball_path: string) -> (bool, string) {
 }
 
 create_signed_fixture :: proc(t: ^testing.T, module_name: string, init_contents: string) -> (string, string) {
-	name := fmt.tprintf("signed_%s", module_name)
+	name := fmt.aprintf("signed_%s", module_name)
 	defer delete(name)
 	base_dir := setup_test_environment(name)
 	module_dir := filepath.join({base_dir, module_name})
 	defer delete(module_dir)
 	testing.expect(t, write_module_files(module_dir, module_name, init_contents), "failed to write module files")
 
-	tar_name := fmt.tprintf("%s-v1.0.0.tar.gz", module_name)
+	tar_name := fmt.aprintf("%s-v1.0.0.tar.gz", module_name)
 	defer delete(tar_name)
 	tarball := create_tarball(base_dir, module_name, tar_name)
 	testing.expect(t, tarball != "", "failed to create tarball")
@@ -364,10 +364,14 @@ test_signed_install_success :: proc(t: ^testing.T) {
 
 	opts := git.Manager_Options{allow_local = true}
 	success, msg := git.install_module(source_dir, opts)
+	if !success {
+		err_msg := fmt.aprintf("expected signed install to succeed: %s", msg)
+		defer delete(err_msg)
+		testing.expect(t, success, err_msg)
+	}
 	if msg != "" {
 		delete(msg)
 	}
-	testing.expect(t, success, "expected signed install to succeed")
 
 	installed := filepath.join({modules_dir, "signed-module", "init.zsh"})
 	defer delete(installed)
@@ -410,10 +414,12 @@ test_signed_install_tampered_tarball :: proc(t: ^testing.T) {
 
 	opts := git.Manager_Options{allow_local = true}
 	success, msg := git.install_module(source_dir, opts)
+	if success {
+		testing.expect(t, !success, "expected tampered signed install to fail")
+	}
 	if msg != "" {
 		delete(msg)
 	}
-	testing.expect(t, !success, "expected tampered signed install to fail")
 }
 
 @(test)
@@ -437,8 +443,12 @@ test_signed_install_allows_critical :: proc(t: ^testing.T) {
 
 	opts := git.Manager_Options{allow_local = true}
 	success, msg := git.install_module(source_dir, opts)
+	if !success {
+		err_msg := fmt.aprintf("expected trusted signed module to install despite critical pattern: %s", msg)
+		defer delete(err_msg)
+		testing.expect(t, success, err_msg)
+	}
 	if msg != "" {
 		delete(msg)
 	}
-	testing.expect(t, success, "expected trusted signed module to install despite critical pattern")
 }

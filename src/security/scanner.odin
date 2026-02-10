@@ -756,6 +756,9 @@ format_scan_report :: proc(result: ^Scan_Result, module_name: string) -> string 
 should_block_install :: proc(result: ^Scan_Result, unsafe_mode: bool) -> bool {
 	if result == nil do return false
 	if unsafe_mode do return false
+	if result.trusted_module || result.trusted_module_applied {
+		return false
+	}
 	return result.critical_count > 0
 }
 
@@ -793,6 +796,11 @@ prompt_user_for_warnings :: proc(
 default_input_reader :: proc() -> string {
 	if input_reader_override != nil {
 		return input_reader_override()
+	}
+	test_input := os.get_env("ZEPHYR_TEST_INPUT")
+	if test_input != "" {
+		defer delete(test_input)
+		return test_input
 	}
 	buf: [256]byte
 	n, err := os.read(os.stdin, buf[:])
