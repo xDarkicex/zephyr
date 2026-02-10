@@ -70,7 +70,7 @@ get_process_name :: proc(pid: int) -> string {
 	selection := os2.Process_Info_Fields{.Executable_Path, .Command_Line}
 	info, err := os2.process_info_by_pid(pid, selection, context.temp_allocator)
 	defer os2.free_process_info(info, context.temp_allocator)
-	if err != .None {
+	if err != nil {
 		return ""
 	}
 

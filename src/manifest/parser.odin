@@ -75,10 +75,12 @@ parse_toml_sections :: proc(file_path: string) -> (Toml_Sections, bool) {
 			value = value[1:len(value)-1]
 		}
 
-		if current_section not_in sections {
-			sections[current_section] = make(map[string]string)
+		pairs, ok := sections[current_section]
+		if !ok {
+			pairs = make(map[string]string)
 		}
-		sections[current_section][strings.clone(key)] = strings.clone(value)
+		pairs[strings.clone(key)] = strings.clone(value)
+		sections[current_section] = pairs
 	}
 
 	return Toml_Sections(sections), true

@@ -39,6 +39,10 @@ require_permission :: proc(perm: Permission, operation: string) -> bool {
 	fmt.printf("  Required permission: %v\n\n", perm)
 
 	switch perm {
+	case .Install:
+		// Generic install denial (agent can't install at all).
+		fmt.println("Agents cannot install modules.")
+		fmt.println("This prevents untrusted code execution.")
 	case .Install_Unsigned:
 		fmt.println("Agents can only install signed modules for security.")
 		fmt.println("Signed modules are cryptographically verified.")

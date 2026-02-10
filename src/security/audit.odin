@@ -5,8 +5,416 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:time"
+import "core:strconv"
+import "core:os/os2"
 
 import "../debug"
+
+// Session and agent audit logging (agent roles feature).
+log_session_registration :: proc(info: Session_Info) {
+	log_path := get_session_log_path(info.session_id, info.started_at)
+	if log_path == "" {
+		return
+	}
+	defer delete(log_path)
+
+	json_line := format_session_json(info)
+	defer delete(json_line)
+	append_line(log_path, json_line)
+}
+
+log_command_scan :: proc(session_id: string, command: string, result: string, reason: string, exit_code: int) {
+	session, ok := get_current_session()
+	if !ok {
+		session = Session_Info{
+			session_id = session_id,
+			agent_id = os.get_env("USER"),
+			agent_type = "human",
+			role = "user",
+		}
+	}
+
+	event := Audit_Event{
+		timestamp = current_timestamp(),
+		session_id = session.session_id,
+		agent_id = session.agent_id,
+		agent_type = session.agent_type,
+		role = session.role,
+		action = "command_scan",
+		result = result,
+		reason = reason,
+	}
+
+	log_path := get_command_log_path(session_id)
+	if log_path == "" {
+		return
+	}
+	defer delete(log_path)
+
+	json_line := format_command_scan_json(event, command, exit_code)
+	defer delete(json_line)
+	append_line(log_path, json_line)
+}
+
+log_audit_event :: proc(event: Audit_Event) {
+	log_path := get_operations_log_path()
+	if log_path == "" {
+		return
+	}
+	defer delete(log_path)
+
+	json_line := format_audit_json(event)
+	defer delete(json_line)
+	append_line(log_path, json_line)
+}
+
+log_permission_denied :: proc(session: Session_Info, perm: Permission, operation: string) {
+	event := Audit_Event{
+		timestamp = current_timestamp(),
+		session_id = session.session_id,
+		agent_id = session.agent_id,
+		agent_type = session.agent_type,
+		role = session.role,
+		action = "permission_denied",
+		result = "denied",
+		reason = fmt.tprintf("Missing permission: %v for %s", perm, operation),
+	}
+	defer delete(event.reason)
+
+	log_audit_event(event)
+}
+
+log_module_install :: proc(module: string, source: string, success: bool, reason: string, signed: bool) {
+	session, ok := get_current_session()
+	if !ok {
+		session = Session_Info{
+			session_id = "unknown",
+			agent_id = os.get_env("USER"),
+			agent_type = "human",
+			role = "user",
+		}
+	}
+
+	result := "success"
+	if !success {
+		result = "failed"
+	}
+
+	event := Audit_Event{
+		timestamp = current_timestamp(),
+		session_id = session.session_id,
+		agent_id = session.agent_id,
+		agent_type = session.agent_type,
+		role = session.role,
+		action = "install",
+		module = module,
+		source = source,
+		result = result,
+		reason = reason,
+		signature_verified = signed,
+	}
+
+	log_audit_event(event)
+}
+
+get_session_log_path :: proc(session_id: string, timestamp: string) -> string {
+	home := os.get_env("HOME")
+	defer delete(home)
+	if home == "" {
+		return ""
+	}
+
+	filename := fmt.tprintf("%s-%s.log", session_id, timestamp)
+	defer delete(filename)
+	return filepath.join({home, ".zephyr", "audit", "sessions", filename})
+}
+
+get_command_log_path :: proc(session_id: string) -> string {
+	home := os.get_env("HOME")
+	defer delete(home)
+	if home == "" {
+		return ""
+	}
+
+	date := get_current_date()
+	defer delete(date)
+	filename := fmt.tprintf("%s.log", session_id)
+	defer delete(filename)
+	return filepath.join({home, ".zephyr", "audit", "commands", date, filename})
+}
+
+get_operations_log_path :: proc() -> string {
+	home := os.get_env("HOME")
+	defer delete(home)
+	if home == "" {
+		return ""
+	}
+
+	date := get_current_date()
+	defer delete(date)
+	return filepath.join({home, ".zephyr", "audit", "operations", date, "operations.log"})
+}
+
+get_current_date :: proc() -> string {
+	now := time.now()
+	buf: [time.MIN_YYYY_DATE_LEN]u8
+	return strings.clone(time.to_string_yyyy_mm_dd(now, buf[:]))
+}
+
+format_session_json :: proc(info: Session_Info) -> string {
+	agent_id := escape_json_string(info.agent_id)
+	agent_type := escape_json_string(info.agent_type)
+	parent := escape_json_string(info.parent_process)
+	started := escape_json_string(info.started_at)
+	role := escape_json_string(info.role)
+	session_id := escape_json_string(info.session_id)
+	defer {
+		delete(agent_id)
+		delete(agent_type)
+		delete(parent)
+		delete(started)
+		delete(role)
+		delete(session_id)
+	}
+
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	fmt.sbprintf(&builder, "{")
+	fmt.sbprintf(&builder, "\"session_id\":\"%s\",", session_id)
+	fmt.sbprintf(&builder, "\"agent_id\":\"%s\",", agent_id)
+	fmt.sbprintf(&builder, "\"agent_type\":\"%s\",", agent_type)
+	fmt.sbprintf(&builder, "\"parent_process\":\"%s\",", parent)
+	fmt.sbprintf(&builder, "\"started_at\":\"%s\",", started)
+	fmt.sbprintf(&builder, "\"role\":\"%s\"", role)
+	fmt.sbprintf(&builder, "}")
+	return strings.clone(strings.to_string(builder))
+}
+
+format_audit_json :: proc(event: Audit_Event) -> string {
+	timestamp := escape_json_string(event.timestamp)
+	session_id := escape_json_string(event.session_id)
+	agent_id := escape_json_string(event.agent_id)
+	agent_type := escape_json_string(event.agent_type)
+	role := escape_json_string(event.role)
+	action := escape_json_string(event.action)
+	module := escape_json_string(event.module)
+	source := escape_json_string(event.source)
+	result := escape_json_string(event.result)
+	reason := escape_json_string(event.reason)
+	defer {
+		delete(timestamp)
+		delete(session_id)
+		delete(agent_id)
+		delete(agent_type)
+		delete(role)
+		delete(action)
+		delete(module)
+		delete(source)
+		delete(result)
+		delete(reason)
+	}
+
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	fmt.sbprintf(&builder, "{")
+	fmt.sbprintf(&builder, "\"timestamp\":\"%s\",", timestamp)
+	fmt.sbprintf(&builder, "\"session_id\":\"%s\",", session_id)
+	fmt.sbprintf(&builder, "\"agent_id\":\"%s\",", agent_id)
+	fmt.sbprintf(&builder, "\"agent_type\":\"%s\",", agent_type)
+	fmt.sbprintf(&builder, "\"role\":\"%s\",", role)
+	fmt.sbprintf(&builder, "\"action\":\"%s\",", action)
+	fmt.sbprintf(&builder, "\"module\":\"%s\",", module)
+	fmt.sbprintf(&builder, "\"source\":\"%s\",", source)
+	fmt.sbprintf(&builder, "\"result\":\"%s\",", result)
+	fmt.sbprintf(&builder, "\"reason\":\"%s\",", reason)
+	fmt.sbprintf(&builder, "\"signature_verified\":%v", event.signature_verified)
+	fmt.sbprintf(&builder, "}")
+	return strings.clone(strings.to_string(builder))
+}
+
+format_command_scan_json :: proc(event: Audit_Event, command: string, exit_code: int) -> string {
+	timestamp := escape_json_string(event.timestamp)
+	session_id := escape_json_string(event.session_id)
+	agent_id := escape_json_string(event.agent_id)
+	agent_type := escape_json_string(event.agent_type)
+	role := escape_json_string(event.role)
+	command_escaped := escape_json_string(command)
+	result := escape_json_string(event.result)
+	reason := escape_json_string(event.reason)
+	defer {
+		delete(timestamp)
+		delete(session_id)
+		delete(agent_id)
+		delete(agent_type)
+		delete(role)
+		delete(command_escaped)
+		delete(result)
+		delete(reason)
+	}
+
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	fmt.sbprintf(&builder, "{")
+	fmt.sbprintf(&builder, "\"timestamp\":\"%s\",", timestamp)
+	fmt.sbprintf(&builder, "\"session_id\":\"%s\",", session_id)
+	fmt.sbprintf(&builder, "\"agent_id\":\"%s\",", agent_id)
+	fmt.sbprintf(&builder, "\"agent_type\":\"%s\",", agent_type)
+	fmt.sbprintf(&builder, "\"role\":\"%s\",", role)
+	fmt.sbprintf(&builder, "\"action\":\"command_scan\",")
+	fmt.sbprintf(&builder, "\"command\":\"%s\",", command_escaped)
+	fmt.sbprintf(&builder, "\"result\":\"%s\",", result)
+	fmt.sbprintf(&builder, "\"reason\":\"%s\",", reason)
+	fmt.sbprintf(&builder, "\"exit_code\":%d", exit_code)
+	fmt.sbprintf(&builder, "}")
+	return strings.clone(strings.to_string(builder))
+}
+
+append_line :: proc(path: string, line: string) {
+	dir := filepath.dir(path)
+	defer delete(dir)
+	os2.make_directory_all(dir)
+
+	data := transmute([]u8)line
+
+	if os.exists(path) {
+		existing, ok := os.read_entire_file(path)
+		if ok {
+			combined := make([]u8, len(existing)+len(data)+1)
+			copy(combined[:len(existing)], existing)
+			copy(combined[len(existing):len(existing)+len(data)], data)
+			combined[len(existing)+len(data)] = '\n'
+			_ = os.write_entire_file(path, combined)
+			delete(existing)
+			delete(combined)
+			return
+		}
+	}
+
+	combined := make([]u8, len(data)+1)
+	copy(combined[:len(data)], data)
+	combined[len(data)] = '\n'
+	_ = os.write_entire_file(path, combined)
+	delete(combined)
+}
+
+cleanup_old_audit_logs :: proc(retention_days: int = 30) {
+	home := os.get_env("HOME")
+	defer delete(home)
+	if home == "" {
+		return
+	}
+
+	audit_base := filepath.join({home, ".zephyr", "audit"})
+	defer delete(audit_base)
+	if !os.exists(audit_base) {
+		return
+	}
+
+	cutoff := time.time_add(time.now(), -time.Duration(retention_days * 24 * 60 * 60 * 1e9))
+
+	cleanup_dated_logs(filepath.join({audit_base, "commands"}), cutoff)
+	cleanup_dated_logs(filepath.join({audit_base, "operations"}), cutoff)
+	cleanup_session_logs(filepath.join({audit_base, "sessions"}), cutoff)
+}
+
+cleanup_dated_logs :: proc(base_path: string, cutoff: time.Time) {
+	if !os.exists(base_path) {
+		return
+	}
+
+	dirs, err := os2.read_all_directory_by_path(base_path, context.temp_allocator)
+	if err != nil {
+		return
+	}
+	defer os2.file_info_slice_delete(dirs, context.temp_allocator)
+
+	for dir in dirs {
+		if dir.type != os2.File_Type.Directory {
+			continue
+		}
+
+		dir_date, ok := parse_date_yyyy_mm_dd(dir.name)
+		if !ok {
+			continue
+		}
+
+		if time.diff(dir_date, cutoff) > 0 {
+			dir_path := filepath.join({base_path, dir.name})
+			os2.remove_all(dir_path)
+			delete(dir_path)
+		}
+	}
+}
+
+cleanup_session_logs :: proc(base_path: string, cutoff: time.Time) {
+	if !os.exists(base_path) {
+		return
+	}
+
+	files, err := os2.read_all_directory_by_path(base_path, context.temp_allocator)
+	if err != nil {
+		return
+	}
+	defer os2.file_info_slice_delete(files, context.temp_allocator)
+
+	for file in files {
+		if file.type == os2.File_Type.Directory {
+			continue
+		}
+
+		parts := strings.split(file.name, "-")
+		defer delete(parts)
+		if len(parts) < 2 {
+			continue
+		}
+
+		timestamp_part := strings.trim_suffix(parts[len(parts)-1], ".log")
+		file_time, ok := parse_rfc3339_time(timestamp_part)
+		if !ok {
+			continue
+		}
+
+		if time.diff(file_time, cutoff) > 0 {
+			file_path := filepath.join({base_path, file.name})
+			os.remove(file_path)
+			delete(file_path)
+		}
+	}
+}
+
+parse_date_yyyy_mm_dd :: proc(value: string) -> (time.Time, bool) {
+	if len(value) != 10 {
+		return {}, false
+	}
+	year64, ok_year := strconv.parse_int(value[:4], 10)
+	if !ok_year {
+		return {}, false
+	}
+	month64, ok_month := strconv.parse_int(value[5:7], 10)
+	if !ok_month {
+		return {}, false
+	}
+	day64, ok_day := strconv.parse_int(value[8:10], 10)
+	if !ok_day {
+		return {}, false
+	}
+	year := int(year64)
+	month := int(month64)
+	day := int(day64)
+	if year <= 0 || month <= 0 || day <= 0 {
+		return {}, false
+	}
+	tm, ok_time := time.datetime_to_time(year, time.Month(month), day, 0, 0, 0, 0)
+	return tm, ok_time
+}
+
+parse_rfc3339_time :: proc(value: string) -> (time.Time, bool) {
+	tm, consumed := time.rfc3339_to_time_utc(value)
+	if consumed == 0 {
+		return {}, false
+	}
+	return tm, true
+}
 
 // audit_unsafe_usage writes an audit record when --unsafe is used.
 audit_unsafe_usage :: proc(module_name: string, source: string, result: ^Scan_Result) {

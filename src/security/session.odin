@@ -4,13 +4,13 @@ import "core:os"
 import "core:strings"
 import "core:sync"
 import "core:time"
+import "core:fmt"
 
 @(private="file")
 _session_registry: Session_Registry
 
 init_session_registry :: proc() {
 	_session_registry.sessions = make(map[string]Session_Info)
-	sync.mutex_init(&_session_registry.mutex)
 }
 
 register_session :: proc(agent_id: string, agent_type: string, session_id: string, parent: string) {
@@ -71,6 +71,9 @@ get_all_sessions :: proc() -> []Session_Info {
 
 current_timestamp :: proc() -> string {
 	now := time.now()
-	return time.format(now, time.RFC3339)
+	stamp, ok := time.time_to_rfc3339(now, 0, false)
+	if !ok {
+		return fmt.tprintf("%v", now)
+	}
+	return stamp
 }
-
