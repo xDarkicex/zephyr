@@ -159,6 +159,8 @@ test_property_security_unsafe_warning_logged :: proc(t: ^testing.T) {
 test_property_security_unsafe_audit_logged :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)
+	lock_home_env()
+	defer unlock_home_env()
 
 	if !git.libgit2_enabled() {
 		return

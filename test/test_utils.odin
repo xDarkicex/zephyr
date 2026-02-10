@@ -6,11 +6,23 @@ import "core:strings"
 import "core:time"
 import "core:fmt"
 import "core:testing"
+import "core:sync"
 import "base:runtime"
 
 import "../src/loader"
 
 DEFAULT_TEST_TIMEOUT :: 30 * time.Second
+
+// home_env_mutex serializes HOME mutations across tests.
+home_env_mutex: sync.Mutex
+
+lock_home_env :: proc() {
+    sync.mutex_lock(&home_env_mutex)
+}
+
+unlock_home_env :: proc() {
+    sync.mutex_unlock(&home_env_mutex)
+}
 
 set_test_timeout :: proc(t: ^testing.T, duration: time.Duration = DEFAULT_TEST_TIMEOUT) {
     reset_test_state(t)

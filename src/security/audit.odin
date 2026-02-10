@@ -342,6 +342,12 @@ cleanup_dated_logs :: proc(base_path: string, cutoff: time.Time) {
 		return
 	}
 
+	cutoff_stamp, ok_cutoff := time.time_to_rfc3339(cutoff, 0, false)
+	if !ok_cutoff || len(cutoff_stamp) < 10 {
+		return
+	}
+	cutoff_date := cutoff_stamp[:10]
+
 	dirs, err := os2.read_all_directory_by_path(base_path, context.temp_allocator)
 	if err != nil {
 		return
@@ -353,12 +359,14 @@ cleanup_dated_logs :: proc(base_path: string, cutoff: time.Time) {
 			continue
 		}
 
-		dir_date, ok := parse_date_yyyy_mm_dd(dir.name)
-		if !ok {
+		if len(dir.name) != 10 {
+			continue
+		}
+		if dir.name[4] != '-' || dir.name[7] != '-' {
 			continue
 		}
 
-		if time.diff(dir_date, cutoff) > 0 {
+		if dir.name < cutoff_date {
 			dir_path := filepath.join({base_path, dir.name})
 			os2.remove_all(dir_path)
 			delete(dir_path)
@@ -394,7 +402,9 @@ cleanup_session_logs :: proc(base_path: string, cutoff: time.Time) {
 			continue
 		}
 
-		if time.diff(file_time, cutoff) > 0 {
+		file_unix := time.time_to_unix(file_time)
+		cutoff_unix := time.time_to_unix(cutoff)
+		if file_unix < cutoff_unix {
 			file_path := filepath.join({base_path, file.name})
 			os.remove(file_path)
 			delete(file_path)

@@ -8,6 +8,8 @@ import "../src/security"
 
 @(test)
 test_audit_log_paths_created :: proc(t: ^testing.T) {
+	lock_home_env()
+	defer unlock_home_env()
 	original_home := os.get_env("HOME")
 	temp_home := setup_test_environment("agent_roles_audit_home")
 	defer teardown_test_environment(temp_home)

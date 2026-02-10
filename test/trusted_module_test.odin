@@ -40,6 +40,8 @@ test_trusted_module_defaults_apply :: proc(t: ^testing.T) {
 test_trusted_module_custom_config :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)
+	lock_home_env()
+	defer unlock_home_env()
 
 	temp_root := setup_test_environment("trusted_module_config")
 	defer teardown_test_environment(temp_root)
