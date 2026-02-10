@@ -294,22 +294,28 @@ parse_time_value :: proc(value: string) -> (time.Time, bool) {
 
 read_audit_events :: proc(events: ^[dynamic]Audit_Entry, opts: Audit_Options) {
 	home := os.get_env("HOME")
-	defer delete(home)
 	if home == "" {
 		return
 	}
+	defer delete(home)
 
 	base := join_posix(home, ".zephyr/audit")
 	defer delete(base)
 
 	if opts.show_sessions {
-		read_session_logs(join_posix(base, "sessions"), events, opts)
+		path := join_posix(base, "sessions")
+		read_session_logs(path, events, opts)
+		delete(path)
 	}
 	if opts.show_commands {
-		read_command_logs(join_posix(base, "commands"), events, opts)
+		path := join_posix(base, "commands")
+		read_command_logs(path, events, opts)
+		delete(path)
 	}
 	if opts.show_operations {
-		read_operations_logs(join_posix(base, "operations"), events, opts)
+		path := join_posix(base, "operations")
+		read_operations_logs(path, events, opts)
+		delete(path)
 	}
 }
 
@@ -380,9 +386,11 @@ read_operations_logs :: proc(base_path: string, events: ^[dynamic]Audit_Entry, o
 		if dir.type != os2.File_Type.Directory {
 			continue
 		}
-		path := join_posix(join_posix(base_path, dir.name), "operations.log")
+		dir_path := join_posix(base_path, dir.name)
+		path := join_posix(dir_path, "operations.log")
 		read_json_lines_log(path, "operation", events, opts)
 		delete(path)
+		delete(dir_path)
 	}
 }
 
@@ -630,8 +638,10 @@ join_posix :: proc(base: string, rest: string) -> string {
 	if base == "" {
 		return strings.clone(rest)
 	}
-	trimmed := strings.trim_suffix(base, "/")
-	defer delete(trimmed)
+	trimmed := base
+	if strings.has_suffix(trimmed, "/") {
+		trimmed = trimmed[:len(trimmed)-1]
+	}
 	if rest == "" {
 		return strings.clone(trimmed)
 	}

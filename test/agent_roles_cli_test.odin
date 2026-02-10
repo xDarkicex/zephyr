@@ -8,6 +8,25 @@ import "core:strings"
 import "../src/cli"
 import "../src/security"
 
+join_posix_test :: proc(base: string, rest: string) -> string {
+	if base == "" {
+		return strings.clone(rest)
+	}
+	trimmed := base
+	if strings.has_suffix(trimmed, "/") {
+		trimmed = trimmed[:len(trimmed)-1]
+	}
+	if rest == "" {
+		return strings.clone(trimmed)
+	}
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	strings.write_string(&builder, trimmed)
+	strings.write_string(&builder, "/")
+	strings.write_string(&builder, rest)
+	return strings.clone(strings.to_string(builder))
+}
+
 setup_cli_home :: proc(t: ^testing.T, name: string) -> (string, string) {
 	lock_home_env()
 	original_home := os.get_env("HOME")
@@ -121,15 +140,35 @@ test_cli_audit_command_runs :: proc(t: ^testing.T) {
 		unlock_home_env()
 	}
 
-	base := filepath.join({temp_home, ".zephyr", "audit"})
+	base := join_posix_test(temp_home, ".zephyr/audit")
 	defer delete(base)
-	_ = os.make_directory(filepath.join({base, "sessions"}), 0o755)
-	_ = os.make_directory(filepath.join({base, "commands", "2026-02-10"}), 0o755)
-	_ = os.make_directory(filepath.join({base, "operations", "2026-02-10"}), 0o755)
+	sessions_dir := join_posix_test(base, "sessions")
+	_ = os.make_directory(sessions_dir, 0o755)
+	delete(sessions_dir)
+	commands_dir := join_posix_test(base, "commands")
+	commands_date_dir := join_posix_test(commands_dir, "2026-02-10")
+	_ = os.make_directory(commands_date_dir, 0o755)
+	delete(commands_date_dir)
+	delete(commands_dir)
+	operations_dir := join_posix_test(base, "operations")
+	operations_date_dir := join_posix_test(operations_dir, "2026-02-10")
+	_ = os.make_directory(operations_date_dir, 0o755)
+	delete(operations_date_dir)
+	delete(operations_dir)
 
-	session_log := filepath.join({base, "sessions", "cli-session-5-2026-02-10T00:00:00Z.log"})
-	command_log := filepath.join({base, "commands", "2026-02-10", "cli-session-5.log"})
-	operation_log := filepath.join({base, "operations", "2026-02-10", "operations.log"})
+	session_dir := join_posix_test(base, "sessions")
+	session_log := join_posix_test(session_dir, "cli-session-5-2026-02-10T00:00:00Z.log")
+	delete(session_dir)
+	command_dir := join_posix_test(base, "commands")
+	command_date_dir := join_posix_test(command_dir, "2026-02-10")
+	command_log := join_posix_test(command_date_dir, "cli-session-5.log")
+	delete(command_date_dir)
+	delete(command_dir)
+	operation_dir := join_posix_test(base, "operations")
+	operation_date_dir := join_posix_test(operation_dir, "2026-02-10")
+	operation_log := join_posix_test(operation_date_dir, "operations.log")
+	delete(operation_date_dir)
+	delete(operation_dir)
 	defer {
 		delete(session_log)
 		delete(command_log)
