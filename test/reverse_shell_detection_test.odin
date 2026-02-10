@@ -32,11 +32,11 @@ test_reverse_shell_detection_patterns :: proc(t: ^testing.T) {
 		{"perl -e 'use Socket; socket(S,PF_INET,SOCK_STREAM,getprotobyname(\"tcp\")); open(STDIN,\">&S\")'", .Perl},
 	}
 
-	for case, idx in cases {
+	for entry, idx in cases {
 		temp_dir := setup_test_environment(fmt.tprintf("reverse_shell_%d", idx))
 		defer teardown_test_environment(temp_dir)
 
-		path := write_reverse_shell_file(temp_dir, fmt.tprintf("shell_%d.sh", idx), case.line)
+		path := write_reverse_shell_file(temp_dir, fmt.tprintf("shell_%d.sh", idx), entry.line)
 		defer delete(path)
 
 		result := security.scan_module(temp_dir, security.Scan_Options{})
@@ -47,7 +47,7 @@ test_reverse_shell_detection_patterns :: proc(t: ^testing.T) {
 
 		found_type := false
 		for finding in result.reverse_shell_findings {
-			if finding.shell_type == case.expected {
+			if finding.shell_type == entry.expected {
 				found_type = true
 				break
 			}

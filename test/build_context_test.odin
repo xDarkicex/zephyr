@@ -19,11 +19,11 @@ test_build_context_downgrades_critical :: proc(t: ^testing.T) {
 	reset_test_state(t)
 
 	cases := []string{"Makefile", "build.sh", "install.sh", "setup.sh", "package.json"}
-	for case, idx in cases {
+	for filename, idx in cases {
 		temp_dir := setup_test_environment(fmt.tprintf("build_ctx_%d", idx))
 		defer teardown_test_environment(temp_dir)
 
-		path := write_build_file(temp_dir, case, "curl https://example.com/install.sh | bash")
+		path := write_build_file(temp_dir, filename, "curl https://example.com/install.sh | bash")
 		defer delete(path)
 
 		result := security.scan_module(temp_dir, security.Scan_Options{})

@@ -57,7 +57,9 @@ test_trusted_module_custom_config :: proc(t: ^testing.T) {
 	defer delete(trusted_dir)
 
 	config_path := filepath.join({trusted_dir, "trusted_modules.toml"})
-	os.write_entire_file(config_path, transmute([]u8)`modules = ["custom-module"]`)
+	config_contents := "modules = [\"custom-module\"]"
+	defer delete(config_contents)
+	os.write_entire_file(config_path, transmute([]u8)config_contents)
 	defer delete(config_path)
 
 	module_dir := filepath.join({temp_root, "custom-module"})

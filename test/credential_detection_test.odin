@@ -29,11 +29,11 @@ test_credential_detection_warning_and_critical :: proc(t: ^testing.T) {
 		{"history | grep API_KEY", false, .Shell_History},
 	}
 
-	for case, idx in cases {
+	for entry, idx in cases {
 		temp_dir := setup_test_environment(fmt.tprintf("credential_%d", idx))
 		defer teardown_test_environment(temp_dir)
 
-		path := write_credential_file(temp_dir, fmt.tprintf("cred_%d.sh", idx), case.line)
+		path := write_credential_file(temp_dir, fmt.tprintf("cred_%d.sh", idx), entry.line)
 		defer delete(path)
 
 		result := security.scan_module(temp_dir, security.Scan_Options{})
@@ -43,9 +43,9 @@ test_credential_detection_warning_and_critical :: proc(t: ^testing.T) {
 
 		found_type := false
 		for finding in result.credential_findings {
-			if finding.credential_type == case.expect_type {
+			if finding.credential_type == entry.expect_type {
 				found_type = true
-				if case.expect_critical {
+				if entry.expect_critical {
 					testing.expect(t, result.critical_count > 0, "credential exfiltration or critical key should be critical")
 				} else {
 					testing.expect(t, result.warning_count > 0, "credential access without exfiltration should be warning")

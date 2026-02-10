@@ -1,7 +1,9 @@
 package test
 
+import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:strings"
 import "core:testing"
 
 import "../src/security"
@@ -12,7 +14,7 @@ scan_fixture :: proc(t: ^testing.T, name: string) -> security.Scan_Result {
 	module_path := filepath.join({modules_dir, name})
 	defer delete(module_path)
 	if !os.exists(module_path) {
-		testing.fail(t, "missing test module: " + name)
+		testing.fail_now(t, fmt.tprintf("missing test module: %s", name))
 	}
 	return security.scan_module(module_path, security.Scan_Options{})
 }
@@ -67,7 +69,7 @@ test_phase2_attack_history_mining :: proc(t: ^testing.T) {
 
 scan_if_installed :: proc(t: ^testing.T, path: string) -> (security.Scan_Result, bool) {
 	if !os.exists(path) {
-		testing.skip(t, "module not installed: " + path)
+		fmt.println(fmt.tprintf("Skipping: module not installed: %s", path))
 		return security.Scan_Result{}, false
 	}
 	result := security.scan_module(path, security.Scan_Options{})
@@ -79,7 +81,10 @@ test_phase2_trusted_oh_my_zsh :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)
 
-	path := os.get_env("HOME") + "/.oh-my-zsh"
+	home := os.get_env("HOME")
+	defer delete(home)
+	path := strings.concatenate({home, "/.oh-my-zsh"})
+	defer delete(path)
 	result, ok := scan_if_installed(t, path)
 	if !ok do return
 	defer security.cleanup_scan_result(&result)
@@ -93,7 +98,10 @@ test_phase2_trusted_zinit :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)
 
-	path := os.get_env("HOME") + "/.zinit"
+	home := os.get_env("HOME")
+	defer delete(home)
+	path := strings.concatenate({home, "/.zinit"})
+	defer delete(path)
 	result, ok := scan_if_installed(t, path)
 	if !ok do return
 	defer security.cleanup_scan_result(&result)
@@ -107,7 +115,10 @@ test_phase2_trusted_nvm :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)
 
-	path := os.get_env("HOME") + "/.nvm"
+	home := os.get_env("HOME")
+	defer delete(home)
+	path := strings.concatenate({home, "/.nvm"})
+	defer delete(path)
 	result, ok := scan_if_installed(t, path)
 	if !ok do return
 	defer security.cleanup_scan_result(&result)
@@ -121,7 +132,10 @@ test_phase2_trusted_rbenv :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)
 
-	path := os.get_env("HOME") + "/.rbenv"
+	home := os.get_env("HOME")
+	defer delete(home)
+	path := strings.concatenate({home, "/.rbenv"})
+	defer delete(path)
 	result, ok := scan_if_installed(t, path)
 	if !ok do return
 	defer security.cleanup_scan_result(&result)

@@ -4,7 +4,6 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 import "core:testing"
-import "core:c"
 
 import "../src/security"
 
@@ -36,33 +35,6 @@ make_warning_result :: proc() -> security.Scan_Result {
 	}
 }
 
-cstring_buffer :: proc(s: string) -> ([]u8, cstring) {
-	if s == "" do return nil, nil
-	buf := make([]u8, len(s)+1)
-	copy(buf[:len(s)], s)
-	buf[len(s)] = 0
-	return buf, cast(cstring)&buf[0]
-}
-
-run_shell_command :: proc(command: string) -> bool {
-	cmd_buf, cmd_c := cstring_buffer(command)
-	defer if cmd_buf != nil { delete(cmd_buf) }
-	if cmd_c == nil do return false
-	return system(cmd_c) == 0
-}
-
-// Use system() for invoking shell commands in tests.
-when ODIN_OS == .Darwin {
-	foreign import libSystem "system:System"
-	foreign libSystem {
-		system :: proc(command: cstring) -> c.int ---
-	}
-} else {
-	foreign import "system:libc"
-	foreign libc {
-		system :: proc(command: cstring) -> c.int ---
-	}
-}
 
 @(test)
 test_scanner_detects_critical_patterns :: proc(t: ^testing.T) {
@@ -380,7 +352,8 @@ test_scanner_detects_symlink_evasion :: proc(t: ^testing.T) {
 	outside_dir := setup_test_environment("security_symlink_outside")
 	defer teardown_test_environment(outside_dir)
 
-	outside_path := write_test_file(outside_dir, "outside.sh", transmute([]u8)"echo ok")
+	outside_content := "echo ok"
+	outside_path := write_test_file(outside_dir, "outside.sh", transmute([]u8)outside_content)
 	defer delete(outside_path)
 
 	link_path := strings.concatenate({temp_dir, "/linked.sh"})

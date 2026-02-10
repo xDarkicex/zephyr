@@ -10,9 +10,7 @@ import "core:time"
 import "../src/security"
 
 write_file :: proc(path: string, contents: string) -> bool {
-	data := []u8(contents)
-	defer delete(data)
-	return os.write_entire_file(path, data)
+	return os.write_entire_file(path, transmute([]u8)contents)
 }
 
 create_perf_module :: proc(base_dir: string, file_count: int, lines_per_file: int) -> (module_dir: string, total_bytes: int) {
@@ -36,7 +34,7 @@ create_perf_module :: proc(base_dir: string, file_count: int, lines_per_file: in
 	payload_builder := strings.builder_make()
 	defer strings.builder_destroy(&payload_builder)
 	for _ in 0..<lines_per_file {
-		strings.builder_write_string(&payload_builder, payload_line)
+		strings.write_string(&payload_builder, payload_line)
 	}
 	payload := strings.clone(strings.to_string(payload_builder))
 	defer delete(payload)
@@ -58,7 +56,7 @@ estimate_scan_memory :: proc(result: security.Scan_Result, total_bytes: int) -> 
 	bytes += len(result.findings) * size_of(security.Finding)
 	bytes += len(result.credential_findings) * size_of(security.Credential_Finding)
 	bytes += len(result.reverse_shell_findings) * size_of(security.Reverse_Shell_Finding)
-	bytes += len(result.symlink_evasions) * size_of(security.Symlink_Evasion)
+	bytes += len(result.symlink_evasions) * size_of(security.Symlink_Finding)
 	bytes += size_of(security.Scan_Result)
 	return bytes
 }

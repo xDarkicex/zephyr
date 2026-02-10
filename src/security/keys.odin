@@ -6,9 +6,16 @@ import "core:strings"
 
 // Official Zephyr signing key (public).
 // NOTE: Placeholder until Task 13 generates the real key.
-ZEPHYR_SIGNING_KEY :: `-----BEGIN PUBLIC KEY-----
+// Test builds can override this with -define:ZEPHYR_TEST_SIGNING_KEY=true
+when #config(ZEPHYR_TEST_SIGNING_KEY, false) {
+	ZEPHYR_SIGNING_KEY :: `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAwHLFDGChB8zNXCa0HnAHboA6bTi8yO8cOzWLcW/yPDs=
+-----END PUBLIC KEY-----`
+} else {
+	ZEPHYR_SIGNING_KEY :: `-----BEGIN PUBLIC KEY-----
 [Placeholder - will be replaced with actual key]
 -----END PUBLIC KEY-----`
+}
 
 get_signing_key :: proc() -> string {
 	return strings.clone(ZEPHYR_SIGNING_KEY)

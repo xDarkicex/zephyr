@@ -21,8 +21,7 @@ when ODIN_OS == .Darwin || ODIN_OS == .Linux {
 			EVP_MD_CTX_new      :: proc() -> ^EVP_MD_CTX ---
 			EVP_MD_CTX_free     :: proc(ctx: ^EVP_MD_CTX) ---
 			EVP_DigestVerifyInit   :: proc(ctx: ^EVP_MD_CTX, pctx: ^^EVP_PKEY_CTX, typ: ^EVP_MD, e: ^ENGINE, pkey: ^EVP_PKEY) -> int ---
-			EVP_DigestVerifyUpdate :: proc(ctx: ^EVP_MD_CTX, data: rawptr, cnt: int) -> int ---
-			EVP_DigestVerifyFinal  :: proc(ctx: ^EVP_MD_CTX, sig: rawptr, siglen: int) -> int ---
+			EVP_DigestVerify        :: proc(ctx: ^EVP_MD_CTX, sig: rawptr, siglen: int, tbs: rawptr, tbslen: int) -> int ---
 			EVP_sha256             :: proc() -> ^EVP_MD ---
 		}
 
@@ -71,44 +70,33 @@ when ODIN_OS == .Darwin || ODIN_OS == .Linux {
 			}
 			defer EVP_PKEY_free(pkey)
 
-			ctx := EVP_MD_CTX_new()
-			if ctx == nil {
-				result.error_message = strings.clone("failed to allocate OpenSSL context")
-				return result
-			}
-
-			use_ctx := ctx
-			ok_init := EVP_DigestVerifyInit(use_ctx, nil, EVP_sha256(), nil, pkey) == 1
-			if !ok_init {
-				EVP_MD_CTX_free(use_ctx)
-				use_ctx = EVP_MD_CTX_new()
-				if use_ctx == nil {
-					result.error_message = strings.clone("failed to allocate OpenSSL context")
-					return result
+			attempt_verify := proc(md: ^EVP_MD, payload: []u8, signature: []u8, key: ^EVP_PKEY) -> bool {
+				ctx := EVP_MD_CTX_new()
+				if ctx == nil {
+					return false
 				}
-				ok_init = EVP_DigestVerifyInit(use_ctx, nil, nil, nil, pkey) == 1
-			}
-			if !ok_init {
-				EVP_MD_CTX_free(use_ctx)
-				result.error_message = strings.clone("failed to initialize OpenSSL verification")
-				return result
-			}
-			defer EVP_MD_CTX_free(use_ctx)
+				defer EVP_MD_CTX_free(ctx)
 
-			if len(data) > 0 {
-				if EVP_DigestVerifyUpdate(use_ctx, rawptr(&data[0]), len(data)) != 1 {
-					result.error_message = strings.clone("OpenSSL verify update failed")
-					return result
+				if EVP_DigestVerifyInit(ctx, nil, md, nil, key) != 1 {
+					return false
 				}
+
+				if len(signature) == 0 {
+					return false
+				}
+				if len(payload) == 0 {
+					return false
+				}
+
+				return EVP_DigestVerify(ctx, rawptr(&signature[0]), len(signature), rawptr(&payload[0]), len(payload)) == 1
 			}
 
-			if len(sig) == 0 {
-				result.error_message = strings.clone("signature file is empty")
-				return result
+			verified := attempt_verify(EVP_sha256(), data, sig, pkey)
+			if !verified {
+				verified = attempt_verify(nil, data, sig, pkey)
 			}
 
-			verify_ok := EVP_DigestVerifyFinal(use_ctx, rawptr(&sig[0]), len(sig))
-			if verify_ok != 1 {
+			if !verified {
 				result.error_message = strings.clone("signature verification failed")
 				return result
 			}

@@ -79,7 +79,7 @@ test_command_scan_edge_cases :: proc(t: ^testing.T) {
 	builder := strings.builder_make()
 	defer strings.builder_destroy(&builder)
 	for _ in 0..<11*1024 {
-		strings.builder_write_string(&builder, "a")
+		strings.write_string(&builder, "a")
 	}
 	over := strings.clone(strings.to_string(builder))
 	defer delete(over)
@@ -115,16 +115,16 @@ test_command_scan_performance :: proc(t: ^testing.T) {
 		return
 	}
 
-	const iterations := 1000
-	const cmd_simple := "ls -la"
-	const cmd_complex := "find / -name \"*.txt\" | xargs grep \"pattern\""
-	const cmd_multiline := "echo start\nls -la\nwhoami\n"
+	iterations := 1000
+	cmd_simple := "ls -la"
+	cmd_complex := "find / -name \"*.txt\" | xargs grep \"pattern\""
+	cmd_multiline := "echo start\nls -la\nwhoami\n"
 
 	start_simple := time.now()
 	for _ in 0..<iterations {
 		_ = security.Scan_Command_Safe(cmd_simple)
 	}
-	avg_simple := time.since(start_simple) / iterations
+	avg_simple := time.since(start_simple) / time.Duration(iterations)
 	testing.expect(t, avg_simple < time.Millisecond * 5,
 		fmt.tprintf("Simple command avg %v exceeds 5ms", avg_simple))
 
@@ -132,7 +132,7 @@ test_command_scan_performance :: proc(t: ^testing.T) {
 	for _ in 0..<iterations {
 		_ = security.Scan_Command_Safe(cmd_complex)
 	}
-	avg_complex := time.since(start_complex) / iterations
+	avg_complex := time.since(start_complex) / time.Duration(iterations)
 	testing.expect(t, avg_complex < time.Millisecond * 10,
 		fmt.tprintf("Complex command avg %v exceeds 10ms", avg_complex))
 
@@ -140,7 +140,7 @@ test_command_scan_performance :: proc(t: ^testing.T) {
 	for _ in 0..<iterations {
 		_ = security.Scan_Command_Safe(cmd_multiline)
 	}
-	avg_multi := time.since(start_multi) / iterations
+	avg_multi := time.since(start_multi) / time.Duration(iterations)
 	testing.expect(t, avg_multi < time.Millisecond * 50,
 		fmt.tprintf("Multiline command avg %v exceeds 50ms", avg_multi))
 }

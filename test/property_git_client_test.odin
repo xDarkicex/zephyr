@@ -5,7 +5,6 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:testing"
-import "core:c"
 
 import "../src/git"
 
@@ -251,29 +250,5 @@ test_git_hooks_not_executed_on_checkout :: proc(t: ^testing.T) {
 }
 
 run_git_cmd :: proc(command: string) -> bool {
-	cmd_buf, cmd_c := cstring_buffer(command)
-	defer if cmd_buf != nil { delete(cmd_buf) }
-	if cmd_c == nil do return false
-	return system(cmd_c) == 0
-}
-
-cstring_buffer :: proc(s: string) -> ([]u8, cstring) {
-	if s == "" do return nil, nil
-	buf := make([]u8, len(s)+1)
-	copy(buf[:len(s)], s)
-	buf[len(s)] = 0
-	return buf, cast(cstring)&buf[0]
-}
-
-// Use system() for invoking local git in tests.
-when ODIN_OS == .Darwin {
-	foreign import libSystem "system:System"
-	foreign libSystem {
-		system :: proc(command: cstring) -> c.int ---
-	}
-} else {
-	foreign import "system:libc"
-	foreign libc {
-		system :: proc(command: cstring) -> c.int ---
-	}
+	return run_shell_command(command)
 }
