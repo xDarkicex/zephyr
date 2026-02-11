@@ -65,7 +65,7 @@ print_system_info :: proc(use_color: bool) {
 	now := time.now()
 	system_time := "unknown"
 	if stamp, ok := time.time_to_rfc3339(now, 0, false); ok {
-		system_time = stamp
+		system_time = strings.clone(stamp)
 		delete(stamp)
 	}
 
