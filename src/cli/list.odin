@@ -13,6 +13,8 @@ List_Options :: struct {
     json_output:  bool,
     pretty_print: bool,
     filter:       string,
+    graph_format: string,
+    verbose:      bool,
 }
 
 // parse_list_options parses command-line arguments for list command
@@ -27,6 +29,12 @@ parse_list_options :: proc() -> List_Options {
             options.pretty_print = true
         } else if strings.has_prefix(arg, "--filter=") {
             options.filter = strings.trim_prefix(arg, "--filter=")
+        } else if arg == "--graph" {
+            options.graph_format = "mermaid"
+        } else if strings.has_prefix(arg, "--graph=") {
+            options.graph_format = strings.trim_prefix(arg, "--graph=")
+        } else if arg == "-v" || arg == "--verbose" {
+            options.verbose = true
         }
     }
     
@@ -115,6 +123,51 @@ list_modules :: proc() {
         }
     }
     
+    // Graph output (plain or embedded in JSON)
+    if options.graph_format != "" {
+        graph_modules := resolved_modules
+        if options.filter != "" {
+            filtered := make([dynamic]manifest.Module)
+            defer delete(filtered)
+            filter_lower := strings.to_lower(options.filter)
+            defer delete(filter_lower)
+            for module in modules {
+                module_name_lower := strings.to_lower(module.name)
+                matches := strings.contains(module_name_lower, filter_lower)
+                delete(module_name_lower)
+                if matches {
+                    append(&filtered, module)
+                }
+            }
+            graph_modules = filtered
+        }
+
+        if options.json_output {
+            json_bytes, marshal_err := generate_json_with_graph(
+                modules_dir,
+                modules,
+                compatible_indices,
+                graph_modules,
+                options.filter,
+                options.pretty_print,
+                options.graph_format,
+                options.verbose,
+            )
+            if marshal_err != nil {
+                colors.print_error("Failed to serialize JSON: %v", marshal_err)
+                os.exit(1)
+            }
+            defer delete(json_bytes)
+            fmt.println(string(json_bytes))
+            return
+        }
+
+        graph := generate_mermaid_graph(graph_modules, options.verbose)
+        defer delete(graph)
+        fmt.println(graph)
+        return
+    }
+
     // Output based on format
     if options.json_output {
         json_bytes, marshal_err := generate_json_output(

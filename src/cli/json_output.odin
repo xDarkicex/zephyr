@@ -17,6 +17,7 @@ JSON_Output :: struct {
     summary:              Summary_Info,
     modules:              [dynamic]Module_Info,
     incompatible_modules: [dynamic]Incompatible_Module_Info,
+    dependency_graph:     Dependency_Graph_Info,
 }
 
 // Environment_Info contains system and Zephyr environment details
@@ -97,6 +98,11 @@ Incompatible_Module_Info :: struct {
     platforms:   Platform_Info_JSON,
 }
 
+Dependency_Graph_Info :: struct {
+    format:  string,
+    content: string,
+}
+
 // generate_json_output creates the complete JSON output structure and marshals it
 // Returns the JSON bytes and any marshal error
 generate_json_output :: proc(
@@ -107,128 +113,16 @@ generate_json_output :: proc(
     filter: string,
     pretty: bool,
 ) -> ([]u8, json.Marshal_Error) {
-    
-    // Get current platform info
-    platform := loader.get_current_platform()
-    defer loader.cleanup_platform_info(&platform)
-    
-    // Build environment info
-    env := Environment_Info{
-        zephyr_version = "1.0.0",
-        modules_dir = strings.clone(modules_dir),
-        os = strings.clone(platform.os),
-        arch = strings.clone(platform.arch),
-        shell = strings.clone(platform.shell),
-        shell_version = strings.clone(platform.version),
-    }
-    defer {
-        if env.modules_dir != "" {
-            delete(env.modules_dir)
-        }
-        if env.os != "" {
-            delete(env.os)
-        }
-        if env.arch != "" {
-            delete(env.arch)
-        }
-        if env.shell != "" {
-            delete(env.shell)
-        }
-        if env.shell_version != "" {
-            delete(env.shell_version)
-        }
-    }
-    
-    // Build modules info
-    modules_info := make([dynamic]Module_Info)
-    defer {
-        for &mod in modules_info {
-            cleanup_module_info_contents(&mod)
-        }
-        delete(modules_info)
-    }
-    
-    for module, idx in resolved_modules {
-        // Apply filter if specified
-        if filter != "" {
-            module_name_lower := strings.to_lower(module.name)
-            filter_lower := strings.to_lower(filter)
-            contains_filter := strings.contains(module_name_lower, filter_lower)
-            delete(module_name_lower)
-            delete(filter_lower)
-            
-            if !contains_filter {
-                continue
-            }
-        }
-        
-        module_info := build_module_info(module, idx + 1, all_modules)
-        append(&modules_info, module_info)
-    }
-    
-    // Build incompatible modules info
-    incompatible_info := make([dynamic]Incompatible_Module_Info)
-    defer {
-        for &mod in incompatible_info {
-            cleanup_incompatible_module_info_contents(&mod)
-        }
-        delete(incompatible_info)
-    }
-    
-    for module, idx in all_modules {
-        // Check if this module is incompatible
-        is_compatible := false
-        for comp_idx in compatible_indices {
-            if comp_idx == idx {
-                is_compatible = true
-                break
-            }
-        }
-        
-        if !is_compatible {
-            // Apply filter if specified
-            if filter != "" {
-                module_name_lower := strings.to_lower(module.name)
-                filter_lower := strings.to_lower(filter)
-                contains_filter := strings.contains(module_name_lower, filter_lower)
-                delete(module_name_lower)
-                delete(filter_lower)
-                
-                if !contains_filter {
-                    continue
-                }
-            }
-            
-            incomp_info := build_incompatible_module_info(module, platform)
-            append(&incompatible_info, incomp_info)
-        }
-    }
-    
-    // Build summary
-    summary := Summary_Info{
-        total_modules = len(modules_info) + len(incompatible_info),
-        compatible_modules = len(modules_info),
-        incompatible_modules = len(incompatible_info),
-    }
-    
-    // Generate timestamp
-    now := time.now()
-    timestamp := fmt.tprintf("%v", now)
-    // NOTE: timestamp is temp-allocated by fmt.tprintf, don't delete it!
-    
-    // Build output structure
-    output := JSON_Output{
-        schema_version = strings.clone("1.0"),
-        generated_at = strings.clone(timestamp),
-        environment = env,
-        summary = summary,
-        modules = modules_info,
-        incompatible_modules = incompatible_info,
-    }
-    defer delete(output.schema_version)
-    defer delete(output.generated_at)
-    
-    // Marshal BEFORE cleanup (this is the key!)
+    output := build_json_output_struct(
+        modules_dir,
+        all_modules,
+        compatible_indices,
+        resolved_modules,
+        filter,
+    )
+    defer cleanup_json_output(&output)
+
+    // Marshal BEFORE cleanup
     options := json.Marshal_Options{
         pretty = pretty,
         use_spaces = true,
@@ -238,6 +132,125 @@ generate_json_output :: proc(
     json_bytes, marshal_err := json.marshal(output, options)
     
     return json_bytes, marshal_err
+}
+
+generate_json_with_graph :: proc(
+    modules_dir: string,
+    all_modules: [dynamic]manifest.Module,
+    compatible_indices: [dynamic]int,
+    resolved_modules: [dynamic]manifest.Module,
+    filter: string,
+    pretty: bool,
+    graph_format: string,
+    verbose: bool,
+) -> ([]u8, json.Marshal_Error) {
+    output := build_json_output_struct(
+        modules_dir,
+        all_modules,
+        compatible_indices,
+        resolved_modules,
+        filter,
+    )
+    defer cleanup_json_output(&output)
+
+    if graph_format == "mermaid" {
+        graph_content := generate_mermaid_graph(resolved_modules, verbose)
+        output.dependency_graph = Dependency_Graph_Info{
+            format = strings.clone("mermaid"),
+            content = graph_content,
+        }
+    }
+
+    options := json.Marshal_Options{
+        pretty = pretty,
+        use_spaces = true,
+        spaces = 2,
+    }
+
+    return json.marshal(output, options)
+}
+
+build_json_output_struct :: proc(
+    modules_dir: string,
+    all_modules: [dynamic]manifest.Module,
+    compatible_indices: [dynamic]int,
+    resolved_modules: [dynamic]manifest.Module,
+    filter: string,
+) -> JSON_Output {
+    platform := loader.get_current_platform()
+    defer loader.cleanup_platform_info(&platform)
+
+    env := Environment_Info{
+        zephyr_version = "1.0.0",
+        modules_dir = strings.clone(modules_dir),
+        os = strings.clone(platform.os),
+        arch = strings.clone(platform.arch),
+        shell = strings.clone(platform.shell),
+        shell_version = strings.clone(platform.version),
+    }
+
+    modules_info := make([dynamic]Module_Info)
+    for module, idx in resolved_modules {
+        if filter != "" {
+            module_name_lower := strings.to_lower(module.name)
+            filter_lower := strings.to_lower(filter)
+            contains_filter := strings.contains(module_name_lower, filter_lower)
+            delete(module_name_lower)
+            delete(filter_lower)
+            if !contains_filter {
+                continue
+            }
+        }
+
+        module_info := build_module_info(module, idx + 1, all_modules)
+        append(&modules_info, module_info)
+    }
+
+    incompatible_info := make([dynamic]Incompatible_Module_Info)
+    for module, idx in all_modules {
+        is_compatible := false
+        for comp_idx in compatible_indices {
+            if comp_idx == idx {
+                is_compatible = true
+                break
+            }
+        }
+
+        if !is_compatible {
+            if filter != "" {
+                module_name_lower := strings.to_lower(module.name)
+                filter_lower := strings.to_lower(filter)
+                contains_filter := strings.contains(module_name_lower, filter_lower)
+                delete(module_name_lower)
+                delete(filter_lower)
+                if !contains_filter {
+                    continue
+                }
+            }
+
+            incomp_info := build_incompatible_module_info(module, platform)
+            append(&incompatible_info, incomp_info)
+        }
+    }
+
+    summary := Summary_Info{
+        total_modules = len(modules_info) + len(incompatible_info),
+        compatible_modules = len(modules_info),
+        incompatible_modules = len(incompatible_info),
+    }
+
+    now := time.now()
+    timestamp := fmt.tprintf("%v", now)
+
+    return JSON_Output{
+        schema_version = strings.clone("1.0"),
+        generated_at = strings.clone(timestamp),
+        environment = env,
+        summary = summary,
+        modules = modules_info,
+        incompatible_modules = incompatible_info,
+        dependency_graph = Dependency_Graph_Info{},
+    }
 }
 
 // build_module_info constructs Module_Info from a manifest.Module
@@ -459,6 +472,7 @@ create_empty_json_output :: proc(modules_dir: string, pretty: bool) -> ([]u8, js
         },
         modules = make([dynamic]Module_Info),
         incompatible_modules = make([dynamic]Incompatible_Module_Info),
+        dependency_graph = Dependency_Graph_Info{},
     }
     
     defer {
@@ -557,6 +571,15 @@ cleanup_json_output :: proc(output: ^JSON_Output) {
         }
         delete(output.incompatible_modules)
         output.incompatible_modules = nil
+    }
+
+    if output.dependency_graph.format != "" {
+        delete(output.dependency_graph.format)
+        output.dependency_graph.format = ""
+    }
+    if output.dependency_graph.content != "" {
+        delete(output.dependency_graph.content)
+        output.dependency_graph.content = ""
     }
 }
 
