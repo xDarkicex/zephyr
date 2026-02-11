@@ -57,6 +57,7 @@ install_release :: proc(release: ^Release_Info) -> bool {
 	}
 	fmt.println("OK")
 
+	fmt.println("Installing update...")
 	if !install_binary(binary_data) {
 		colors.print_error("Failed to install new binary")
 		return false
@@ -67,6 +68,7 @@ install_release :: proc(release: ^Release_Info) -> bool {
 		return false
 	}
 
+	fmt.println("Installation complete.")
 	return true
 }
 
@@ -126,7 +128,35 @@ download_with_progress :: proc(url: string, expected_size: int) -> []u8 {
 	if expected_size > 0 && len(response.body) != expected_size {
 		colors.print_warning("Downloaded size mismatch: expected %d, got %d", expected_size, len(response.body))
 	}
+	print_download_summary(len(response.body), expected_size)
 	return response.body
+}
+
+print_download_summary :: proc(downloaded: int, expected: int) {
+	if downloaded <= 0 {
+		return
+	}
+	if expected <= 0 {
+		fmt.printf("Download complete (%d bytes).\n", downloaded)
+		return
+	}
+
+	percent := int(float64(downloaded) / float64(expected) * 100.0)
+	if percent > 100 {
+		percent = 100
+	}
+	bar_width := 20
+	filled := percent * bar_width / 100
+	bar := make([]u8, bar_width)
+	for i := 0; i < bar_width; i += 1 {
+		if i < filled {
+			bar[i] = '#'
+		} else {
+			bar[i] = '-'
+		}
+	}
+	fmt.printf("Download complete [%s] %d%% (%d/%d bytes)\n", string(bar[:]), percent, downloaded, expected)
+	delete(bar)
 }
 
 download_checksum :: proc(url: string) -> string {

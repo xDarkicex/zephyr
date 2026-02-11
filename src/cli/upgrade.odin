@@ -42,7 +42,9 @@ upgrade_command :: proc() {
 	}
 
 	if !is_newer_version(latest, current) {
-		fmt.printf("Zephyr is up to date (%s).\n", current)
+		fmt.printf("Current version: %s\n", current)
+		fmt.printf("Latest version:  %s\n", latest)
+		fmt.printf("Zephyr is up to date.\n")
 		return
 	}
 
@@ -53,6 +55,12 @@ upgrade_command :: proc() {
 		}
 		fmt.println("Run 'zephyr upgrade' to install.")
 		return
+	}
+
+	fmt.printf("Current version: %s\n", current)
+	fmt.printf("Latest version:  %s\n", latest)
+	if release.release_notes_url != "" {
+		fmt.printf("Release notes: %s\n", release.release_notes_url)
 	}
 
 	if !options.force {
