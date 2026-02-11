@@ -280,8 +280,17 @@ get_agent_id() {
     esac
 }
 
-ZEPHYR_AGENT_TYPE="$(detect_agent_type)"
-ZEPHYR_AGENT_ID="$(get_agent_id "$ZEPHYR_AGENT_TYPE")"
+if [[ -n "$ZEPHYR_AGENT_TYPE" ]]; then
+    ZEPHYR_AGENT_TYPE="$(echo "$ZEPHYR_AGENT_TYPE" | tr '[:upper:]' '[:lower:]')"
+elif [[ -n "$ZEPHYR_AGENT_ID" ]]; then
+    ZEPHYR_AGENT_TYPE="custom"
+else
+    ZEPHYR_AGENT_TYPE="$(detect_agent_type)"
+fi
+
+if [[ -z "$ZEPHYR_AGENT_ID" ]]; then
+    ZEPHYR_AGENT_ID="$(get_agent_id "$ZEPHYR_AGENT_TYPE")"
+fi
 ZEPHYR_SESSION_ID="$$"
 ZEPHYR_PARENT_PROCESS="$(/bin/ps -p "$PPID" -o comm= 2>/dev/null | head -n 1 || echo 'unknown')"
 

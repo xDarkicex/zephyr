@@ -88,3 +88,21 @@ test_detect_human_default :: proc(t: ^testing.T) {
 	agent_type := security.detect_agent_type()
 	testing.expect(t, agent_type == "human", "Should default to human")
 }
+
+@(test)
+test_detect_dynamic_override :: proc(t: ^testing.T) {
+	sync.mutex_lock(&env_mutex)
+	defer sync.mutex_unlock(&env_mutex)
+	clear_agent_env()
+
+	os.set_env("ZEPHYR_AGENT_TYPE", "My-AGENT")
+	os.set_env("ZEPHYR_AGENT_ID", "agent-42")
+	defer os.unset_env("ZEPHYR_AGENT_TYPE")
+	defer os.unset_env("ZEPHYR_AGENT_ID")
+
+	agent_type := security.detect_agent_type()
+	agent_id := security.get_agent_id(agent_type)
+
+	testing.expect(t, agent_type == "my-agent", "Should respect ZEPHYR_AGENT_TYPE override")
+	testing.expect(t, agent_id == "agent-42", "Should use ZEPHYR_AGENT_ID override")
+}

@@ -27,6 +27,18 @@ Permissions controlled by role:
 
 If `zephyr` is not on `PATH`, the load script uses the absolute path of the binary that generated it.
 
+### Manual Overrides (Dynamic Agents)
+
+For agent frameworks that don’t match a known environment signature, you can
+set overrides before running `zephyr load`:
+
+```bash
+export ZEPHYR_AGENT_TYPE="my-agent"
+export ZEPHYR_AGENT_ID="agent-42"
+```
+
+If only `ZEPHYR_AGENT_ID` is set, the agent type defaults to `custom`.
+
 ## CLI Commands
 
 View current session:
