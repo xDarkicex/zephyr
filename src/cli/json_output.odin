@@ -153,8 +153,25 @@ generate_json_with_graph :: proc(
     )
     defer cleanup_json_output(&output)
 
+    graph_modules := resolved_modules
+    if filter != "" {
+        filtered := make([dynamic]manifest.Module)
+        defer delete(filtered)
+        filter_lower := strings.to_lower(filter)
+        defer delete(filter_lower)
+        for module in resolved_modules {
+            module_name_lower := strings.to_lower(module.name)
+            matches := strings.contains(module_name_lower, filter_lower)
+            delete(module_name_lower)
+            if matches {
+                append(&filtered, module)
+            }
+        }
+        graph_modules = filtered
+    }
+
     if graph_format == "mermaid" {
-        graph_content := generate_mermaid_graph(resolved_modules, verbose)
+        graph_content := generate_mermaid_graph(graph_modules, verbose)
         output.dependency_graph = Dependency_Graph_Info{
             format = strings.clone("mermaid"),
             content = graph_content,
@@ -181,7 +198,7 @@ build_json_output_struct :: proc(
     defer loader.cleanup_platform_info(&platform)
 
     env := Environment_Info{
-        zephyr_version = "1.0.0",
+        zephyr_version = strings.clone("1.0.0"),
         modules_dir = strings.clone(modules_dir),
         os = strings.clone(platform.os),
         arch = strings.clone(platform.arch),
@@ -458,7 +475,7 @@ create_empty_json_output :: proc(modules_dir: string, pretty: bool) -> ([]u8, js
         schema_version = strings.clone("1.0"),
         generated_at = strings.clone(timestamp),
         environment = Environment_Info{
-            zephyr_version = "1.0.0",
+            zephyr_version = strings.clone("1.0.0"),
             modules_dir = strings.clone(modules_dir),
             os = strings.clone(platform.os),
             arch = strings.clone(platform.arch),
