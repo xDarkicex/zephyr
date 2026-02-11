@@ -424,6 +424,8 @@ print_usage :: proc() {
 	fmt.println("    zephyr upgrade               # Upgrade Zephyr to latest release")
 	fmt.println("    zephyr upgrade --check       # Check for a newer Zephyr release")
 	fmt.println("    zephyr uninstall my-module   # Remove a module")
+	fmt.println("    zephyr uninstall my-module --force  # Force remove with dependents")
+	fmt.println("    zephyr list --graph=mermaid  # Output dependency graph")
 	fmt.println("    zephyr show-signing-key      # Display Zephyr signing key")
 	fmt.println("    zephyr verify <path>         # Verify a signed tarball")
 	fmt.println("    zephyr session               # Show current agent session")

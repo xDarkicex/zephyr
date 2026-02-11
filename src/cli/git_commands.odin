@@ -17,11 +17,6 @@ Install_Options :: struct {
 }
 
 
-// Uninstall_Options captures CLI inputs for git uninstall.
-Uninstall_Options :: struct {
-	module_name:  string,
-	manager_opts: git.Manager_Options,
-}
 
 // parse_install_options parses install flags from os.args.
 parse_install_options :: proc() -> Install_Options {
@@ -64,37 +59,6 @@ parse_install_options :: proc() -> Install_Options {
 }
 
 
-// parse_uninstall_options parses uninstall flags from os.args.
-parse_uninstall_options :: proc() -> Uninstall_Options {
-	options := Uninstall_Options{}
-	options.manager_opts.check_dependencies = true
-
-	args := os.args[1:]
-	for arg in args {
-		if arg == "uninstall" {
-			continue
-		}
-		if is_global_flag(arg) {
-			if arg == "-v" || arg == "--verbose" {
-				options.manager_opts.verbose = true
-			}
-			continue
-		}
-		if arg == "--confirm" {
-			options.manager_opts.confirm = true
-			continue
-		}
-		if strings.has_prefix(arg, "-") {
-			continue
-		}
-		if options.module_name == "" {
-			options.module_name = arg
-		}
-	}
-
-	return options
-}
-
 // install_command executes the install workflow and exits on failure.
 install_command :: proc() {
 	options := parse_install_options()
@@ -121,32 +85,6 @@ install_command :: proc() {
 	}
 }
 
-
-// uninstall_command executes the uninstall workflow and exits on failure.
-uninstall_command :: proc() {
-	options := parse_uninstall_options()
-	if options.module_name == "" {
-		colors.print_error("Module name required")
-		fmt.eprintln("Usage: zephyr uninstall <module-name> [--confirm]")
-		os.exit(1)
-	}
-
-	init_git_or_exit()
-	defer shutdown_git()
-
-	success, message := git.uninstall_module(options.module_name, options.manager_opts)
-	if message != "" {
-		if success {
-			fmt.println(message)
-		} else {
-			fmt.eprintln(message)
-		}
-		delete(message)
-	}
-	if !success {
-		os.exit(1)
-	}
-}
 
 // is_global_flag returns true for flags handled globally by the CLI.
 is_global_flag :: proc(arg: string) -> bool {
