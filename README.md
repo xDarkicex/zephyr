@@ -35,7 +35,7 @@ Zephyr uses a **clone (no checkout) → scan → validate → checkout → move*
 2. **Security scan**: All files scanned for dangerous patterns while isolated
 3. **Validation**: Manifest and dependencies validated
 4. **Controlled checkout**: Files are checked out only after scan + validation
-5. **Move to final**: Only if all checks pass, moved to `~/.zsh/modules/`
+5. **Move to final**: Only if all checks pass, moved to `~/.zephyr/modules/`
 
 This ensures malicious code cannot execute during the scan, and failed scans leave no artifacts.
 Git hooks are detected during the scan and **blocked by default** (install fails unless `--unsafe` is used).
@@ -128,6 +128,18 @@ Signing details are documented in `docs/SECURITY.md` and `docs/MODULE_DEVELOPMEN
 - You can verify a tarball yourself with `zephyr verify <path>`.
 - If `libarchive` or `openssl` is missing, signed installs will fail.
 
+### Build Metadata
+
+Builds embed version metadata at compile time. You can override the version
+string via `make`:
+
+```bash
+make build VERSION=1.2.3
+```
+
+`GIT_COMMIT` and `BUILD_TIME` are automatically captured from git and the
+current UTC time. If git is unavailable, the build falls back to `unknown`.
+
 ### Quick Install (Plugin Manager)
 
 If you use a zsh plugin manager (Oh My Zsh, Zinit, Antigen, etc.):
@@ -171,7 +183,7 @@ make build
 This will:
 1. Build the `zephyr` binary
 2. Install it to `$HOME/.zsh/bin/zephyr`
-3. Create the modules directory at `$HOME/.zsh/modules`
+3. Create the modules directory at `$HOME/.zephyr/modules`
 4. Set up a basic `core` module
 
 **Available make targets:**
@@ -233,16 +245,16 @@ zephyr list
 
 # Should show something like:
 # MODULE DISCOVERY RESULTS
-#   Directory: /Users/user/.zsh/modules
+#   Directory: /Users/user/.zephyr/modules
 #   Modules: 1 total, 1 compatible
 #   Platform: darwin/arm64, shell: zsh 5.9
 #
 # ✓ core v1.0.0
 #   Description: Core shell utilities and functions
-#   Path: /Users/user/.zsh/modules/core
+#   Path: /Users/user/.zephyr/modules/core
 
 # Test with verbose output
-zephyr -v validate
+zephyr --verbose validate
 # Should show: ✓ All modules are valid and ready to load!
 ```
 
@@ -257,7 +269,7 @@ zephyr init my-aliases
 
 This creates:
 ```
-$HOME/.zsh/modules/my-aliases/
+$HOME/.zephyr/modules/my-aliases/
 ├── module.toml
 ├── aliases.zsh
 └── functions.zsh
@@ -265,7 +277,7 @@ $HOME/.zsh/modules/my-aliases/
 
 ### 2. Add Some Content
 
-Edit `$HOME/.zsh/modules/my-aliases/aliases.zsh`:
+Edit `$HOME/.zephyr/modules/my-aliases/aliases.zsh`:
 
 ```bash
 # Git aliases
@@ -287,7 +299,7 @@ alias l='ls -CF'
 exec zsh
 
 # Or test without reloading using verbose mode
-zephyr -v load
+zephyr --verbose load
 ```
 
 Your aliases are now available! Zephyr automatically discovered and loaded your module.
@@ -300,7 +312,8 @@ Zephyr supports various command-line flags for enhanced output and debugging:
 
 ### Global Flags
 
-- `-v, --verbose`: Enable verbose output with detailed operation information
+- `-v, --version`: Show version information
+- `--verbose`: Enable verbose output with detailed operation information
 - `-d, --debug`: Enable debug output with internal processing details  
 - `--trace`: Enable maximum verbosity with trace-level debugging
 - `--no-color`: Disable colored output (useful for scripts or non-color terminals)
@@ -314,6 +327,56 @@ Zephyr supports various command-line flags for enhanced output and debugging:
 - `ZEPHYR_DEBUG_LOCATION`: Show source location in debug output
 - `NO_COLOR`: Disable colored output
 - `ZSH_MODULES_DIR`: Override default modules directory
+
+### Version Output
+
+Zephyr provides both a short and full version output:
+
+```bash
+zephyr -v
+zephyr --version
+```
+
+Full output includes build metadata, platform, shell, and modules directory.
+Use `--no-color` or `NO_COLOR=1` to disable colorized output.
+
+**Example output:**
+```
+    ███████╗███████╗██████╗ ██╗  ██╗██╗   ██╗██████╗
+    ╚══███╔╝██╔════╝██╔══██╗██║  ██║╚██╗ ██╔╝██╔══██╗
+      ███╔╝ █████╗  ██████╔╝███████║ ╚████╔╝ ██████╔╝
+     ███╔╝  ██╔══╝  ██╔═══╝ ██╔══██║  ╚██╔╝  ██╔══██╗
+    ███████╗███████╗██║     ██║  ██║   ██║   ██║  ██║
+    ╚══════╝╚══════╝╚═╝     ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝
+
+    Version:        dev
+    Build:          50a51e1 (2026-02-11T04:10:02Z)
+    Repository:     github.com/zephyr-systems/zephyr
+
+    System Time:    02-11-2026 - 04:10:09
+    Platform:       linux/arm64
+    Shell:          bash
+    Modules Dir:    /root/.zephyr/modules
+```
+
+**ASCII screenshot (copy/paste):**
+```
+    ███████╗███████╗██████╗ ██╗  ██╗██╗   ██╗██████╗
+    ╚══███╔╝██╔════╝██╔══██╗██║  ██║╚██╗ ██╔╝██╔══██╗
+      ███╔╝ █████╗  ██████╔╝███████║ ╚████╔╝ ██████╔╝
+     ███╔╝  ██╔══╝  ██╔═══╝ ██╔══██║  ╚██╔╝  ██╔══██╗
+    ███████╗███████╗██║     ██║  ██║   ██║   ██║  ██║
+    ╚══════╝╚══════╝╚═╝     ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝
+
+    Version:        dev
+    Build:          50a51e1 (2026-02-11T04:10:02Z)
+    Repository:     github.com/zephyr-systems/zephyr
+
+    System Time:    02-11-2026 - 04:10:09
+    Platform:       linux/arm64
+    Shell:          bash
+    Modules Dir:    /root/.zephyr/modules
+```
 
 ### `zephyr load` (default)
 
@@ -340,10 +403,10 @@ zephyr --debug load
 
 # === Module: core v1.0.0 ===
 export ZSH_MODULE_CORE_THEME="default"
-source "$HOME/.zsh/modules/core/exports.zsh"
+source "$HOME/.zephyr/modules/core/exports.zsh"
 
 # === Module: my-aliases v1.0.0 ===
-source "$HOME/.zsh/modules/my-aliases/aliases.zsh"
+source "$HOME/.zephyr/modules/my-aliases/aliases.zsh"
 ```
 
 ### `zephyr list`
@@ -364,7 +427,7 @@ zephyr --debug list
 **Output example:**
 ```
 MODULE DISCOVERY RESULTS
-  Directory: /Users/user/.zsh/modules
+  Directory: /Users/user/.zephyr/modules
   Modules: 4 total, 3 compatible
   Platform: darwin/arm64, shell: zsh 5.9
 
@@ -382,7 +445,7 @@ MODULE DISCOVERY RESULTS
 
 ✓ core v1.0.0
   Description: Core shell utilities and functions
-  Path: /Users/user/.zsh/modules/core
+  Path: /Users/user/.zephyr/modules/core
 
 ✓ Summary: 4 modules ready to load
 ```
@@ -412,7 +475,7 @@ zephyr -v list --json --pretty --filter=core
   "generated_at": "2026-02-06T10:30:45Z",
   "environment": {
     "zephyr_version": "1.0.0",
-    "modules_directory": "/Users/user/.zsh/modules",
+    "modules_directory": "/Users/user/.zephyr/modules",
     "platform": {
       "os": "darwin",
       "arch": "arm64",
@@ -491,7 +554,7 @@ zephyr --debug validate
 
 **Success output:**
 ```
-Validating modules in: /Users/user/.zsh/modules
+Validating modules in: /Users/user/.zephyr/modules
 
 Found 3 module manifest(s)
 
@@ -505,16 +568,16 @@ Use 'zephyr list' to see the load order.
 
 **Error output with suggestions:**
 ```
-Validating modules in: /Users/user/.zsh/modules
+Validating modules in: /Users/user/.zephyr/modules
 
 Found 2 module manifest(s)
 
 ✗ PARSING ERRORS
 Found 1 module(s) with parsing errors
 
-✗ /Users/user/.zsh/modules/bad-module/module.toml
+✗ /Users/user/.zephyr/modules/bad-module/module.toml
   Error: Missing required 'name' field in [module] section
-  File: /Users/user/.zsh/modules/bad-module/module.toml
+  File: /Users/user/.zephyr/modules/bad-module/module.toml
   Operation: Manifest validation
 
 Suggested fixes:
@@ -533,7 +596,7 @@ Suggested fixes:
 Found modules with dependency issues
 
 ✗ Module: git-helpers
-  Path: /Users/user/.zsh/modules/git-helpers/module.toml
+  Path: /Users/user/.zephyr/modules/git-helpers/module.toml
   ✗ Missing required dependency: 'colors'
 
 Suggested fixes:
@@ -682,9 +745,9 @@ zephyr -v init my-new-module
 **Success output:**
 ```
 ✓ Creating new module: my-new-module
-Location: /Users/user/.zsh/modules/my-new-module
+Location: /Users/user/.zephyr/modules/my-new-module
 
-ℹ Creating module directory: /Users/user/.zsh/modules/my-new-module
+ℹ Creating module directory: /Users/user/.zephyr/modules/my-new-module
 ℹ Creating subdirectory: functions
 ℹ Creating subdirectory: aliases  
 ℹ Creating subdirectory: completions
@@ -697,7 +760,7 @@ Location: /Users/user/.zsh/modules/my-new-module
 ✓ Module created successfully!
 
 Files created:
-   /Users/user/.zsh/modules/my-new-module/
+   /Users/user/.zephyr/modules/my-new-module/
    |-- module.toml          # Module manifest and configuration
    |-- init.zsh            # Main initialization script
    |-- README.md           # Documentation and usage guide
@@ -709,10 +772,10 @@ Files created:
 
 Next steps:
 1. Edit the module manifest:
-   vim /Users/user/.zsh/modules/my-new-module/module.toml
+   vim /Users/user/.zephyr/modules/my-new-module/module.toml
 
 2. Customize your module:
-   vim /Users/user/.zsh/modules/my-new-module/init.zsh
+   vim /Users/user/.zephyr/modules/my-new-module/init.zsh
 
 3. Test your module:
    zephyr validate          # Check for manifest errors
@@ -889,7 +952,7 @@ register_completions() {
 
 ### Module Directory
 
-By default, Zephyr looks for modules in `$HOME/.zsh/modules`. You can override this:
+By default, Zephyr looks for modules in `$HOME/.zephyr/modules`. You can override this:
 
 ```bash
 export ZSH_MODULES_DIR="/path/to/my/modules"
@@ -1043,7 +1106,7 @@ Use the verbose and debug flags to get detailed information about what Zephyr is
 zephyr -v load
 # Output:
 # [INFO] Verbose mode enabled
-# [INFO] Using modules directory: /Users/user/.zsh/modules
+# [INFO] Using modules directory: /Users/user/.zephyr/modules
 # [INFO] Starting module discovery
 # [INFO] Discovered 3 modules
 # [INFO] Starting platform filtering
@@ -1056,9 +1119,9 @@ zephyr --debug validate
 # Output:
 # [DEBUG] Debug mode enabled
 # [INFO] Processing command: validate
-# [DEBUG] Scanning directory: /Users/user/.zsh/modules
-# [DEBUG] Found manifest: /Users/user/.zsh/modules/core/module.toml
-# [DEBUG] Discovered module: core at /Users/user/.zsh/modules/core
+# [DEBUG] Scanning directory: /Users/user/.zephyr/modules
+# [DEBUG] Found manifest: /Users/user/.zephyr/modules/core/module.toml
+# [DEBUG] Discovered module: core at /Users/user/.zephyr/modules/core
 # [INFO] Resolving dependencies for 3 modules
 # [INFO] Resolution successful: 3 modules in order
 
@@ -1096,12 +1159,12 @@ zephyr validate
 
 ```bash
 $ zephyr load
-✗ Modules directory does not exist: /Users/user/.zsh/modules
+✗ Modules directory does not exist: /Users/user/.zephyr/modules
 
 Suggested fixes:
 
   1. Create the modules directory
-     Command: mkdir -p ~/.zsh/modules
+     Command: mkdir -p ~/.zephyr/modules
      Why: This creates the default modules directory where Zephyr looks for modules
 
   2. Set a custom modules directory
@@ -1119,7 +1182,7 @@ Suggested fixes:
 $ zephyr validate
 ✗ Invalid manifest
   Error: Missing required 'name' field in [module] section of /path/to/module.toml
-  File: /Users/user/.zsh/modules/bad-module/module.toml
+  File: /Users/user/.zephyr/modules/bad-module/module.toml
   Operation: Manifest validation
 
 Suggested fixes:
@@ -1154,7 +1217,7 @@ Suggested fixes:
 
 ```bash
 $ zephyr load
-⚠ No compatible modules found for current platform in: /Users/user/.zsh/modules
+⚠ No compatible modules found for current platform in: /Users/user/.zephyr/modules
 
 Suggested fixes:
 

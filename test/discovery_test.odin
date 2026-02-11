@@ -529,7 +529,7 @@ test_discovery_environment_variable :: proc(t: ^testing.T) {
     
     // Property: Should contain expected path components when using defaults
     if original_zsh_dir == "" && original_home != "" {
-        testing.expect(t, strings.contains(modules_dir, ".zsh/modules"), 
-            fmt.tprintf("Default path should contain .zsh/modules: %s", modules_dir))
+        testing.expect(t, strings.contains(modules_dir, ".zephyr/modules"),
+            fmt.tprintf("Default path should contain .zephyr/modules: %s", modules_dir))
     }
 }

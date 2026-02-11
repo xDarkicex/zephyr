@@ -16,11 +16,6 @@ Install_Options :: struct {
 	manager_opts: git.Manager_Options,
 }
 
-// Update_Options captures CLI inputs for git update.
-Update_Options :: struct {
-	module_name:  string,
-	manager_opts: git.Manager_Options,
-}
 
 // Uninstall_Options captures CLI inputs for git uninstall.
 Uninstall_Options :: struct {
@@ -68,31 +63,6 @@ parse_install_options :: proc() -> Install_Options {
 	return options
 }
 
-// parse_update_options parses update flags from os.args.
-parse_update_options :: proc() -> Update_Options {
-	options := Update_Options{}
-
-	args := os.args[1:]
-	for arg in args {
-		if arg == "update" {
-			continue
-		}
-		if is_global_flag(arg) {
-			if arg == "-v" || arg == "--verbose" {
-				options.manager_opts.verbose = true
-			}
-			continue
-		}
-		if strings.has_prefix(arg, "-") {
-			continue
-		}
-		if options.module_name == "" {
-			options.module_name = arg
-		}
-	}
-
-	return options
-}
 
 // parse_uninstall_options parses uninstall flags from os.args.
 parse_uninstall_options :: proc() -> Uninstall_Options {
@@ -151,26 +121,6 @@ install_command :: proc() {
 	}
 }
 
-// update_command executes the update workflow and exits on failure.
-update_command :: proc() {
-	options := parse_update_options()
-
-	init_git_or_exit()
-	defer shutdown_git()
-
-	success, message := git.update_module(options.module_name, options.manager_opts)
-	if message != "" {
-		if success {
-			fmt.println(message)
-		} else {
-			fmt.eprintln(message)
-		}
-		delete(message)
-	}
-	if !success {
-		os.exit(1)
-	}
-}
 
 // uninstall_command executes the uninstall workflow and exits on failure.
 uninstall_command :: proc() {

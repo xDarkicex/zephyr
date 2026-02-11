@@ -384,6 +384,271 @@ get_head_commit_hash :: proc(repo_path: string) -> (string, Git_Result) {
 	return clone_cstring(cs), Git_Result{success = true, error = .None}
 }
 
+// get_head_branch returns the current HEAD branch name (shorthand).
+get_head_branch :: proc(repo_path: string) -> (string, Git_Result) {
+	if repo_path == "" {
+		return "", Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("empty repository path")}
+	}
+	when !LIBGIT2_ENABLED {
+		return "", Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("libgit2 disabled (build with libgit2 installed)")}
+	}
+
+	path_buf, path_c := to_cstring_buffer(repo_path)
+	defer if path_buf != nil { delete(path_buf) }
+
+	repo: ^git_repository
+	if git_repository_open(&repo, path_c) < 0 {
+		return "", Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	defer if repo != nil { git_repository_free(repo) }
+
+	head: ^git_reference
+	if git_repository_head(&head, repo) < 0 {
+		return "", Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	defer if head != nil { git_reference_free(head) }
+
+	short := git_reference_shorthand(head)
+	if short == nil {
+		return "", Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("failed to resolve branch name")}
+	}
+
+	return clone_cstring(short), Git_Result{success = true, error = .None}
+}
+
+// pull_repository_branch performs a fetch and hard reset to origin/<branch>.
+pull_repository_branch :: proc(repo_path: string, branch: string) -> Git_Result {
+	if repo_path == "" {
+		return Git_Result{success = false, error = .Pull_Failed, message = strings.clone("empty repository path")}
+	}
+	if branch == "" {
+		return Git_Result{success = false, error = .Pull_Failed, message = strings.clone("empty branch name")}
+	}
+	when !LIBGIT2_ENABLED {
+		return Git_Result{
+			success = false,
+			error = .Pull_Failed,
+			message = strings.clone("libgit2 disabled (build with libgit2 installed)"),
+		}
+	}
+
+	path_buf, path_c := to_cstring_buffer(repo_path)
+	defer if path_buf != nil { delete(path_buf) }
+
+	repo: ^git_repository
+	if git_repository_open(&repo, path_c) < 0 {
+		return Git_Result{success = false, error = .Pull_Failed, message = clone_git_error_message()}
+	}
+	defer if repo != nil { git_repository_free(repo) }
+
+	origin_buf, origin_c := to_cstring_buffer("origin")
+	defer if origin_buf != nil { delete(origin_buf) }
+
+	remote: ^git_remote
+	if git_remote_lookup(&remote, repo, origin_c) < 0 {
+		return Git_Result{success = false, error = .Pull_Failed, message = clone_git_error_message()}
+	}
+	defer if remote != nil { git_remote_free(remote) }
+
+	if git_remote_fetch(remote, nil, nil, nil) < 0 {
+		return Git_Result{success = false, error = .Pull_Failed, message = clone_git_error_message()}
+	}
+
+	ref_name := fmt.aprintf("refs/remotes/origin/%s", branch)
+	defer delete(ref_name)
+	ref_buf, ref_c := to_cstring_buffer(ref_name)
+	defer if ref_buf != nil { delete(ref_buf) }
+
+	oid: git_oid
+	if git_reference_name_to_id(&oid, repo, ref_c) < 0 {
+		return Git_Result{success = false, error = .Pull_Failed, message = clone_git_error_message()}
+	}
+
+	target: ^git_object
+	if git_object_lookup(&target, repo, &oid, .COMMIT) < 0 {
+		return Git_Result{success = false, error = .Pull_Failed, message = clone_git_error_message()}
+	}
+	defer if target != nil { git_object_free(target) }
+
+	if git_reset(repo, target, .HARD, nil) < 0 {
+		return Git_Result{success = false, error = .Pull_Failed, message = clone_git_error_message()}
+	}
+
+	return Git_Result{success = true, error = .None}
+}
+
+// count_commits_between counts commits reachable from new_hash not in old_hash.
+count_commits_between :: proc(repo_path: string, old_hash: string, new_hash: string) -> (int, Git_Result) {
+	if repo_path == "" {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("empty repository path")}
+	}
+	if old_hash == "" || new_hash == "" {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("empty commit hash")}
+	}
+	when !LIBGIT2_ENABLED {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("libgit2 disabled (build with libgit2 installed)")}
+	}
+
+	path_buf, path_c := to_cstring_buffer(repo_path)
+	defer if path_buf != nil { delete(path_buf) }
+
+	repo: ^git_repository
+	if git_repository_open(&repo, path_c) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	defer if repo != nil { git_repository_free(repo) }
+
+	old_buf, old_c := to_cstring_buffer(old_hash)
+	defer if old_buf != nil { delete(old_buf) }
+	new_buf, new_c := to_cstring_buffer(new_hash)
+	defer if new_buf != nil { delete(new_buf) }
+
+	old_oid: git_oid
+	if git_oid_fromstr(&old_oid, old_c) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	new_oid: git_oid
+	if git_oid_fromstr(&new_oid, new_c) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+
+	walk: ^git_revwalk
+	if git_revwalk_new(&walk, repo) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	defer if walk != nil { git_revwalk_free(walk) }
+
+	if git_revwalk_push(walk, &new_oid) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	if git_revwalk_hide(walk, &old_oid) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+
+	count := 0
+	for {
+		rc := git_revwalk_next(&new_oid, walk)
+		if rc == 0 {
+			count += 1
+			continue
+		}
+		if rc == GIT_ITEROVER {
+			break
+		}
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+
+	return count, Git_Result{success = true, error = .None}
+}
+
+// count_files_changed_between returns number of file deltas between two commits.
+count_files_changed_between :: proc(repo_path: string, old_hash: string, new_hash: string) -> (int, Git_Result) {
+	if repo_path == "" {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("empty repository path")}
+	}
+	if old_hash == "" || new_hash == "" {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("empty commit hash")}
+	}
+	when !LIBGIT2_ENABLED {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("libgit2 disabled (build with libgit2 installed)")}
+	}
+
+	path_buf, path_c := to_cstring_buffer(repo_path)
+	defer if path_buf != nil { delete(path_buf) }
+
+	repo: ^git_repository
+	if git_repository_open(&repo, path_c) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	defer if repo != nil { git_repository_free(repo) }
+
+	old_buf, old_c := to_cstring_buffer(old_hash)
+	defer if old_buf != nil { delete(old_buf) }
+	new_buf, new_c := to_cstring_buffer(new_hash)
+	defer if new_buf != nil { delete(new_buf) }
+
+	old_oid: git_oid
+	if git_oid_fromstr(&old_oid, old_c) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	new_oid: git_oid
+	if git_oid_fromstr(&new_oid, new_c) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+
+	old_commit: ^git_commit
+	if git_commit_lookup(&old_commit, repo, &old_oid) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	defer if old_commit != nil { git_commit_free(old_commit) }
+
+	new_commit: ^git_commit
+	if git_commit_lookup(&new_commit, repo, &new_oid) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	defer if new_commit != nil { git_commit_free(new_commit) }
+
+	old_tree: ^git_tree
+	if git_commit_tree(&old_tree, old_commit) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	defer if old_tree != nil { git_tree_free(old_tree) }
+
+	new_tree: ^git_tree
+	if git_commit_tree(&new_tree, new_commit) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	defer if new_tree != nil { git_tree_free(new_tree) }
+
+	diff: ^git_diff
+	if git_diff_tree_to_tree(&diff, repo, old_tree, new_tree, nil) < 0 {
+		return 0, Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	defer if diff != nil { git_diff_free(diff) }
+
+	deltas := git_diff_num_deltas(diff)
+	return int(deltas), Git_Result{success = true, error = .None}
+}
+
+// get_remote_commit_hash returns the commit hash for refs/remotes/origin/<branch>.
+get_remote_commit_hash :: proc(repo_path: string, branch: string) -> (string, Git_Result) {
+	if repo_path == "" {
+		return "", Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("empty repository path")}
+	}
+	if branch == "" {
+		return "", Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("empty branch name")}
+	}
+	when !LIBGIT2_ENABLED {
+		return "", Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("libgit2 disabled (build with libgit2 installed)")}
+	}
+
+	path_buf, path_c := to_cstring_buffer(repo_path)
+	defer if path_buf != nil { delete(path_buf) }
+
+	repo: ^git_repository
+	if git_repository_open(&repo, path_c) < 0 {
+		return "", Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+	defer if repo != nil { git_repository_free(repo) }
+
+	ref_name := fmt.aprintf("refs/remotes/origin/%s", branch)
+	defer delete(ref_name)
+	ref_buf, ref_c := to_cstring_buffer(ref_name)
+	defer if ref_buf != nil { delete(ref_buf) }
+
+	oid: git_oid
+	if git_reference_name_to_id(&oid, repo, ref_c) < 0 {
+		return "", Git_Result{success = false, error = .Revparse_Failed, message = clone_git_error_message()}
+	}
+
+	cs := git_oid_tostr_s(&oid)
+	if cs == nil {
+		return "", Git_Result{success = false, error = .Revparse_Failed, message = strings.clone("failed to format commit hash")}
+	}
+
+	return clone_cstring(cs), Git_Result{success = true, error = .None}
+}
+
 // reset_to_commit hard-resets the repository to the given commit hash.
 reset_to_commit :: proc(repo_path: string, commit_hash: string) -> Git_Result {
 	if repo_path == "" {
@@ -492,7 +757,20 @@ when LIBGIT2_ENABLED {
 		git_object_free :: proc(obj: ^git_object) ---
 		git_reset :: proc(repo: ^git_repository, target: ^git_object, reset_type: git_reset_t, checkout_opts: ^git_checkout_options) -> c.int ---
 		git_oid_fromstr :: proc(out: ^git_oid, str: cstring) -> c.int ---
-		git_oid_tostr_s :: proc(id: ^git_oid) -> cstring ---
+git_oid_tostr_s :: proc(id: ^git_oid) -> cstring ---
+		git_reference_shorthand :: proc(ref: ^git_reference) -> cstring ---
+		git_commit_lookup :: proc(out: ^^git_commit, repo: ^git_repository, id: ^git_oid) -> c.int ---
+		git_commit_tree :: proc(out: ^^git_tree, commit: ^git_commit) -> c.int ---
+		git_commit_free :: proc(commit: ^git_commit) ---
+		git_tree_free :: proc(tree: ^git_tree) ---
+		git_diff_tree_to_tree :: proc(out: ^^git_diff, repo: ^git_repository, old_tree: ^git_tree, new_tree: ^git_tree, opts: rawptr) -> c.int ---
+		git_diff_num_deltas :: proc(diff: ^git_diff) -> c.size_t ---
+		git_diff_free :: proc(diff: ^git_diff) ---
+		git_revwalk_new :: proc(out: ^^git_revwalk, repo: ^git_repository) -> c.int ---
+		git_revwalk_push :: proc(walk: ^git_revwalk, id: ^git_oid) -> c.int ---
+		git_revwalk_hide :: proc(walk: ^git_revwalk, id: ^git_oid) -> c.int ---
+		git_revwalk_next :: proc(out: ^git_oid, walk: ^git_revwalk) -> c.int ---
+		git_revwalk_free :: proc(walk: ^git_revwalk) ---
 	}
 } else {
 	git_libgit2_init :: proc() -> c.int { return -1 }
@@ -517,6 +795,19 @@ when LIBGIT2_ENABLED {
 	git_reset :: proc(repo: ^git_repository, target: ^git_object, reset_type: git_reset_t, checkout_opts: ^git_checkout_options) -> c.int { return -1 }
 	git_oid_fromstr :: proc(out: ^git_oid, str: cstring) -> c.int { return -1 }
 	git_oid_tostr_s :: proc(id: ^git_oid) -> cstring { return nil }
+	git_reference_shorthand :: proc(ref: ^git_reference) -> cstring { return nil }
+	git_commit_lookup :: proc(out: ^^git_commit, repo: ^git_repository, id: ^git_oid) -> c.int { return -1 }
+	git_commit_tree :: proc(out: ^^git_tree, commit: ^git_commit) -> c.int { return -1 }
+	git_commit_free :: proc(commit: ^git_commit) {}
+	git_tree_free :: proc(tree: ^git_tree) {}
+	git_diff_tree_to_tree :: proc(out: ^^git_diff, repo: ^git_repository, old_tree: ^git_tree, new_tree: ^git_tree, opts: rawptr) -> c.int { return -1 }
+	git_diff_num_deltas :: proc(diff: ^git_diff) -> c.size_t { return 0 }
+	git_diff_free :: proc(diff: ^git_diff) {}
+	git_revwalk_new :: proc(out: ^^git_revwalk, repo: ^git_repository) -> c.int { return -1 }
+	git_revwalk_push :: proc(walk: ^git_revwalk, id: ^git_oid) -> c.int { return -1 }
+	git_revwalk_hide :: proc(walk: ^git_revwalk, id: ^git_oid) -> c.int { return -1 }
+	git_revwalk_next :: proc(out: ^git_oid, walk: ^git_revwalk) -> c.int { return -1 }
+	git_revwalk_free :: proc(walk: ^git_revwalk) {}
 }
 
 git_error :: struct {
@@ -528,6 +819,10 @@ git_repository :: struct {}
 git_remote :: struct {}
 git_reference :: struct {}
 git_object :: struct {}
+git_commit :: struct {}
+git_tree :: struct {}
+git_diff :: struct {}
+git_revwalk :: struct {}
 git_object_t :: enum c.int {
 	ANY    = -2,
 	COMMIT = 1,
@@ -545,6 +840,8 @@ git_reset_t :: enum c.int {
 git_oid :: struct {
 	id: [20]u8,
 }
+
+GIT_ITEROVER :: -31
 git_strarray :: struct {
 	strings: ^cstring,
 	count:   c.size_t,

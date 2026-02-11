@@ -20,6 +20,7 @@ Manager_Options :: struct {
 	allow_local: bool,
 	check_dependencies: bool,
 	unsafe: bool,
+	skip_scan: bool,
 }
 
 // Module_Manager_Error enumerates high-level operation failures.
@@ -46,10 +47,22 @@ Module_Manager_Error :: enum {
 }
 
 // Update_Result reports success plus optional messages and summaries.
+Update_Status :: enum {
+	Success,
+	Failed,
+	Skipped,
+	Rolled_Back,
+}
+
 Update_Result :: struct {
 	success: bool,
 	message: string,
 	summary: string,
+	status: Update_Status,
+	old_version: string,
+	new_version: string,
+	commits_pulled: int,
+	files_changed: int,
 }
 
 // cleanup_update_result frees any owned strings.
@@ -63,6 +76,17 @@ cleanup_update_result :: proc(result: ^Update_Result) {
 		delete(result.summary)
 		result.summary = ""
 	}
+	result.status = .Failed
+	if result.old_version != "" {
+		delete(result.old_version)
+		result.old_version = ""
+	}
+	if result.new_version != "" {
+		delete(result.new_version)
+		result.new_version = ""
+	}
+	result.commits_pulled = 0
+	result.files_changed = 0
 	result.success = false
 }
 
@@ -314,6 +338,10 @@ update_module :: proc(module_name: string, options: Manager_Options) -> (bool, s
 		return false, format_manager_error(.Not_Found, "modules directory not found", module_name, "update")
 	}
 
+	if options.skip_scan && !security.require_permission(.Use_Unsafe, "skip security scan") {
+		return false, format_manager_error(.Validation_Failed, "Permission denied", module_name, "update")
+	}
+
 	if module_name == "" {
 		names := list_installed_modules()
 		if names == nil || len(names) == 0 {
@@ -326,6 +354,7 @@ update_module :: proc(module_name: string, options: Manager_Options) -> (bool, s
 		items := make([dynamic]string, 0, len(names))
 		success_count := 0
 		error_count := 0
+		skipped_count := 0
 
 		for name in names {
 			if name == "" do continue
@@ -350,16 +379,19 @@ update_module :: proc(module_name: string, options: Manager_Options) -> (bool, s
 				append(&items, result.summary)
 				result.summary = ""
 			}
-			if result.success {
+			switch result.status {
+			case .Success:
 				success_count += 1
-			} else {
+			case .Skipped:
+				skipped_count += 1
+			case:
 				error_count += 1
 			}
 			cleanup_update_result(&result)
 			delete(module_path)
 		}
 
-		summary := errors.format_summary("Update Summary", items[:], success_count, error_count)
+		summary := format_update_summary(items[:], success_count, error_count, skipped_count)
 		cleanup_manager_results(items[:])
 		cleanup_manager_results(names[:])
 		return error_count == 0, summary
@@ -535,6 +567,31 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 
 	colors.print_info("Updating module: %s", module_name)
 
+	if !is_git_repository(module_path) {
+		result.status = .Skipped
+		result.message = format_manager_error(.Update_Failed, "not a git repository", module_name, "update")
+		result.summary = strings.clone(fmt.tprintf("%s %s: skipped (not a git repository)", colors.warning_symbol(), module_name))
+		return result
+	}
+	if !has_remote_origin(module_path) {
+		result.status = .Skipped
+		result.message = format_manager_error(.Update_Failed, "no git remote", module_name, "update")
+		result.summary = strings.clone(fmt.tprintf("%s %s: skipped (no git remote)", colors.warning_symbol(), module_name))
+		return result
+	}
+
+	manifest_path := filepath.join({module_path, "module.toml"})
+	if manifest_path != "" && os.exists(manifest_path) {
+		old_module, ok := manifest.parse(manifest_path)
+		if ok {
+			result.old_version = strings.clone(old_module.version)
+			manifest.cleanup_module(&old_module)
+		} else {
+			manifest.cleanup_module(&old_module)
+		}
+		delete(manifest_path)
+	}
+
 	prev_hash, hash_result := get_head_commit_hash(module_path)
 	defer cleanup_git_result(&hash_result)
 	if !hash_result.success {
@@ -544,9 +601,24 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 		}
 			result.message = format_manager_error(.Update_Failed, detail, module_name, "read current commit")
 			result.summary = strings.clone(fmt.tprintf("%s %s: update failed", colors.error_symbol(), module_name))
+			result.status = .Failed
 			return result
 		}
 	defer if prev_hash != "" { delete(prev_hash) }
+
+	branch, branch_result := get_head_branch(module_path)
+	defer cleanup_git_result(&branch_result)
+	if !branch_result.success {
+		detail := branch_result.message
+		if detail == "" {
+			detail = "failed to read current branch"
+		}
+		result.message = format_manager_error(.Update_Failed, detail, module_name, "read current branch")
+		result.summary = strings.clone(fmt.tprintf("%s %s: update failed", colors.error_symbol(), module_name))
+		result.status = .Failed
+		return result
+	}
+	defer if branch != "" { delete(branch) }
 
 	colors.print_info("Fetching updates: %s", module_name)
 
@@ -559,12 +631,13 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 		}
 			result.message = format_manager_error(.Fetch_Failed, detail, module_name, "git fetch")
 			result.summary = strings.clone(fmt.tprintf("%s %s: fetch failed", colors.error_symbol(), module_name))
+			result.status = .Failed
 			return result
 		}
 
 	colors.print_info("Pulling updates: %s", module_name)
 
-	pull_result := pull_repository(module_path)
+	pull_result := pull_repository_branch(module_path, branch)
 	defer cleanup_git_result(&pull_result)
 	if !pull_result.success {
 		detail := pull_result.message
@@ -573,79 +646,69 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 		}
 			result.message = format_manager_error(.Pull_Failed, detail, module_name, "git pull")
 			result.summary = strings.clone(fmt.tprintf("%s %s: pull failed", colors.error_symbol(), module_name))
+			result.status = .Failed
 			return result
 		}
 
-	colors.print_info("Scanning for security issues: %s", module_name)
-	scan_options := security.Scan_Options{
-		unsafe_mode = options.unsafe,
-		verbose = options.verbose,
-	}
-	scan_result := security.scan_module(module_path, scan_options)
+	scan_result, scan_ok, scan_message := validate_update_scan(module_name, module_path, options)
 	defer security.cleanup_scan_result(&scan_result)
-	if !scan_result.success {
-		result.message = format_manager_error(.Validation_Failed, scan_result.error_message, module_name, "security scan")
+	if !scan_ok {
+		rollback_info := rollback_update_message(module_path, prev_hash)
+		message := strings.clone(fmt.tprintf("%s\nRollback: %s", scan_message, rollback_info))
+		result.message = format_manager_error(.Validation_Failed, message, module_name, "security scan")
 		result.summary = strings.clone(fmt.tprintf("%s %s: security scan failed", colors.error_symbol(), module_name))
+		result.status = .Rolled_Back
+		delete(rollback_info)
+		delete(message)
 		return result
 	}
-	if scan_result.critical_count > 0 || scan_result.warning_count > 0 {
-		report := security.format_scan_report(&scan_result, module_name)
-		fmt.println(report)
-		delete(report)
-	}
-	if options.unsafe {
-		security.audit_unsafe_usage(module_name, module_path, &scan_result)
-	}
-	if security.should_block_install(&scan_result, options.unsafe) {
-		result.message = format_manager_error(.Validation_Failed, "Critical security issues detected. Use --unsafe to override.", module_name, "security scan")
-		result.summary = strings.clone(fmt.tprintf("%s %s: security scan blocked", colors.error_symbol(), module_name))
-		return result
-	}
-	if scan_result.warning_count > 0 && !options.unsafe {
-		if !security.prompt_user_for_warnings(&scan_result, module_name) {
-			result.message = format_manager_error(.Validation_Failed, "Update cancelled by user", module_name, "security scan")
-			result.summary = strings.clone(fmt.tprintf("%s %s: update cancelled", colors.error_symbol(), module_name))
-			return result
-		}
-	}
-	if options.unsafe && (scan_result.critical_count > 0 || scan_result.warning_count > 0) {
-		colors.print_warning("Unsafe mode enabled: security checks bypassed")
-	}
 
-	if options.verbose {
-		colors.print_info("Validating module: %s", module_name)
-	}
-
-	validation := validate_module(module_path, module_name)
+	validation := validate_update_manifest(module_path, module_name, options.verbose)
 	defer cleanup_validation_result(&validation)
 	if validation.warning != "" {
 		colors.print_warning("%s", validation.warning)
 	}
 
 		if validation.valid {
+			new_hash, new_hash_result := get_head_commit_hash(module_path)
+			defer cleanup_git_result(&new_hash_result)
+			if new_hash_result.success && new_hash != "" {
+				stats, stats_result := compute_update_stats(module_path, prev_hash, new_hash)
+				defer cleanup_git_result(&stats_result)
+				if stats_result.success {
+					result.commits_pulled = stats.commits_pulled
+					result.files_changed = stats.files_changed
+				}
+				delete(new_hash)
+			}
+
+			manifest_path := filepath.join({module_path, "module.toml"})
+			if manifest_path != "" && os.exists(manifest_path) {
+				new_module, ok := manifest.parse(manifest_path)
+				if ok {
+					result.new_version = strings.clone(new_module.version)
+					manifest.cleanup_module(&new_module)
+				} else {
+					manifest.cleanup_module(&new_module)
+				}
+				delete(manifest_path)
+			}
+
 			result.success = true
+			result.status = .Success
 			result.message = format_update_success(module_name)
-			result.summary = strings.clone(fmt.tprintf("%s %s", colors.success_symbol(), module_name))
+			result.summary = format_update_line(module_name, &result)
 			return result
 		}
 
 	rollback_message := ""
-	rollback_result := reset_to_commit(module_path, prev_hash)
-	defer cleanup_git_result(&rollback_result)
-		if rollback_result.success {
-			rollback_message = strings.clone("rolled back to previous commit")
-		} else {
-			if rollback_result.message != "" {
-				rollback_message = strings.clone(fmt.tprintf("rollback failed: %s", rollback_result.message))
-			} else {
-				rollback_message = strings.clone("rollback failed")
-			}
-		}
+	rollback_message = rollback_update_message(module_path, prev_hash)
 
 		validation_detail := build_validation_detail(&validation)
 		message := strings.clone(fmt.tprintf("%s\nRollback: %s", validation_detail, rollback_message))
 		result.message = format_manager_error(.Validation_Failed, message, module_name, "update")
 		result.summary = strings.clone(fmt.tprintf("%s %s: validation failed", colors.error_symbol(), module_name))
+		result.status = .Rolled_Back
 
 	delete(rollback_message)
 	delete(validation_detail)
@@ -678,10 +741,79 @@ build_validation_detail :: proc(result: ^Validation_Result) -> string {
 	}
 }
 
+rollback_update_message :: proc(module_path: string, prev_hash: string) -> string {
+	rollback_result := reset_to_commit(module_path, prev_hash)
+	defer cleanup_git_result(&rollback_result)
+	if rollback_result.success {
+		return strings.clone("rolled back to previous commit")
+	}
+	if rollback_result.message != "" {
+		message := strings.clone(fmt.tprintf("rollback failed: %s", rollback_result.message))
+		return message
+	}
+	return strings.clone("rollback failed")
+}
+
 format_update_success :: proc(module_name: string) -> string {
 	message := strings.clone(fmt.tprintf("Module '%s' updated successfully.", module_name))
 	defer delete(message)
 	return errors.format_success("Update complete", message)
+}
+
+format_update_line :: proc(module_name: string, result: ^Update_Result) -> string {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+
+	fmt.sbprintf(&builder, "%s %s", colors.success_symbol(), module_name)
+
+	if result != nil && result.old_version != "" && result.new_version != "" {
+		fmt.sbprintf(&builder, ": %s \u2192 %s", result.old_version, result.new_version)
+	}
+
+	if result != nil {
+		stats := Update_Stats{
+			commits_pulled = result.commits_pulled,
+			files_changed = result.files_changed,
+		}
+		stats_text := format_update_stats(stats)
+		defer delete(stats_text)
+		if stats_text != "" {
+			fmt.sbprintf(&builder, " (%s)", stats_text)
+		}
+	}
+
+	return strings.clone(strings.to_string(builder))
+}
+
+format_update_summary :: proc(items: []string, success_count: int, error_count: int, skipped_count: int) -> string {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+
+	title := "Update Summary"
+	fmt.sbprintf(&builder, "%s\n", colors.bold(title))
+	for _ in 0..<len(title) {
+		fmt.sbprintf(&builder, "=")
+	}
+	fmt.sbprintf(&builder, "\n")
+
+	total := success_count + error_count + skipped_count
+	fmt.sbprintf(&builder, "Total: %d", total)
+	if success_count > 0 {
+		fmt.sbprintf(&builder, " | %s %d", colors.success("Updated:"), success_count)
+	}
+	if error_count > 0 {
+		fmt.sbprintf(&builder, " | %s %d", colors.error("Failed:"), error_count)
+	}
+	if skipped_count > 0 {
+		fmt.sbprintf(&builder, " | %s %d", colors.warning("Skipped:"), skipped_count)
+	}
+	fmt.sbprintf(&builder, "\n\n")
+
+	for item in items {
+		fmt.sbprintf(&builder, "  %s\n", item)
+	}
+
+	return strings.clone(strings.to_string(builder))
 }
 
 format_install_success :: proc(module_name: string) -> string {
