@@ -8,14 +8,14 @@ build_reverse_deps :: proc(modules: [dynamic]manifest.Module) -> map[string][dyn
 
 	for module in modules {
 		if module.name not_in reverse {
-			reverse[module.name] = make([dynamic]string)
+			reverse[strings.clone(module.name)] = make([dynamic]string)
 		}
 	}
 
 	for module in modules {
 		for dep in module.required {
 			if dep not_in reverse {
-				reverse[dep] = make([dynamic]string)
+				reverse[strings.clone(dep)] = make([dynamic]string)
 			}
 			append(&reverse[dep], strings.clone(module.name))
 		}
