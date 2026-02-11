@@ -11,6 +11,19 @@ Zephyr writes **append‑only JSON Lines (NDJSON)** audit logs under:
 
 Each line is a single JSON object suitable for SIEM ingestion.
 
+## Automatic Agent Tracking
+
+Zephyr registers a session when you run `zephyr load` (the generated shell code
+exports `ZEPHYR_AGENT_ID`, `ZEPHYR_AGENT_TYPE`, `ZEPHYR_SESSION_ID` and calls
+`zephyr register-session`). This creates a **session log** entry and associates
+subsequent command scans and module operations with the active session and agent.
+
+This means:
+
+- **sessions/** captures who/what started a session and when.
+- **commands/** captures shell command scan results (e.g., Shell‑Guard).
+- **operations/** captures install/update/uninstall and permission denials.
+
 ## Schema (Stable Fields)
 
 All events include:

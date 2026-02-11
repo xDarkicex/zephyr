@@ -5,6 +5,16 @@ import "core:strings"
 import "core:os/os2"
 
 detect_agent_type :: proc() -> string {
+	// Explicit override (for dynamic/unknown agents)
+	if override := env_value("ZEPHYR_AGENT_TYPE"); override != "" {
+		lower := strings.to_lower(override)
+		delete(override)
+		return lower
+	}
+	if env_set("ZEPHYR_AGENT_ID") {
+		return "custom"
+	}
+
 	// Claude Code
 	if env_set("ANTHROPIC_API_KEY") || env_set("ANTHROPIC_AGENT_ID") {
 		return "claude-code"
@@ -84,6 +94,10 @@ get_process_name :: proc(pid: int) -> string {
 }
 
 get_agent_id :: proc(agent_type: string) -> string {
+	if id := env_value("ZEPHYR_AGENT_ID"); id != "" {
+		return id
+	}
+
 	switch agent_type {
 	case "claude-code":
 		if id := env_value("ANTHROPIC_AGENT_ID"); id != "" {
