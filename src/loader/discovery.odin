@@ -81,7 +81,7 @@ get_global_cache_stats :: proc() -> (int, int, int, bool) {
 }
 
 // get_modules_dir returns the modules directory path
-// Uses ZSH_MODULES_DIR environment variable if set, otherwise defaults to $HOME/.zsh/modules
+// Uses ZSH_MODULES_DIR environment variable if set, otherwise defaults to $HOME/.zephyr/modules
 get_modules_dir :: proc() -> string {
 	// Check for ZSH_MODULES_DIR environment variable first
 	modules_dir := os.get_env("ZSH_MODULES_DIR")
@@ -90,15 +90,15 @@ get_modules_dir :: proc() -> string {
 	}
 	delete(modules_dir)
 
-	// Default to $HOME/.zsh/modules
+	// Default to $HOME/.zephyr/modules
 	home := os.get_env("HOME")
 	if home == "" {
 		// Fallback if HOME is not set (shouldn't happen on Unix systems)
-		return strings.clone(".zsh/modules")
+		return strings.clone(".zephyr/modules")
 	}
 	defer delete(home)
 
-	return filepath.join({home, ".zsh", "modules"})
+	return filepath.join({home, ".zephyr", "modules"})
 }
 
 // discover scans a base directory for modules containing module.toml files

@@ -191,11 +191,19 @@ move_to_final :: proc(temp_path: string, modules_dir: string, module_name: strin
 		cleanup_temp(final_path)
 	}
 
+when ODIN_OS == .Linux {
+	rename_err := os.rename(temp_path, final_path)
+	if rename_err != os.ERROR_NONE {
+		delete(final_path)
+		return false, strings.clone("failed to move module into place")
+	}
+} else {
 	ok := os.rename(temp_path, final_path)
 	if !ok {
 		delete(final_path)
 		return false, strings.clone("failed to move module into place")
 	}
+}
 
 	return true, final_path
 }
