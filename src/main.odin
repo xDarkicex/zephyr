@@ -11,6 +11,7 @@ import "errors"
 import "loader"
 import "manifest"
 import "security"
+import "version"
 
 main :: proc() {
 	// Initialize colors and debug modules
@@ -32,7 +33,13 @@ main :: proc() {
 	for i < len(args) {
 		arg := args[i]
 
-		if arg == "-v" || arg == "--verbose" {
+		if arg == "--version" {
+			version.print_version(!version.should_disable_color())
+			os.exit(0)
+		} else if arg == "-v" {
+			version.print_version_short()
+			os.exit(0)
+		} else if arg == "--verbose" {
 			verbose = true
 			debug.set_debug_level(.Info)
 			debug.debug_info("Verbose mode enabled")
@@ -156,8 +163,7 @@ run_init :: proc() {
 
 	// Skip flags to find module name
 	for arg in args {
-		if arg != "-v" &&
-		   arg != "--verbose" &&
+		if arg != "--verbose" &&
 		   arg != "-d" &&
 		   arg != "--debug" &&
 		   arg != "--trace" &&

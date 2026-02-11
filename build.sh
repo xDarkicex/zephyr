@@ -5,6 +5,20 @@ BINARY_NAME="zephyr"
 BUILD_FLAGS=(-o:speed)
 LINKER_FLAGS=""
 
+# Build metadata (embedded at compile time)
+VERSION="${VERSION:-dev}"
+if [ -z "${GIT_COMMIT:-}" ]; then
+    if command -v git &> /dev/null; then
+        GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    else
+        GIT_COMMIT="unknown"
+    fi
+fi
+BUILD_TIME="${BUILD_TIME:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}"
+BUILD_FLAGS+=("-define:VERSION=${VERSION}")
+BUILD_FLAGS+=("-define:GIT_COMMIT=${GIT_COMMIT}")
+BUILD_FLAGS+=("-define:BUILD_TIME=${BUILD_TIME}")
+
 # Detect OS and architecture
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)

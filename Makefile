@@ -6,6 +6,12 @@
 # Binary name
 BINARY := zephyr
 
+# Version metadata (embedded at build time)
+VERSION ?= dev
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+BUILD_METADATA_FLAGS := -define:VERSION="$(VERSION)" -define:GIT_COMMIT="$(GIT_COMMIT)" -define:BUILD_TIME="$(BUILD_TIME)"
+
 # Optional libgit2 flags (auto-detected via pkg-config)
 # Note: Odin's `foreign import "system:git2"` already links -lgit2.
 # We only need library search paths/other flags here to avoid duplicate -lgit2 warnings.
@@ -98,7 +104,7 @@ check-libgit2: ## Check libgit2 detection
 
 build: ## Build the zephyr binary
 	@echo "$(BLUE)Building $(BINARY)...$(NC)"
-	@./build.sh
+	@VERSION="$(VERSION)" GIT_COMMIT="$(GIT_COMMIT)" BUILD_TIME="$(BUILD_TIME)" ./build.sh
 	@echo "$(GREEN)✓ Build complete$(NC)"
 
 install: build ## Build and install to ~/.zsh/bin
@@ -114,7 +120,7 @@ clean: ## Remove build artifacts
 
 test: build ## Run test suite
 	@echo "$(BLUE)Running tests...$(NC)"
-	@odin test test $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) $(ARCHIVE_FLAGS) -define:ZEPHYR_TEST_SIGNING_KEY=true $(if $(ODIN_TEST_NAMES),-define:ODIN_TEST_NAMES="$(ODIN_TEST_NAMES)",)
+	@odin test test $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) $(ARCHIVE_FLAGS) $(BUILD_METADATA_FLAGS) -define:ZEPHYR_TEST_SIGNING_KEY=true $(if $(ODIN_TEST_NAMES),-define:ODIN_TEST_NAMES="$(ODIN_TEST_NAMES)",)
 	@echo "$(GREEN)✓ Tests passed$(NC)"
 
 benchmark: build ## Run performance benchmark
@@ -138,12 +144,12 @@ run: build ## Build and run with test modules
 
 dev: ## Build with debug flags
 	@echo "$(BLUE)Building $(BINARY) in debug mode...$(NC)"
-	@odin build src -o:none -debug -out:$(BINARY) $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) $(ARCHIVE_FLAGS)
+	@odin build src -o:none -debug -out:$(BINARY) $(EXTRA_LINKER_FLAGS) $(LIBMAGIC_FLAGS) $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) $(ARCHIVE_FLAGS) $(BUILD_METADATA_FLAGS)
 	@echo "$(GREEN)✓ Debug build complete$(NC)"
 
 check: ## Validate code (odin check)
 	@echo "$(BLUE)Checking code...$(NC)"
-	@odin check src $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) $(ARCHIVE_FLAGS)
+	@odin check src $(OPENSSL_FLAGS) $(LIBCURL_FLAGS) $(ARCHIVE_FLAGS) $(BUILD_METADATA_FLAGS)
 	@echo "$(GREEN)✓ Code check passed$(NC)"
 
 fmt: ## Format code (if odin fmt exists)
