@@ -10,11 +10,13 @@ import "debug"
 import "errors"
 import "loader"
 import "manifest"
+import "security"
 
 main :: proc() {
 	// Initialize colors and debug modules
 	colors.init_colors()
 	debug.init_debug()
+	security.init_session_registry()
 
 	debug.debug_args(os.args[:])
 
