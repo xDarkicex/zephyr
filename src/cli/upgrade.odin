@@ -5,6 +5,7 @@ import "core:os"
 import "core:strings"
 
 import "../colors"
+import "../security"
 import "../upgrade"
 import "../version"
 
@@ -17,14 +18,22 @@ Upgrade_Options :: struct {
 upgrade_command :: proc() {
 	options := parse_upgrade_options()
 
+	if !check_upgrade_permissions() {
+		colors.print_error("Permission denied: agents cannot run upgrade")
+		security.log_zephyr_upgrade(version.VERSION, "", false, "permission denied")
+		os.exit(2)
+	}
+
 	release := upgrade.get_latest_release(options.channel)
 	if release == nil {
 		err := upgrade.get_last_error()
 		if err != "" {
 			colors.print_error("%s", err)
+			security.log_zephyr_upgrade(version.VERSION, "", false, err)
 			delete(err)
 		} else {
 			colors.print_error("Failed to fetch releases")
+			security.log_zephyr_upgrade(version.VERSION, "", false, "failed to fetch releases")
 		}
 		os.exit(1)
 	}
@@ -38,6 +47,7 @@ upgrade_command :: proc() {
 	}
 	if latest == "" {
 		colors.print_error("Release version missing")
+		security.log_zephyr_upgrade(version.VERSION, "", false, "release version missing")
 		os.exit(1)
 	}
 
@@ -45,6 +55,9 @@ upgrade_command :: proc() {
 		fmt.printf("Current version: %s\n", current)
 		fmt.printf("Latest version:  %s\n", latest)
 		fmt.printf("Zephyr is up to date.\n")
+		if options.check_only {
+			security.log_zephyr_upgrade(current, latest, true, "up to date")
+		}
 		return
 	}
 
@@ -54,6 +67,7 @@ upgrade_command :: proc() {
 			fmt.printf("Release notes: %s\n", release.release_notes_url)
 		}
 		fmt.println("Run 'zephyr upgrade' to install.")
+		security.log_zephyr_upgrade(current, latest, true, "check only")
 		return
 	}
 
@@ -66,16 +80,19 @@ upgrade_command :: proc() {
 	if !options.force {
 		if !confirm_upgrade(latest, release.release_notes_url) {
 			fmt.println("Upgrade cancelled.")
+			security.log_zephyr_upgrade(current, latest, false, "cancelled by user")
 			return
 		}
 	}
 
 	if !upgrade.install_release(release) {
 		colors.print_error("Upgrade failed.")
+		security.log_zephyr_upgrade(current, latest, false, "install failed")
 		os.exit(1)
 	}
 
 	fmt.printf("Successfully upgraded to %s!\n", latest)
+	security.log_zephyr_upgrade(current, latest, true, "")
 }
 
 parse_upgrade_options :: proc() -> Upgrade_Options {
@@ -137,6 +154,10 @@ confirm_upgrade :: proc(version: string, notes_url: string) -> bool {
 		fmt.Printf("Release notes: %s\n", notes_url)
 	}
 	return prompt_yes_no("Continue with upgrade?", true)
+}
+
+check_upgrade_permissions :: proc() -> bool {
+	return !security.is_agent_environment()
 }
 
 is_newer_version :: proc(latest: string, current: string) -> bool {

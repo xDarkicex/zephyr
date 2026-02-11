@@ -203,6 +203,40 @@ log_module_update :: proc(module: string, old_version: string, new_version: stri
 	log_audit_event(event)
 }
 
+log_zephyr_upgrade :: proc(old_version: string, new_version: string, success: bool, reason: string) {
+	session, ok := get_current_session()
+	if !ok {
+		session = Session_Info{
+			session_id = "unknown",
+			agent_id = os.get_env("USER"),
+			agent_type = "human",
+			role = "user",
+		}
+	}
+
+	result := "success"
+	if !success {
+		result = "failed"
+	}
+
+	event := Audit_Event{
+		timestamp = current_timestamp(),
+		session_id = session.session_id,
+		agent_id = session.agent_id,
+		agent_type = session.agent_type,
+		role = session.role,
+		action = "upgrade",
+		module = "zephyr",
+		result = result,
+		reason = reason,
+		previous_version = old_version,
+		new_version = new_version,
+		signature_verified = false,
+	}
+
+	log_audit_event(event)
+}
+
 log_config_modify :: proc(success: bool, reason: string) {
 	session, ok := get_current_session()
 	if !ok {
