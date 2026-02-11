@@ -22,7 +22,7 @@ show_signing_key_command :: proc() {
 	delete(fingerprint)
 	fmt.println("")
 	fmt.println("Verify this key matches the official key published at:")
-	fmt.println("  https://github.com/xDarkicex/zephyr")
+	fmt.println("  https://github.com/zephyr-systems/zephyr")
 	fmt.println("")
 }
 

@@ -569,7 +569,7 @@ Set up automated testing:
 # .github/workflows/test-modules.yml equivalent
 
 # Install zephyr
-git clone https://github.com/xDarkicex/zephyr.git
+git clone https://github.com/zephyr-systems/zephyr.git
 cd zephyr && ./install.sh
 
 # Test module validation

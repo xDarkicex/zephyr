@@ -7,6 +7,7 @@ This guide helps you diagnose and fix common issues with Zephyr Shell Loader.
 - [Quick Diagnostics](#quick-diagnostics)
 - [Installation Issues](#installation-issues)
 - [Git Module Management](#git-module-management)
+- [Update and Upgrade Issues](#update-and-upgrade-issues)
 - [Module Loading Problems](#module-loading-problems)
 - [Dependency Issues](#dependency-issues)
 - [Performance Problems](#performance-problems)
@@ -48,7 +49,7 @@ zsh: command not found: zephyr
 1. **Zephyr not installed**
    ```bash
    # Install zephyr
-   git clone https://github.com/xDarkicex/zephyr.git
+   git clone https://github.com/zephyr-systems/zephyr.git
    cd zephyr
    ./install.sh
    ```
@@ -205,6 +206,74 @@ Invalid install source
    ```bash
    ls /path/to/module-repo/module.toml
    ```
+
+## Update and Upgrade Issues
+
+### Problem: `zephyr update` rolls back after pulling
+
+**Symptoms:**
+```
+Update failed: validation error
+Rolling back module to previous commit
+```
+
+**Explanation:** Updates run **security scan + manifest validation** after pulling. If either fails,
+Zephyr hard-resets the module to the previous commit.
+
+**Next steps:**
+- Review the module’s latest commit for security or manifest issues.
+- Re-run with `--force` only if you trust the module and accept the risk.
+
+### Problem: `zephyr upgrade --check` says no releases found
+
+**Symptoms:**
+```
+No releases found
+```
+
+**Cause:** There are no published GitHub releases for Zephyr yet, or the API rate limit is exceeded.
+
+**Solutions:**
+- Retry later if rate-limited.
+- Ensure a release exists at:
+  `https://github.com/zephyr-systems/zephyr/releases`
+
+### Problem: `zephyr upgrade` blocked for agents
+
+**Symptoms:**
+```
+Upgrade denied: agents are not allowed to run upgrade
+```
+
+**Cause:** Upgrades are restricted to **human sessions** by design.
+
+**Solution:** Run upgrade from a human shell session.
+
+### Problem: Checksum mismatch during upgrade
+
+**Symptoms:**
+```
+Checksum mismatch
+Upgrade aborted
+```
+
+**Cause:** The downloaded asset does not match the release checksum.
+
+**Solutions:**
+- Retry the upgrade (network/cache corruption).
+- Verify the release asset and checksum are correct.
+
+### Problem: Upgrade download fails
+
+**Symptoms:**
+```
+Network error: GitHub API request failed
+```
+
+**Solutions:**
+- Check network connectivity.
+- Confirm GitHub API availability.
+- Retry after rate limits reset.
 
 ## Module Loading Problems
 

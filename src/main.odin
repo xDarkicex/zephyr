@@ -446,5 +446,5 @@ print_usage :: proc() {
 	fmt.println("    ZSH:   Add to .zshrc:  eval \"$(zephyr load)\"")
 	fmt.println("    Bash:  Add to .bashrc: eval \"$(zephyr load)\"")
 	fmt.println("")
-	fmt.println("For more information, visit: https://github.com/xDarkicex/zephyr")
+	fmt.println("For more information, visit: https://github.com/zephyr-systems/zephyr")
 }

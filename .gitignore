@@ -4,6 +4,7 @@ MEMORY_DEBUGGING_MEMO.md
 SECURITY_SPEC.md
 scripts/
 .tmp_home/
+agent_*
 # Odin build artifacts
 zephyr
 acceptance_test

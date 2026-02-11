@@ -711,10 +711,33 @@ zephyr update
 
 # Update a single module
 zephyr update git-helpers
+
+# Check for updates without applying changes
+zephyr update --check
 ```
 
-If a validation check fails after pulling, Zephyr attempts to roll back the module to the previous commit.
+If a validation check fails after pulling, Zephyr **hard resets** the module to the previous commit.
 Updates also run the security scan; critical findings block the update and warnings require confirmation.
+
+### `zephyr upgrade`
+
+Upgrades the Zephyr binary by checking GitHub releases for your OS/arch.
+
+```bash
+# Check for available upgrades
+zephyr upgrade --check
+
+# Upgrade to the latest stable release
+zephyr upgrade
+
+# Force upgrade without confirmation prompt
+zephyr upgrade --force
+```
+
+Notes:
+- Upgrades are **blocked for agent roles** (humans only).
+- Downloads are verified with SHA256 checksums before install.
+- If verification fails, the upgrade is aborted and no binary is replaced.
 
 ### `zephyr uninstall <module-name>`
 

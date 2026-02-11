@@ -12,6 +12,7 @@ This document provides comprehensive usage examples for all Zephyr commands with
 - [zephyr scan](#zephyr-scan)
 - [zephyr install](#zephyr-install)
 - [zephyr update](#zephyr-update)
+- [zephyr upgrade](#zephyr-upgrade)
 - [zephyr uninstall](#zephyr-uninstall)
 - [zephyr init](#zephyr-init)
 - [Environment Variables](#environment-variables)
@@ -747,6 +748,34 @@ Fetching updates: git-helpers
 Pulling updates: git-helpers
 ✓ Update complete
   Module 'git-helpers' updated successfully.
+```
+
+## zephyr upgrade
+
+Upgrade the Zephyr binary from GitHub releases for your OS/arch.
+
+```bash
+# Check for upgrades
+zephyr upgrade --check
+
+# Upgrade to latest stable
+zephyr upgrade
+
+# Force upgrade without confirmation
+zephyr upgrade --force
+```
+
+**Typical output:**
+```
+Current: 1.2.0
+Latest:  1.2.1
+Release: https://github.com/zephyr-systems/zephyr/releases/tag/v1.2.1
+
+Downloading zephyr-darwin-arm64
+Download complete [####################] 100%
+Verifying checksum... OK
+Installing update...
+✓ Upgrade complete: now running 1.2.1
 ```
 
 ## zephyr uninstall

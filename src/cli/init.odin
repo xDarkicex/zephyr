@@ -476,7 +476,7 @@ provide_usage_instructions :: proc(module_name: string, module_dir: string) {
     
     fmt.println("Documentation:")
     fmt.eprintfln("   Read %s/README.md for detailed information", module_dir)
-    fmt.println("   Visit https://github.com/xDarkicex/zephyr for more examples")
+    fmt.println("   Visit https://github.com/zephyr-systems/zephyr for more examples")
     fmt.println("")
     
     fmt.println("Example commands to try after loading:")

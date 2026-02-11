@@ -6,7 +6,7 @@ Zephyr can be installed as a zsh plugin using popular plugin managers.
 
 1. Build Zephyr first:
    ```bash
-   git clone https://github.com/xDarkicex/zephyr.git
+   git clone https://github.com/zephyr-systems/zephyr.git
    cd zephyr
    make install
    ```
@@ -19,7 +19,7 @@ Zephyr can be installed as a zsh plugin using popular plugin managers.
 
 1. Clone this repo into Oh My Zsh's custom plugins directory:
    ```bash
-   git clone https://github.com/xDarkicex/zephyr.git \
+   git clone https://github.com/zephyr-systems/zephyr.git \
        ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zephyr
    cd ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zephyr
    make install
@@ -63,7 +63,7 @@ zplug "xDarkicex/zephyr"
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/xDarkicex/zephyr.git ~/.zephyr
+   git clone https://github.com/zephyr-systems/zephyr.git ~/.zephyr
    cd ~/.zephyr
    make install
    ```
