@@ -169,6 +169,40 @@ log_module_uninstall :: proc(module: string, success: bool, reason: string) {
 	log_audit_event(event)
 }
 
+log_module_update :: proc(module: string, old_version: string, new_version: string, success: bool, reason: string) {
+	session, ok := get_current_session()
+	if !ok {
+		session = Session_Info{
+			session_id = "unknown",
+			agent_id = os.get_env("USER"),
+			agent_type = "human",
+			role = "user",
+		}
+	}
+
+	result := "success"
+	if !success {
+		result = "failed"
+	}
+
+	event := Audit_Event{
+		timestamp = current_timestamp(),
+		session_id = session.session_id,
+		agent_id = session.agent_id,
+		agent_type = session.agent_type,
+		role = session.role,
+		action = "update",
+		module = module,
+		result = result,
+		reason = reason,
+		previous_version = old_version,
+		new_version = new_version,
+		signature_verified = false,
+	}
+
+	log_audit_event(event)
+}
+
 log_config_modify :: proc(success: bool, reason: string) {
 	session, ok := get_current_session()
 	if !ok {
@@ -296,6 +330,8 @@ format_audit_json :: proc(event: Audit_Event) -> string {
 	source := escape_json_string(event.source)
 	result := escape_json_string(event.result)
 	reason := escape_json_string(event.reason)
+	previous_version := escape_json_string(event.previous_version)
+	new_version := escape_json_string(event.new_version)
 	user_name := escape_json_string(os.get_env("USER"))
 	host_name := escape_json_string(os.get_env("HOSTNAME"))
 	event_category := escape_json_string(event_category_for_action(event.action))
@@ -310,6 +346,8 @@ format_audit_json :: proc(event: Audit_Event) -> string {
 		delete(source)
 		delete(result)
 		delete(reason)
+		delete(previous_version)
+		delete(new_version)
 		delete(user_name)
 		delete(host_name)
 		delete(event_category)
@@ -330,6 +368,8 @@ format_audit_json :: proc(event: Audit_Event) -> string {
 	fmt.sbprintf(&builder, "\"action\":\"%s\",", action)
 	fmt.sbprintf(&builder, "\"module\":\"%s\",", module)
 	fmt.sbprintf(&builder, "\"source\":\"%s\",", source)
+	fmt.sbprintf(&builder, "\"previous_version\":\"%s\",", previous_version)
+	fmt.sbprintf(&builder, "\"new_version\":\"%s\",", new_version)
 	fmt.sbprintf(&builder, "\"result\":\"%s\",", result)
 	fmt.sbprintf(&builder, "\"reason\":\"%s\",", reason)
 	fmt.sbprintf(&builder, "\"event_action\":\"%s\",", action)

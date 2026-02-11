@@ -48,6 +48,7 @@ Audit_Event :: struct {
 	source:             string,
 	result:             string,
 	reason:             string,
+	previous_version:   string,
+	new_version:        string,
 	signature_verified: bool,
 }
-

@@ -571,12 +571,14 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 		result.status = .Skipped
 		result.message = format_manager_error(.Update_Failed, "not a git repository", module_name, "update")
 		result.summary = strings.clone(fmt.tprintf("%s %s: skipped (not a git repository)", colors.warning_symbol(), module_name))
+		security.log_module_update(module_name, result.old_version, result.new_version, false, "skipped: not a git repository")
 		return result
 	}
 	if !has_remote_origin(module_path) {
 		result.status = .Skipped
 		result.message = format_manager_error(.Update_Failed, "no git remote", module_name, "update")
 		result.summary = strings.clone(fmt.tprintf("%s %s: skipped (no git remote)", colors.warning_symbol(), module_name))
+		security.log_module_update(module_name, result.old_version, result.new_version, false, "skipped: no git remote")
 		return result
 	}
 
@@ -602,6 +604,7 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 			result.message = format_manager_error(.Update_Failed, detail, module_name, "read current commit")
 			result.summary = strings.clone(fmt.tprintf("%s %s: update failed", colors.error_symbol(), module_name))
 			result.status = .Failed
+			security.log_module_update(module_name, result.old_version, result.new_version, false, detail)
 			return result
 		}
 	defer if prev_hash != "" { delete(prev_hash) }
@@ -616,6 +619,7 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 		result.message = format_manager_error(.Update_Failed, detail, module_name, "read current branch")
 		result.summary = strings.clone(fmt.tprintf("%s %s: update failed", colors.error_symbol(), module_name))
 		result.status = .Failed
+		security.log_module_update(module_name, result.old_version, result.new_version, false, detail)
 		return result
 	}
 	defer if branch != "" { delete(branch) }
@@ -632,6 +636,7 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 			result.message = format_manager_error(.Fetch_Failed, detail, module_name, "git fetch")
 			result.summary = strings.clone(fmt.tprintf("%s %s: fetch failed", colors.error_symbol(), module_name))
 			result.status = .Failed
+			security.log_module_update(module_name, result.old_version, result.new_version, false, detail)
 			return result
 		}
 
@@ -647,6 +652,7 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 			result.message = format_manager_error(.Pull_Failed, detail, module_name, "git pull")
 			result.summary = strings.clone(fmt.tprintf("%s %s: pull failed", colors.error_symbol(), module_name))
 			result.status = .Failed
+			security.log_module_update(module_name, result.old_version, result.new_version, false, detail)
 			return result
 		}
 
@@ -658,6 +664,7 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 		result.message = format_manager_error(.Validation_Failed, message, module_name, "security scan")
 		result.summary = strings.clone(fmt.tprintf("%s %s: security scan failed", colors.error_symbol(), module_name))
 		result.status = .Rolled_Back
+		security.log_module_update(module_name, result.old_version, result.new_version, false, scan_message)
 		delete(rollback_info)
 		delete(message)
 		return result
@@ -698,6 +705,7 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 			result.status = .Success
 			result.message = format_update_success(module_name)
 			result.summary = format_update_line(module_name, &result)
+			security.log_module_update(module_name, result.old_version, result.new_version, true, "")
 			return result
 		}
 
@@ -709,6 +717,7 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 		result.message = format_manager_error(.Validation_Failed, message, module_name, "update")
 		result.summary = strings.clone(fmt.tprintf("%s %s: validation failed", colors.error_symbol(), module_name))
 		result.status = .Rolled_Back
+		security.log_module_update(module_name, result.old_version, result.new_version, false, validation_detail)
 
 	delete(rollback_message)
 	delete(validation_detail)
