@@ -19,6 +19,19 @@ Uninstall_Options :: struct {
 	yes:         bool,
 }
 
+Confirm_Reader :: proc() -> string
+
+default_confirm_reader :: proc() -> string {
+	buf: [256]byte
+	n, _ := os.read(os.stdin, buf[:])
+	if n <= 0 {
+		return strings.clone("")
+	}
+	return strings.clone(strings.trim_space(string(buf[:n])))
+}
+
+confirm_reader := default_confirm_reader
+
 // parse_uninstall_options parses uninstall flags from os.args.
 parse_uninstall_options :: proc() -> Uninstall_Options {
 	options := Uninstall_Options{}
@@ -125,6 +138,13 @@ uninstall_module_internal :: proc(options: Uninstall_Options) -> (bool, string) 
 		return false, message
 	}
 
+	if has && dependents != nil && len(dependents) > 0 && options.force {
+		if !show_force_warning(options.module_name, dependents, options.yes) {
+			security.log_module_uninstall(options.module_name, false, "force uninstall canceled")
+			return false, strings.clone("uninstall canceled")
+		}
+	}
+
 	if !remove_module_directory(module_path) {
 		security.log_module_uninstall(options.module_name, false, "failed to remove module directory")
 		return false, strings.clone("failed to remove module directory")
@@ -168,4 +188,36 @@ remove_module_directory :: proc(path: string) -> bool {
 	}
 	os2.remove_all(path)
 	return !os.exists(path)
+}
+
+show_force_warning :: proc(module_name: string, dependents: []string, skip_prompt: bool) -> bool {
+	fmt.printf("%s Force uninstall requested.\n", colors.warning_symbol())
+	fmt.printf("  Module: %s\n", module_name)
+	if dependents != nil && len(dependents) > 0 {
+		deps_joined := strings.join(dependents, ", ")
+		defer delete(deps_joined)
+		fmt.printf("  Dependents: %s\n", deps_joined)
+	}
+	if is_critical_module(module_name) {
+		fmt.println("")
+		fmt.printf("%s WARNING: This is a critical module.\n", colors.error_symbol())
+		fmt.println("  Removing it may break core functionality.")
+	}
+	fmt.println("")
+	if skip_prompt {
+		return true
+	}
+	return confirm("Proceed with uninstall? [y/N]: ")
+}
+
+confirm :: proc(message: string) -> bool {
+	fmt.print(message)
+	response := confirm_reader()
+	defer delete(response)
+	if response == "" {
+		return false
+	}
+	lower := strings.to_lower(response)
+	defer delete(lower)
+	return lower == "y" || lower == "yes"
 }

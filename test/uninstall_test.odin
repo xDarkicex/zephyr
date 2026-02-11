@@ -8,7 +8,7 @@ import "core:testing"
 
 import "../src/cli"
 
-create_module_manifest :: proc(dir_path: string, name: string, required: []string = nil) {
+create_uninstall_test_manifest :: proc(dir_path: string, name: string, required: []string = nil) {
 	module_toml := strings.builder_make()
 	defer strings.builder_destroy(&module_toml)
 	fmt.sbprintf(&module_toml, "[module]\n")
@@ -51,7 +51,7 @@ test_uninstall_success_no_dependents :: proc(t: ^testing.T) {
 	module_dir := filepath.join({modules_dir, "solo"})
 	defer delete(module_dir)
 	os.make_directory(module_dir)
-	create_module_manifest(module_dir, "solo")
+	create_uninstall_test_manifest(module_dir, "solo")
 
 	original_env := os.get_env("ZSH_MODULES_DIR")
 	defer {
@@ -118,8 +118,8 @@ test_uninstall_blocked_by_dependents :: proc(t: ^testing.T) {
 	os.make_directory(module_a)
 	os.make_directory(module_b)
 
-	create_module_manifest(module_b, "module-b")
-	create_module_manifest(module_a, "module-a", []string{"module-b"})
+	create_uninstall_test_manifest(module_b, "module-b")
+	create_uninstall_test_manifest(module_a, "module-a", []string{"module-b"})
 
 	original_env := os.get_env("ZSH_MODULES_DIR")
 	defer {
