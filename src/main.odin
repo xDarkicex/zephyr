@@ -106,6 +106,8 @@ main :: proc() {
 		run_install()
 	case "update":
 		run_update()
+	case "upgrade":
+		run_upgrade()
 	case "uninstall":
 		run_uninstall()
 	case "show-signing-key":
@@ -197,6 +199,10 @@ run_install :: proc() {
 
 run_update :: proc() {
 	cli.update_command()
+}
+
+run_upgrade :: proc() {
+	cli.upgrade_command()
 }
 
 run_uninstall :: proc() {
