@@ -71,14 +71,14 @@ uninstall_module_internal :: proc(options: Uninstall_Options) -> (bool, string) 
 	}
 
 	if !options.skip_permission && !security.require_permission(.Uninstall, "uninstall module") {
-		security.log_module_uninstall(options.module_name, false, "permission denied")
+		security.log_uninstall_failed(options.module_name, "permission denied")
 		return false, strings.clone("permission denied")
 	}
 
 	modules_dir := loader.get_modules_dir()
 	defer delete(modules_dir)
 	if modules_dir == "" || !os.exists(modules_dir) {
-		security.log_module_uninstall(options.module_name, false, "modules directory not found")
+		security.log_uninstall_failed(options.module_name, "modules directory not found")
 		return false, strings.clone("modules directory not found")
 	}
 
@@ -89,7 +89,7 @@ uninstall_module_internal :: proc(options: Uninstall_Options) -> (bool, string) 
 	defer delete(module_path)
 
 	if !os.exists(module_path) {
-		security.log_module_uninstall(options.module_name, false, "module not found")
+		security.log_uninstall_failed(options.module_name, "module not found")
 		return false, strings.clone("module not found")
 	}
 
@@ -101,13 +101,13 @@ uninstall_module_internal :: proc(options: Uninstall_Options) -> (bool, string) 
 		}
 	}
 	if modules == nil || len(modules) == 0 {
-		security.log_module_uninstall(options.module_name, false, "no modules discovered")
+		security.log_uninstall_failed(options.module_name, "no modules discovered")
 		return false, strings.clone("no modules discovered")
 	}
 
 	resolved_modules, err := loader.resolve(modules)
 	if err != "" {
-		security.log_module_uninstall(options.module_name, false, "dependency resolution failed")
+		security.log_uninstall_failed(options.module_name, "dependency resolution failed")
 		msg := strings.clone(fmt.tprintf("dependency resolution failed: %s", err))
 		delete(err)
 		return false, msg
@@ -135,23 +135,23 @@ uninstall_module_internal :: proc(options: Uninstall_Options) -> (bool, string) 
 		}
 		fmt.sbprintf(&builder, ". Use --force to uninstall anyway.")
 		message := strings.clone(strings.to_string(builder))
-		security.log_module_uninstall(options.module_name, false, "dependents found")
+		security.log_uninstall_blocked(options.module_name, dependents)
 		return false, message
 	}
 
 	if has && dependents != nil && len(dependents) > 0 && options.force {
 		if !show_force_warning(options.module_name, dependents, options.yes) {
-			security.log_module_uninstall(options.module_name, false, "force uninstall canceled")
+			security.log_uninstall_failed(options.module_name, "force uninstall canceled")
 			return false, strings.clone("uninstall canceled")
 		}
 	}
 
 	if !remove_module_directory(module_path) {
-		security.log_module_uninstall(options.module_name, false, "failed to remove module directory")
+		security.log_uninstall_failed(options.module_name, "failed to remove module directory")
 		return false, strings.clone("failed to remove module directory")
 	}
 
-	security.log_module_uninstall(options.module_name, true, "uninstalled")
+	security.log_uninstall_success(options.module_name, options.force)
 	return true, strings.clone(fmt.tprintf("✓ Module '%s' uninstalled successfully.", options.module_name))
 }
 
@@ -164,8 +164,9 @@ uninstall_command :: proc() {
 		os.exit(1)
 	}
 
-	blocked, exit_code := check_agent_uninstall_policy(options)
+	blocked, exit_code, block_reason := check_agent_uninstall_policy(options)
 	if blocked {
+		security.log_agent_blocked_uninstall(options.module_name, block_reason)
 		fmt.eprintln("Error: Operation not permitted")
 		os.exit(exit_code)
 	}
@@ -233,15 +234,15 @@ confirm :: proc(message: string) -> bool {
 	return lower == "y" || lower == "yes"
 }
 
-check_agent_uninstall_policy :: proc(options: Uninstall_Options) -> (bool, int) {
+check_agent_uninstall_policy :: proc(options: Uninstall_Options) -> (bool, int, string) {
 	if !security.is_agent_environment() {
-		return false, 0
+		return false, 0, ""
 	}
 	if options.force {
-		return true, 0
+		return true, 0, "force"
 	}
 	if options.module_name != "" && is_critical_module(options.module_name) {
-		return true, 0
+		return true, 0, "critical"
 	}
-	return false, 0
+	return false, 0, ""
 }

@@ -27,7 +27,7 @@ test_uninstall_agent_force_blocked :: proc(t: ^testing.T) {
 	security.register_session("agent-1", "cursor", "agent-test-session", "parent")
 
 	options := cli.Uninstall_Options{module_name = "demo", force = true}
-	blocked, code := cli.check_agent_uninstall_policy(options)
+		blocked, code, _ := cli.check_agent_uninstall_policy(options)
 	testing.expect(t, blocked, "agent force should be blocked")
 	testing.expect(t, code == 0, "agent force block should exit 0")
 }
@@ -51,7 +51,7 @@ test_uninstall_agent_critical_blocked :: proc(t: ^testing.T) {
 	security.register_session("agent-1", "cursor", "agent-test-session", "parent")
 
 	options := cli.Uninstall_Options{module_name = "stdlib"}
-	blocked, code := cli.check_agent_uninstall_policy(options)
+		blocked, code, _ := cli.check_agent_uninstall_policy(options)
 	testing.expect(t, blocked, "agent critical uninstall should be blocked")
 	testing.expect(t, code == 0, "agent critical block should exit 0")
 }

@@ -169,6 +169,43 @@ log_module_uninstall :: proc(module: string, success: bool, reason: string) {
 	log_audit_event(event)
 }
 
+log_uninstall_success :: proc(module: string, forced: bool) {
+	reason := "uninstalled"
+	if forced {
+		reason = "forced"
+	}
+	log_module_uninstall(module, true, reason)
+}
+
+log_uninstall_blocked :: proc(module: string, dependents: []string) {
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	if dependents != nil && len(dependents) > 0 {
+		fmt.sbprintf(&builder, "dependents: ")
+		for dep, idx in dependents {
+			if idx > 0 {
+				fmt.sbprintf(&builder, ", ")
+			}
+			fmt.sbprintf(&builder, "%s", dep)
+		}
+	} else {
+		fmt.sbprintf(&builder, "dependents")
+	}
+	log_module_uninstall(module, false, strings.clone(strings.to_string(builder)))
+}
+
+log_agent_blocked_uninstall :: proc(module: string, reason: string) {
+	prefix := "agent_blocked:"
+	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
+	fmt.sbprintf(&builder, "%s%s", prefix, reason)
+	log_module_uninstall(module, false, strings.clone(strings.to_string(builder)))
+}
+
+log_uninstall_failed :: proc(module: string, reason: string) {
+	log_module_uninstall(module, false, reason)
+}
+
 log_module_update :: proc(module: string, old_version: string, new_version: string, success: bool, reason: string) {
 	session, ok := get_current_session()
 	if !ok {
