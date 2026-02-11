@@ -107,6 +107,14 @@ get_current_session :: proc() -> (Session_Info, bool) {
 	return {}, false
 }
 
+is_agent_environment :: proc() -> bool {
+	session, ok := get_current_session()
+	if !ok {
+		return false
+	}
+	return session.role == "agent"
+}
+
 get_all_sessions :: proc() -> []Session_Info {
 	ensure_session_registry()
 	sync.mutex_lock(&_session_registry.mutex)

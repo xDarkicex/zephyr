@@ -242,7 +242,9 @@ check_for_updates :: proc(options: Update_Options) -> int {
 
 get_modules_to_update :: proc(module_name: string) -> [dynamic]string {
 	if module_name != "" {
-		return []string{strings.clone(module_name)}
+		names := make([dynamic]string, 0, 1)
+		append(&names, strings.clone(module_name))
+		return names
 	}
 
 	names := git.list_installed_modules()

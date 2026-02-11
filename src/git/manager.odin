@@ -384,6 +384,10 @@ update_module :: proc(module_name: string, options: Manager_Options) -> (bool, s
 				success_count += 1
 			case .Skipped:
 				skipped_count += 1
+			case .Failed:
+				error_count += 1
+			case .Rolled_Back:
+				error_count += 1
 			case:
 				error_count += 1
 			}
@@ -575,10 +579,10 @@ update_single_module :: proc(module_name: string, module_path: string, options: 
 		return result
 	}
 	if !has_remote_origin(module_path) {
-		result.status = .Skipped
+		result.status = .Failed
 		result.message = format_manager_error(.Update_Failed, "no git remote", module_name, "update")
-		result.summary = strings.clone(fmt.tprintf("%s %s: skipped (no git remote)", colors.warning_symbol(), module_name))
-		security.log_module_update(module_name, result.old_version, result.new_version, false, "skipped: no git remote")
+		result.summary = strings.clone(fmt.tprintf("%s %s: update failed (no git remote)", colors.error_symbol(), module_name))
+		security.log_module_update(module_name, result.old_version, result.new_version, false, "no git remote")
 		return result
 	}
 
@@ -808,10 +812,10 @@ format_update_summary :: proc(items: []string, success_count: int, error_count: 
 	total := success_count + error_count + skipped_count
 	fmt.sbprintf(&builder, "Total: %d", total)
 	if success_count > 0 {
-		fmt.sbprintf(&builder, " | %s %d", colors.success("Updated:"), success_count)
+		fmt.sbprintf(&builder, " | %s %d", colors.success("Success:"), success_count)
 	}
 	if error_count > 0 {
-		fmt.sbprintf(&builder, " | %s %d", colors.error("Failed:"), error_count)
+		fmt.sbprintf(&builder, " | %s %d", colors.error("Errors:"), error_count)
 	}
 	if skipped_count > 0 {
 		fmt.sbprintf(&builder, " | %s %d", colors.warning("Skipped:"), skipped_count)

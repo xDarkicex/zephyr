@@ -22,23 +22,23 @@ GitHub_Asset :: struct {
 	size:                 int,
 }
 
-	last_error: string
+github_last_error: string
 
-set_last_error :: proc(message: string) {
-	if last_error != "" {
-		delete(last_error)
-		last_error = ""
+set_github_error :: proc(message: string) {
+	if github_last_error != "" {
+		delete(github_last_error)
+		github_last_error = ""
 	}
 	if message != "" {
-		last_error = strings.clone(message)
+		github_last_error = strings.clone(message)
 	}
 }
 
-get_last_error :: proc() -> string {
-	if last_error == "" {
+get_github_error :: proc() -> string {
+	if github_last_error == "" {
 		return strings.clone("")
 	}
-	return strings.clone(last_error)
+	return strings.clone(github_last_error)
 }
 
 cleanup_github_asset :: proc(asset: ^GitHub_Asset) {
@@ -86,7 +86,7 @@ cleanup_github_releases :: proc(releases: ^[dynamic]GitHub_Release) {
 }
 
 get_latest_release :: proc(channel: Release_Channel) -> ^Release_Info {
-	set_last_error("")
+	set_github_error("")
 
 	headers := []string{
 		"Accept: application/vnd.github+json",
@@ -96,18 +96,18 @@ get_latest_release :: proc(channel: Release_Channel) -> ^Release_Info {
 
 	if !response.ok {
 		if response.error != "" {
-			set_last_error(fmt.tprintf("Network error: %s", response.error))
+			set_github_error(fmt.tprintf("Network error: %s", response.error))
 		} else {
-			set_last_error("Network error: GitHub API request failed")
+			set_github_error("Network error: GitHub API request failed")
 		}
 		return nil
 	}
 	if response.status_code != 200 {
 		message := handle_download_error(response.status_code, "")
 		if response.status_code == 403 {
-			set_last_error("GitHub API rate limit exceeded")
+			set_github_error("GitHub API rate limit exceeded")
 		} else {
-			set_last_error(message)
+			set_github_error(message)
 		}
 		delete(message)
 		return nil
@@ -116,14 +116,14 @@ get_latest_release :: proc(channel: Release_Channel) -> ^Release_Info {
 	releases := parse_releases_json(response.body)
 	if releases == nil || len(releases) == 0 {
 		cleanup_release_list(&releases)
-		set_last_error("No releases found")
+		set_github_error("No releases found")
 		return nil
 	}
 
 	release := filter_by_channel(releases, channel)
 	if release == nil {
 		cleanup_release_list(&releases)
-		set_last_error("No matching release found for channel")
+		set_github_error("No matching release found for channel")
 		return nil
 	}
 
@@ -134,10 +134,12 @@ get_latest_release :: proc(channel: Release_Channel) -> ^Release_Info {
 
 parse_releases_json :: proc(json_data: []u8) -> [dynamic]Release_Info {
 	releases := make([dynamic]GitHub_Release)
-	unmarshal_err := json.unmarshal(json_data, &releases)
-	if unmarshal_err != .None {
+	payload := strings.clone(strings.trim_space(string(json_data)))
+	defer if payload != "" { delete(payload) }
+	unmarshal_err := json.unmarshal_string(payload, &releases)
+	if unmarshal_err != nil {
 		cleanup_github_releases(&releases)
-		set_last_error("Failed to parse GitHub releases JSON")
+		set_github_error(fmt.tprintf("Failed to parse GitHub releases JSON: %v", unmarshal_err))
 		return nil
 	}
 	defer cleanup_github_releases(&releases)
@@ -168,6 +170,11 @@ parse_releases_json :: proc(json_data: []u8) -> [dynamic]Release_Info {
 	}
 
 	return out
+}
+
+// ParseReleasesJSON exposes the GitHub JSON parsing for tests.
+ParseReleasesJSON :: proc(json_data: []u8) -> [dynamic]Release_Info {
+	return parse_releases_json(json_data)
 }
 
 filter_by_channel :: proc(releases: [dynamic]Release_Info, channel: Release_Channel) -> ^Release_Info {

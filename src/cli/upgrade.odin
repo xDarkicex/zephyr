@@ -26,7 +26,7 @@ upgrade_command :: proc() {
 
 	release := upgrade.get_latest_release(options.channel)
 	if release == nil {
-		err := upgrade.get_last_error()
+		err := upgrade.get_github_error()
 		if err != "" {
 			colors.print_error("%s", err)
 			security.log_zephyr_upgrade(version.VERSION, "", false, err)
@@ -180,9 +180,9 @@ parse_release_channel :: proc(value: string) -> upgrade.Release_Channel {
 }
 
 confirm_upgrade :: proc(version: string, notes_url: string) -> bool {
-	fmt.Printf("Upgrade Zephyr to %s?\n", version)
+	fmt.printf("Upgrade Zephyr to %s?\n", version)
 	if notes_url != "" {
-		fmt.Printf("Release notes: %s\n", notes_url)
+		fmt.printf("Release notes: %s\n", notes_url)
 	}
 	return prompt_yes_no("Continue with upgrade?", true)
 }
@@ -233,6 +233,11 @@ is_newer_version :: proc(latest: string, current: string) -> bool {
 	}
 
 	return false
+}
+
+// IsNewerVersion exposes version comparison for tests.
+IsNewerVersion :: proc(latest: string, current: string) -> bool {
+	return is_newer_version(latest, current)
 }
 
 parse_version_parts :: proc(version_str: string) -> [dynamic]int {

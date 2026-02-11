@@ -2,6 +2,7 @@ package upgrade
 
 import "core:fmt"
 import "core:os"
+import os2 "core:os/os2"
 import "core:path/filepath"
 import "core:strings"
 
@@ -108,6 +109,11 @@ detect_platform :: proc() -> string {
 	return strings.clone(fmt.tprintf("%s-%s", platform.os, platform.arch))
 }
 
+// DetectPlatform exposes platform detection for tests.
+DetectPlatform :: proc() -> string {
+	return detect_platform()
+}
+
 find_asset_for_platform :: proc(release: ^Release_Info, platform: string) -> ^Release_Asset {
 	if release == nil || platform == "" || release.assets == nil {
 		return nil
@@ -169,7 +175,7 @@ print_download_summary :: proc(downloaded: int, expected: int) {
 		return
 	}
 
-	percent := int(float64(downloaded) / float64(expected) * 100.0)
+	percent := int(f64(downloaded) / f64(expected) * 100.0)
 	if percent > 100 {
 		percent = 100
 	}
@@ -227,6 +233,11 @@ verify_checksum :: proc(data: []u8, expected_line: string) -> bool {
 	return security.constant_time_compare(expected, computed)
 }
 
+// VerifyChecksum exposes checksum verification for tests.
+VerifyChecksum :: proc(data: []u8, expected_line: string) -> bool {
+	return verify_checksum(data, expected_line)
+}
+
 install_binary :: proc(data: []u8) -> bool {
 	current_path := resolve_current_binary()
 	defer if current_path != "" { delete(current_path) }
@@ -243,26 +254,23 @@ install_binary :: proc(data: []u8) -> bool {
 		return false
 	}
 
-	mode := os.Permissions_Default_File + os.Permissions_Execute_All
-	if info, err := os.stat(current_path); err == os.ERROR_NONE {
-		mode = info.mode & os.Permissions_All
-	}
-	_ = os.chmod(temp_path, mode)
+	mode := os2.Permissions_Read_Write_All + os2.Permissions_Execute_All
+	_ = os2.change_mode(temp_path, mode)
 
 	if os.exists(backup_path) {
 		_ = os.remove(backup_path)
 	}
 
 	if os.exists(current_path) {
-		if err := os.rename(current_path, backup_path); err != os.ERROR_NONE {
+		if err := os2.rename(current_path, backup_path); err != os2.ERROR_NONE {
 			_ = os.remove(temp_path)
 			return false
 		}
 	}
 
-	if err := os.rename(temp_path, current_path); err != os.ERROR_NONE {
+	if err := os2.rename(temp_path, current_path); err != os2.ERROR_NONE {
 		if os.exists(backup_path) {
-			_ = os.rename(backup_path, current_path)
+			_ = os2.rename(backup_path, current_path)
 		}
 		_ = os.remove(temp_path)
 		return false
