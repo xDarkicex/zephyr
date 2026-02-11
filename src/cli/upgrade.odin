@@ -37,7 +37,7 @@ upgrade_command :: proc() {
 		}
 		os.exit(exit_code_for_upgrade_error(err))
 	}
-	defer upgrade.cleanup_release_info(release)
+	defer upgrade.destroy_release_info(release)
 
 	current := strings.clone(version.VERSION)
 	defer delete(current)

@@ -1,5 +1,6 @@
 package upgrade
 
+import "core:mem"
 import "core:strings"
 
 Release_Info :: struct {
@@ -60,6 +61,12 @@ cleanup_release_info :: proc(info: ^Release_Info) {
 		delete(info.assets)
 		info.assets = nil
 	}
+}
+
+destroy_release_info :: proc(info: ^Release_Info) {
+	if info == nil do return
+	cleanup_release_info(info)
+	mem.free(info)
 }
 
 cleanup_release_list :: proc(releases: ^[dynamic]Release_Info) {

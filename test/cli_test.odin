@@ -77,6 +77,28 @@ parse_int :: proc(s: string) -> int {
 	return value * sign
 }
 
+parse_int_bytes :: proc(data: []u8) -> int {
+	sign := 1
+	found := false
+	value := 0
+	for b in data {
+		if !found && b == '-' {
+			sign = -1
+			found = true
+			continue
+		}
+		if b >= '0' && b <= '9' {
+			value = value*10 + int(b-'0')
+			found = true
+			continue
+		}
+		if found {
+			break
+		}
+	}
+	return value * sign
+}
+
 run_scan_command := proc(t: ^testing.T, command: string) -> (int, string, string) {
 	temp_dir := setup_test_environment("scan_command_cli")
 	defer teardown_test_environment(temp_dir)
@@ -97,25 +119,49 @@ run_scan_command := proc(t: ^testing.T, command: string) -> (int, string, string
 	escaped := shell_escape_single(command)
 	defer delete(escaped)
 
-	script := fmt.tprintf("cd '%s' && ./zephyr scan '%s' > '%s' 2> '%s'; printf \"%%d\" $? > '%s'",
+	script := fmt.aprintf("cd '%s' && ./zephyr scan '%s' > '%s' 2> '%s'; printf \"%%d\" $? > '%s'",
 		root, escaped, out_path, err_path, code_path)
 	defer delete(script)
 
 	ok := run_shell_command(script)
 	testing.expect(t, ok, "shell command should run")
 
-	code_data, _ := os.read_entire_file(code_path)
-	defer delete(code_data)
-	code_str := strings.trim_space(string(code_data))
-	defer delete(code_str)
-	code := parse_int(code_str)
+	code_data, code_ok := os.read_entire_file(code_path)
+	if code_ok {
+		defer delete(code_data)
+	} else {
+		fmt.eprintf("run_scan_command: missing code file at %s\n", code_path)
+	}
+	code := 0
+	if code_ok {
+		code = parse_int_bytes(code_data)
+	}
 
-	out_data, _ := os.read_entire_file(out_path)
-	defer delete(out_data)
-	err_data, _ := os.read_entire_file(err_path)
-	defer delete(err_data)
+	out_str := ""
+	out_data, out_ok := os.read_entire_file(out_path)
+	if out_ok {
+		out_str = strings.clone(string(out_data))
+		defer delete(out_data)
+	} else {
+		fmt.eprintf("run_scan_command: missing stdout file at %s\n", out_path)
+	}
+	if !out_ok {
+		out_str = strings.clone("")
+	}
 
-	return code, string(out_data), string(err_data)
+	err_str := ""
+	err_data, err_ok := os.read_entire_file(err_path)
+	if err_ok {
+		err_str = strings.clone(string(err_data))
+		defer delete(err_data)
+	} else {
+		fmt.eprintf("run_scan_command: missing stderr file at %s\n", err_path)
+	}
+	if !err_ok {
+		err_str = strings.clone("")
+	}
+
+	return code, out_str, err_str
 }
 
 // **Validates: Requirements 1.1, 1.2, 6.1**
@@ -1127,16 +1173,22 @@ test_scan_command_exit_codes :: proc(t: ^testing.T) {
 	reset_test_state(t)
 
 	code_safe, out_safe, err_safe := run_scan_command(t, "ls -la")
+	defer delete(out_safe)
+	defer delete(err_safe)
 	testing.expect(t, code_safe == 0, "safe command should exit 0")
 	testing.expect(t, len(out_safe) == 0, "safe command should be silent on stdout")
 	testing.expect(t, len(err_safe) == 0, "safe command should be silent on stderr")
 
 	code_critical, out_critical, err_critical := run_scan_command(t, "rm -rf /")
+	defer delete(out_critical)
+	defer delete(err_critical)
 	testing.expect(t, code_critical == 1, "critical command should exit 1")
 	testing.expect(t, len(out_critical) == 0, "critical command should be silent on stdout")
 	testing.expect(t, len(err_critical) == 0, "critical command should be silent on stderr")
 
 	code_warning, out_warning, err_warning := run_scan_command(t, "cat ~/.aws/credentials")
+	defer delete(out_warning)
+	defer delete(err_warning)
 	testing.expect(t, code_warning == 2, "warning command should exit 2")
 	testing.expect(t, len(out_warning) == 0, "warning command should be silent on stdout")
 	testing.expect(t, len(err_warning) == 0, "warning command should be silent on stderr")

@@ -112,7 +112,7 @@ test_upgrade_check_newer_version_available :: proc(t: ^testing.T) {
 		}
 		return
 	}
-	defer upgrade.cleanup_release_info(release)
+	defer upgrade.destroy_release_info(release)
 
 	latest := release.version
 	if latest == "" {
@@ -198,7 +198,7 @@ test_upgrade_check_up_to_date :: proc(t: ^testing.T) {
 		}
 		return
 	}
-	defer upgrade.cleanup_release_info(release)
+	defer upgrade.destroy_release_info(release)
 
 	latest := release.version
 	if latest == "" {
@@ -320,7 +320,7 @@ test_upgrade_install_mock_download :: proc(t: ^testing.T) {
 		}
 		return
 	}
-	defer upgrade.cleanup_release_info(release)
+	defer upgrade.destroy_release_info(release)
 
 	ok_install := upgrade.install_release(release)
 	testing.expect(t, ok_install, "expected upgrade installation to succeed")
