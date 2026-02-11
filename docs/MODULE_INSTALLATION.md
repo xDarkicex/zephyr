@@ -95,10 +95,17 @@ After pulling, modules are validated again. If validation fails, Zephyr attempts
 zephyr uninstall git-helpers
 ```
 
-If dependency checking is enabled and other modules depend on the target, Zephyr will require confirmation:
+If dependency checking is enabled and other modules depend on the target, Zephyr blocks the uninstall unless you force it:
 
 ```bash
-zephyr uninstall git-helpers --confirm
+zephyr uninstall git-helpers --force
+zephyr uninstall git-helpers --force --yes
+```
+
+Dependency graphs can help you review impact before uninstalling:
+
+```bash
+zephyr list --graph=mermaid
 ```
 
 ## Local Path Installs
@@ -125,3 +132,11 @@ If installs or updates fail, see:
 
 - `docs/TROUBLESHOOTING.md`
 - `SECURITY_SPEC.md` for security considerations
+
+If an uninstall is blocked, check dependents with:
+
+```bash
+zephyr list --graph=mermaid
+```
+
+Then retry with `--force` (and `--yes` if you want to skip confirmation).

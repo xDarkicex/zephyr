@@ -728,10 +728,18 @@ Removes an installed module from your modules directory.
 # Uninstall a module
 zephyr uninstall git-helpers
 
-# Uninstall with confirmation when dependents are detected
-zephyr uninstall git-helpers --confirm
+# Force uninstall when dependents are detected
+zephyr uninstall git-helpers --force
+
+# Skip the confirmation prompt when forcing
+zephyr uninstall git-helpers --force --yes
 ```
 
+Notes:
+- If dependents exist, Zephyr blocks by default and requires `--force`.
+- Agent roles cannot uninstall critical modules or use `--force`.
+
+Dependency graphs can be generated with `zephyr list --graph=mermaid`.
 For more details on install/update workflows, see `docs/MODULE_INSTALLATION.md`.
 
 ### `zephyr init <name>`
@@ -1269,6 +1277,9 @@ export NO_COLOR=1
 ## Troubleshooting
 
 See the [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for common issues and solutions.
+
+Common uninstall issues:
+- If uninstall is blocked due to dependents, review `zephyr list --graph=mermaid` and re-run with `--force`.
 
 ## Performance
 

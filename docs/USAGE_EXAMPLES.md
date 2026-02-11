@@ -539,13 +539,26 @@ $ zephyr list --json | jq '.incompatible_modules[] | {name, reason}'
 }
 ```
 
-**Generate module dependency graph:**
+**Generate module dependency graph (Mermaid):**
 ```bash
-$ zephyr list --json | jq -r '.modules[] | "\(.name) -> \(.dependencies.required | join(", "))"'
-core -> 
-colors -> core
-git-helpers -> core, colors
-my-aliases -> 
+$ zephyr list --graph=mermaid
+graph TD
+  core
+  colors --> core
+  git-helpers --> core
+  git-helpers --> colors
+  my-aliases
+```
+
+**Extract dependency graph from JSON:**
+```bash
+$ zephyr list --graph=mermaid --json | jq -r '.dependency_graph.content'
+graph TD
+  core
+  colors --> core
+  git-helpers --> core
+  git-helpers --> colors
+  my-aliases
 ```
 
 #### Integration with Scripts
@@ -786,8 +799,11 @@ Remove a module from the modules directory. If dependency checks are enabled, co
 # Uninstall a module
 zephyr uninstall git-helpers
 
-# Confirm when dependents are detected
-zephyr uninstall git-helpers --confirm
+# Force uninstall when dependents are detected
+zephyr uninstall git-helpers --force
+
+# Skip the confirmation prompt when forcing
+zephyr uninstall git-helpers --force --yes
 ```
 
 **Typical output:**
