@@ -10,8 +10,28 @@ import "../http"
 import "../loader"
 import "../security"
 
+last_error: string
+
+set_last_error :: proc(message: string) {
+	if last_error != "" {
+		delete(last_error)
+		last_error = ""
+	}
+	if message != "" {
+		last_error = strings.clone(message)
+	}
+}
+
+get_last_error :: proc() -> string {
+	if last_error == "" {
+		return strings.clone("")
+	}
+	return strings.clone(last_error)
+}
+
 install_release :: proc(release: ^Release_Info) -> bool {
 	if release == nil {
+		set_last_error("release missing")
 		colors.print_error("No release selected")
 		return false
 	}
@@ -19,12 +39,14 @@ install_release :: proc(release: ^Release_Info) -> bool {
 	platform := detect_platform()
 	defer delete(platform)
 	if platform == "" {
+		set_last_error("failed to detect platform")
 		colors.print_error("Failed to detect platform")
 		return false
 	}
 
 	asset := find_asset_for_platform(release, platform)
 	if asset == nil {
+		set_last_error("no binary available for platform")
 		colors.print_error("No binary available for platform: %s", platform)
 		return false
 	}
@@ -32,6 +54,7 @@ install_release :: proc(release: ^Release_Info) -> bool {
 	colors.print_info("Downloading %s", asset.name)
 	binary_data := download_with_progress(asset.download_url, asset.size)
 	if binary_data == nil || len(binary_data) == 0 {
+		set_last_error("download failed")
 		colors.print_error("Failed to download release binary")
 		if binary_data != nil {
 			delete(binary_data)
@@ -44,6 +67,7 @@ install_release :: proc(release: ^Release_Info) -> bool {
 	defer delete(checksum_url)
 	expected_checksum := download_checksum(checksum_url)
 	if expected_checksum == "" {
+		set_last_error("checksum download failed")
 		colors.print_error("Failed to download checksum")
 		return false
 	}
@@ -51,6 +75,7 @@ install_release :: proc(release: ^Release_Info) -> bool {
 
 	fmt.print("Verifying checksum... ")
 	if !verify_checksum(binary_data, expected_checksum) {
+		set_last_error("checksum mismatch")
 		fmt.println("FAILED")
 		colors.print_error("Checksum verification failed")
 		return false
@@ -59,11 +84,13 @@ install_release :: proc(release: ^Release_Info) -> bool {
 
 	fmt.println("Installing update...")
 	if !install_binary(binary_data) {
+		set_last_error("install failed")
 		colors.print_error("Failed to install new binary")
 		return false
 	}
 
 	if !verify_installation() {
+		set_last_error("installation verification failed")
 		colors.print_error("Installation verification failed")
 		return false
 	}
@@ -116,9 +143,10 @@ download_with_progress :: proc(url: string, expected_size: int) -> []u8 {
 	response := http.get(url, headers, 30)
 	defer http.cleanup_http_result(&response)
 	if !response.ok || response.status_code < 200 || response.status_code >= 300 {
-		if response.error != "" {
-			colors.print_error("Download failed: %s", response.error)
-		}
+		message := handle_download_error(response.status_code, response.error)
+		set_last_error(message)
+		colors.print_error("%s", message)
+		delete(message)
 		return nil
 	}
 	if response.body == nil || len(response.body) == 0 {

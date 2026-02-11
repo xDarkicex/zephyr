@@ -55,3 +55,25 @@ format_git_error :: proc(title: string, detail: string, ctx: errors.ErrorContext
 
 	return errors.format_error(title, message, ctx_local)
 }
+
+// handle_git_error returns a formatted error with a best-effort suggestion.
+handle_git_error :: proc(operation: string, detail: string, module_name: string) -> string {
+	lower := strings.to_lower(detail)
+	defer delete(lower)
+
+	suggestion := ""
+	switch {
+	case strings.contains(lower, "permission"):
+		suggestion = "Check file permissions and SSH keys."
+	case strings.contains(lower, "network") || strings.contains(lower, "timeout"):
+		suggestion = "Check your network connection and remote URL."
+	case strings.contains(lower, "conflict"):
+		suggestion = "Resolve merge conflicts and retry."
+	}
+
+	ctx := errors.ErrorContext{
+		operation   = operation,
+		module_name = module_name,
+	}
+	return format_git_error("Git error", detail, ctx, suggestion)
+}

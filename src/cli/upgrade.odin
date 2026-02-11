@@ -35,7 +35,7 @@ upgrade_command :: proc() {
 			colors.print_error("Failed to fetch releases")
 			security.log_zephyr_upgrade(version.VERSION, "", false, "failed to fetch releases")
 		}
-		os.exit(1)
+		os.exit(exit_code_for_upgrade_error(err))
 	}
 	defer upgrade.cleanup_release_info(release)
 
@@ -48,7 +48,7 @@ upgrade_command :: proc() {
 	if latest == "" {
 		colors.print_error("Release version missing")
 		security.log_zephyr_upgrade(version.VERSION, "", false, "release version missing")
-		os.exit(1)
+		os.exit(4)
 	}
 
 	if !is_newer_version(latest, current) {
@@ -86,13 +86,44 @@ upgrade_command :: proc() {
 	}
 
 	if !upgrade.install_release(release) {
-		colors.print_error("Upgrade failed.")
-		security.log_zephyr_upgrade(current, latest, false, "install failed")
-		os.exit(1)
+		install_err := upgrade.get_last_error()
+		if install_err != "" {
+			colors.print_error("Upgrade failed: %s", install_err)
+			security.log_zephyr_upgrade(current, latest, false, install_err)
+		} else {
+			colors.print_error("Upgrade failed.")
+			security.log_zephyr_upgrade(current, latest, false, "install failed")
+		}
+		code := exit_code_for_upgrade_error(install_err)
+		if install_err != "" {
+			delete(install_err)
+		}
+		os.exit(code)
 	}
 
 	fmt.printf("Successfully upgraded to %s!\n", latest)
 	security.log_zephyr_upgrade(current, latest, true, "")
+}
+
+exit_code_for_upgrade_error :: proc(message: string) -> int {
+	if message == "" {
+		return 1
+	}
+	lower := strings.to_lower(message)
+	defer delete(lower)
+	if strings.contains(lower, "permission") {
+		return 2
+	}
+	if strings.contains(lower, "network") || strings.contains(lower, "rate limit") {
+		return 3
+	}
+	if strings.contains(lower, "checksum") || strings.contains(lower, "validation") {
+		return 4
+	}
+	if strings.contains(lower, "disk") || strings.contains(lower, "space") {
+		return 1
+	}
+	return 1
 }
 
 parse_upgrade_options :: proc() -> Upgrade_Options {

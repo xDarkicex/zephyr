@@ -22,7 +22,7 @@ GitHub_Asset :: struct {
 	size:                 int,
 }
 
-last_error: string
+	last_error: string
 
 set_last_error :: proc(message: string) {
 	if last_error != "" {
@@ -96,14 +96,20 @@ get_latest_release :: proc(channel: Release_Channel) -> ^Release_Info {
 
 	if !response.ok {
 		if response.error != "" {
-			set_last_error(response.error)
+			set_last_error(fmt.tprintf("Network error: %s", response.error))
 		} else {
-			set_last_error("GitHub API request failed")
+			set_last_error("Network error: GitHub API request failed")
 		}
 		return nil
 	}
 	if response.status_code != 200 {
-		set_last_error(fmt.tprintf("GitHub API returned HTTP %d", response.status_code))
+		message := handle_download_error(response.status_code, "")
+		if response.status_code == 403 {
+			set_last_error("GitHub API rate limit exceeded")
+		} else {
+			set_last_error(message)
+		}
+		delete(message)
 		return nil
 	}
 

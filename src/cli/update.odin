@@ -84,17 +84,44 @@ update_command :: proc() {
 	}
 
 	success, message := git.update_module(options.module_name, options.manager_opts)
+	exit_message := ""
 	if message != "" {
 		if success {
 			fmt.println(message)
 		} else {
 			fmt.eprintln(message)
 		}
+		exit_message = strings.clone(message)
 		delete(message)
 	}
 	if !success {
-		os.exit(1)
+		code := exit_code_for_update_error(exit_message)
+		if exit_message != "" {
+			delete(exit_message)
+		}
+		os.exit(code)
 	}
+	if exit_message != "" {
+		delete(exit_message)
+	}
+}
+
+exit_code_for_update_error :: proc(message: string) -> int {
+	if message == "" {
+		return 1
+	}
+	lower := strings.to_lower(message)
+	defer delete(lower)
+	if strings.contains(lower, "permission") {
+		return 2
+	}
+	if strings.contains(lower, "fetch failed") || strings.contains(lower, "pull failed") || strings.contains(lower, "network") {
+		return 3
+	}
+	if strings.contains(lower, "validation") || strings.contains(lower, "security scan") {
+		return 4
+	}
+	return 1
 }
 
 check_update_permissions :: proc(options: Update_Options) -> bool {
