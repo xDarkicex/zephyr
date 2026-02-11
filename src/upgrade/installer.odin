@@ -118,7 +118,7 @@ find_asset_for_platform :: proc(release: ^Release_Info, platform: string) -> ^Re
 	if release == nil || platform == "" || release.assets == nil {
 		return nil
 	}
-	asset_name := fmt.tprintf("zephyr-%s", platform)
+	asset_name := fmt.aprintf("zephyr-%s", platform)
 	defer delete(asset_name)
 
 	for i in 0..<len(release.assets) {
@@ -163,7 +163,9 @@ download_with_progress :: proc(url: string, expected_size: int) -> []u8 {
 		colors.print_warning("Downloaded size mismatch: expected %d, got %d", expected_size, len(response.body))
 	}
 	print_download_summary(len(response.body), expected_size)
-	return response.body
+	body := response.body
+	response.body = nil
+	return body
 }
 
 print_download_summary :: proc(downloaded: int, expected: int) {
