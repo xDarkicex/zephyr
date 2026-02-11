@@ -29,7 +29,6 @@ test_property_graph_is_mermaid :: proc(t: ^testing.T) {
 		os.make_directory(module_dir)
 		create_uninstall_test_manifest(module_dir, name)
 		delete(module_dir)
-		delete(name)
 	}
 
 	modules := loader.discover(modules_dir)
@@ -96,9 +95,15 @@ test_property_agent_blocks_consistent :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)
 
+	security.init_session_registry()
+	defer security.cleanup_session_registry()
+
+	os.set_env("ZEPHYR_SESSION_ID", "agent-prop-session")
 	os.set_env("ZEPHYR_AGENT_ID", "agent-prop")
 	os.set_env("ZEPHYR_AGENT_TYPE", "test-agent")
+	security.register_session("agent-prop", "test-agent", "agent-prop-session", "parent")
 	defer {
+		os.unset_env("ZEPHYR_SESSION_ID")
 		os.unset_env("ZEPHYR_AGENT_ID")
 		os.unset_env("ZEPHYR_AGENT_TYPE")
 	}
@@ -170,7 +175,7 @@ test_property_uninstall_logs_event :: proc(t: ^testing.T) {
 	log_path := filepath.join({temp_dir, ".zephyr", "audit", "operations"})
 	testing.expect(t, os.exists(log_path), "audit log directory should exist")
 	delete(log_path)
-	_ = security.cleanup_old_audit_logs(0)
+	security.cleanup_old_audit_logs(0)
 }
 
 @(test)
@@ -178,9 +183,15 @@ test_property_exit_codes_consistent :: proc(t: ^testing.T) {
 	set_test_timeout(t)
 	reset_test_state(t)
 
+	security.init_session_registry()
+	defer security.cleanup_session_registry()
+
+	os.set_env("ZEPHYR_SESSION_ID", "agent-exit-session")
 	os.set_env("ZEPHYR_AGENT_ID", "agent-exit")
 	os.set_env("ZEPHYR_AGENT_TYPE", "test-agent")
+	security.register_session("agent-exit", "test-agent", "agent-exit-session", "parent")
 	defer {
+		os.unset_env("ZEPHYR_SESSION_ID")
 		os.unset_env("ZEPHYR_AGENT_ID")
 		os.unset_env("ZEPHYR_AGENT_TYPE")
 	}

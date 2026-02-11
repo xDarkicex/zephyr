@@ -15,9 +15,9 @@ if [ -z "${GIT_COMMIT:-}" ]; then
     fi
 fi
 BUILD_TIME="${BUILD_TIME:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}"
-BUILD_FLAGS+=("-define:VERSION=${VERSION}")
-BUILD_FLAGS+=("-define:GIT_COMMIT=${GIT_COMMIT}")
-BUILD_FLAGS+=("-define:BUILD_TIME=${BUILD_TIME}")
+BUILD_FLAGS+=("-define:VERSION=\"${VERSION}\"")
+BUILD_FLAGS+=("-define:GIT_COMMIT=\"${GIT_COMMIT}\"")
+BUILD_FLAGS+=("-define:BUILD_TIME=\"${BUILD_TIME}\"")
 
 # Detect OS and architecture
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')

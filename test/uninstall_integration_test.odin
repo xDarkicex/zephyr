@@ -8,6 +8,7 @@ import "core:testing"
 import "../src/cli"
 import "../src/loader"
 import "../src/manifest"
+import "../src/security"
 
 set_modules_dir_env :: proc(modules_dir: string) -> string {
 	original := os.get_env("ZSH_MODULES_DIR")
@@ -114,9 +115,15 @@ test_uninstall_integration_agent_vs_human :: proc(t: ^testing.T) {
 	original_env := set_modules_dir_env(modules_dir)
 	defer restore_modules_dir_env(original_env)
 
+	security.init_session_registry()
+	defer security.cleanup_session_registry()
+
+	os.set_env("ZEPHYR_SESSION_ID", "agent-test-session")
 	os.set_env("ZEPHYR_AGENT_ID", "agent-test")
 	os.set_env("ZEPHYR_AGENT_TYPE", "test-agent")
+	security.register_session("agent-test", "test-agent", "agent-test-session", "parent")
 	defer {
+		os.unset_env("ZEPHYR_SESSION_ID")
 		os.unset_env("ZEPHYR_AGENT_ID")
 		os.unset_env("ZEPHYR_AGENT_TYPE")
 	}

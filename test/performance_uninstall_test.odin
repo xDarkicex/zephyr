@@ -31,7 +31,6 @@ test_performance_graph_generation :: proc(t: ^testing.T) {
 		os.make_directory(module_dir)
 		create_uninstall_test_manifest(module_dir, name)
 		delete(module_dir)
-		delete(name)
 	}
 
 	modules := loader.discover(modules_dir)
@@ -79,7 +78,6 @@ test_performance_reverse_deps :: proc(t: ^testing.T) {
 		}
 		create_uninstall_test_manifest(module_dir, name, deps)
 		delete(module_dir)
-		delete(name)
 	}
 
 	modules := loader.discover(modules_dir)
