@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+env:
+  ODIN_VERSION: dev-2025-12
+  ODIN_URL_DARWIN_AMD64: https://sourceforge.net/projects/odin.mirror/files/dev-2025-12/odin-macos-amd64-dev-2025-12.tar.gz/download
+  ODIN_URL_DARWIN_ARM64: https://sourceforge.net/projects/odin.mirror/files/dev-2025-12/odin-macos-arm64-dev-2025-12.tar.gz/download
+  ODIN_URL_LINUX_AMD64: https://sourceforge.net/projects/odin.mirror/files/dev-2025-12/odin-linux-amd64-dev-2025-12.tar.gz/download
+  ODIN_URL_LINUX_ARM64: https://sourceforge.net/projects/odin.mirror/files/dev-2025-12/odin-linux-arm64-dev-2025-12.tar.gz/download
+
+jobs:
+  build:
+    name: build-${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: darwin
+            arch: amd64
+            runner: macos-latest
+            odin_url: ${{ env.ODIN_URL_DARWIN_AMD64 }}
+          - os: darwin
+            arch: arm64
+            runner: macos-latest
+            odin_url: ${{ env.ODIN_URL_DARWIN_ARM64 }}
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+            odin_url: ${{ env.ODIN_URL_LINUX_AMD64 }}
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm64
+            odin_url: ${{ env.ODIN_URL_LINUX_ARM64 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'darwin'
+        run: |
+          brew update
+          brew install libgit2 libmagic openssl@3 curl libarchive pkg-config
+
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgit2-dev libmagic-dev libssl-dev libcurl4-openssl-dev libarchive-dev pkg-config clang
+
+      - name: Install Odin
+        run: |
+          curl -L -o /tmp/odin.tar.gz "${{ matrix.odin_url }}"
+          tar -xzf /tmp/odin.tar.gz -C /tmp
+          echo "/tmp/odin-${{ matrix.os }}-${{ matrix.arch }}-dev-2025-12" >> $GITHUB_PATH
+
+      - name: Build
+        run: |
+          make build
+          ./zephyr --version
+
+      - name: Package
+        run: |
+          asset="zephyr-${{ matrix.os }}-${{ matrix.arch }}"
+          tar -czf "${asset}.tar.gz" zephyr
+          shasum -a 256 "${asset}.tar.gz" > "${asset}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zephyr-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            zephyr-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
+            zephyr-${{ matrix.os }}-${{ matrix.arch }}.sha256
+
+  release:
+    name: publish-release
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/**/zephyr-*.tar.gz
+            dist/**/zephyr-*.sha256

@@ -113,7 +113,7 @@ run_first_time_setup :: proc() {
 					check_dependencies = false,
 					unsafe = false,
 				}
-				success, msg := git.install_module("xDarkicex/zephyr-guardrails-module", options)
+				success, msg := git.install_module("zephyr-systems/zephyr-guardrails-module", options)
 				if success {
 					fmt.println(fmt.tprintf("%s Guardrails installed successfully!", colors.success_symbol()))
 					fmt.println("")

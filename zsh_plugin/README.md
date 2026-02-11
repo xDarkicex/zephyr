@@ -40,7 +40,7 @@ Zephyr can be installed as a zsh plugin using popular plugin managers.
 Add to your `~/.zshrc`:
 
 ```bash
-zinit light xDarkicex/zephyr
+zinit light zephyr-systems/zephyr
 ```
 
 ### Antigen
@@ -48,7 +48,7 @@ zinit light xDarkicex/zephyr
 Add to your `~/.zshrc`:
 
 ```bash
-antigen bundle xDarkicex/zephyr
+antigen bundle zephyr-systems/zephyr
 ```
 
 ### Zplug
@@ -56,7 +56,7 @@ antigen bundle xDarkicex/zephyr
 Add to your `~/.zshrc`:
 
 ```bash
-zplug "xDarkicex/zephyr"
+zplug "zephyr-systems/zephyr"
 ```
 
 ### Manual Installation
@@ -152,7 +152,7 @@ Make sure `compinit` is called after loading the plugin. Most plugin managers ha
 
 1. Install the guardrails module for AI safety:
    ```bash
-   zephyr install xDarkicex/zephyr-guardrails-module
+   zephyr install zephyr-systems/zephyr-guardrails-module
    ```
 
 2. Create your own modules:

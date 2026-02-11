@@ -21,7 +21,7 @@ eval "$(zephyr load)"
 
 ### 1. Install Zephyr
 ```bash
-git clone https://github.com/xDarkicex/zephyr.git
+git clone https://github.com/zephyr-systems/zephyr.git
 cd zephyr
 ./install.sh
 ```
@@ -179,7 +179,7 @@ if [[ -x "$HOME/.zsh/bin/zephyr" ]]; then
         eval "$($HOME/.zsh/bin/zephyr load 2>/dev/null)"
     fi
 else
-    echo "Warning: Zephyr not found. Install with: git clone https://github.com/xDarkicex/zephyr.git && cd zephyr && ./install.sh"
+    echo "Warning: Zephyr not found. Install with: git clone https://github.com/zephyr-systems/zephyr.git && cd zephyr && ./install.sh"
 fi
 
 # Your other shell configuration...

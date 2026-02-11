@@ -129,8 +129,6 @@ run_scan_command := proc(t: ^testing.T, command: string) -> (int, string, string
 	code_data, code_ok := os.read_entire_file(code_path)
 	if code_ok {
 		defer delete(code_data)
-	} else {
-		fmt.eprintf("run_scan_command: missing code file at %s\n", code_path)
 	}
 	code := 0
 	if code_ok {
@@ -142,8 +140,6 @@ run_scan_command := proc(t: ^testing.T, command: string) -> (int, string, string
 	if out_ok {
 		out_str = strings.clone(string(out_data))
 		defer delete(out_data)
-	} else {
-		fmt.eprintf("run_scan_command: missing stdout file at %s\n", out_path)
 	}
 	if !out_ok {
 		out_str = strings.clone("")
@@ -154,8 +150,6 @@ run_scan_command := proc(t: ^testing.T, command: string) -> (int, string, string
 	if err_ok {
 		err_str = strings.clone(string(err_data))
 		defer delete(err_data)
-	} else {
-		fmt.eprintf("run_scan_command: missing stderr file at %s\n", err_path)
 	}
 	if !err_ok {
 		err_str = strings.clone("")

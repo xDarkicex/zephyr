@@ -359,25 +359,6 @@ Use `--no-color` or `NO_COLOR=1` to disable colorized output.
     Modules Dir:    /root/.zephyr/modules
 ```
 
-**ASCII screenshot (copy/paste):**
-```
-    ███████╗███████╗██████╗ ██╗  ██╗██╗   ██╗██████╗
-    ╚══███╔╝██╔════╝██╔══██╗██║  ██║╚██╗ ██╔╝██╔══██╗
-      ███╔╝ █████╗  ██████╔╝███████║ ╚████╔╝ ██████╔╝
-     ███╔╝  ██╔══╝  ██╔═══╝ ██╔══██║  ╚██╔╝  ██╔══██╗
-    ███████╗███████╗██║     ██║  ██║   ██║   ██║  ██║
-    ╚══════╝╚══════╝╚═╝     ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝
-
-    Version:        dev
-    Build:          50a51e1 (2026-02-11T04:10:02Z)
-    Repository:     github.com/zephyr-systems/zephyr
-
-    System Time:    02-11-2026 - 04:10:09
-    Platform:       linux/arm64
-    Shell:          bash
-    Modules Dir:    /root/.zephyr/modules
-```
-
 ### `zephyr load` (default)
 
 Generates shell code for loading all discovered modules in dependency order.
