@@ -1,6 +1,7 @@
 package version
 
 import "core:fmt"
+import "core:os"
 import "core:time"
 import "core:strings"
 import "../loader"
@@ -71,14 +72,7 @@ print_system_info :: proc(use_color: bool) {
 	platform := loader.get_current_platform()
 	defer loader.cleanup_platform_info(&platform)
 
-	shell_name := platform.shell
-	shell_version := platform.version
-	if shell_name == "" {
-		shell_name = "unknown"
-	}
-	if shell_version == "" {
-		shell_version = ""
-	}
+	shell_name, shell_version := get_shell_info()
 
 	modules_dir := loader.get_modules_dir()
 	defer delete(modules_dir)
@@ -91,4 +85,63 @@ print_system_info :: proc(use_color: bool) {
 		fmt.printf("    %sShell:%s          %s\n", label_color, reset, shell_name)
 	}
 	fmt.printf("    %sModules Dir:%s    %s\n", label_color, reset, modules_dir)
+}
+
+get_shell_info :: proc() -> (name: string, version: string) {
+	shell_path := os.get_env("SHELL")
+	if shell_path != "" {
+		defer delete(shell_path)
+		if strings.contains(shell_path, "zsh") {
+			name = "zsh"
+			version = get_zsh_version()
+			return
+		}
+		if strings.contains(shell_path, "bash") {
+			name = "bash"
+			version = get_bash_version()
+			return
+		}
+	}
+
+	name = "unknown"
+	version = ""
+	return
+}
+
+get_zsh_version :: proc() -> string {
+	zsh_version := os.get_env("ZSH_VERSION")
+	if zsh_version != "" {
+		defer delete(zsh_version)
+		return strings.clone(zsh_version)
+	}
+	return ""
+}
+
+get_bash_version :: proc() -> string {
+	bash_version := os.get_env("BASH_VERSION")
+	if bash_version != "" {
+		defer delete(bash_version)
+		parts := strings.split(bash_version, " ")
+		defer delete(parts)
+		if len(parts) > 0 {
+			return strings.clone(parts[0])
+		}
+	}
+	return ""
+}
+
+should_disable_color :: proc() -> bool {
+	no_color := os.get_env("NO_COLOR")
+	if no_color != "" {
+		delete(no_color)
+		return true
+	}
+	delete(no_color)
+
+	for arg in os.args[1:] {
+		if arg == "--no-color" {
+			return true
+		}
+	}
+	return false
 }
