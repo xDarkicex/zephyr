@@ -30,7 +30,7 @@ before they can execute:
 2. **Security scan**: All files are scanned for dangerous patterns while isolated
 3. **Validation**: Manifest and dependencies are validated
 4. **Controlled checkout**: Files are checked out after scan + validation
-5. **Move to final location**: Only if all checks pass, module is moved to `~/.zsh/modules/`
+5. **Move to final location**: Only if all checks pass, module is moved to `~/.zephyr/modules/`
 
 This ensures that:
 - Malicious code cannot execute during the scan

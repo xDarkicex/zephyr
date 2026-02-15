@@ -36,4 +36,4 @@ ZSH_MODULES_DIR="$PWD/test-modules" ./zephyr load
 
 ## Note
 
-These are **example modules only** - not meant for production use. For real modules, use `~/.zsh/modules` or your configured modules directory.
+These are **example modules only** - not meant for production use. For real modules, use `~/.zephyr/modules` or your configured modules directory.

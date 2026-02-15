@@ -4,7 +4,7 @@ This directory is a placeholder for development modules.
 
 ## Default Module Location
 
-By default, Zephyr looks for modules in `~/.zsh/modules`, not this directory.
+By default, Zephyr looks for modules in `~/.zephyr/modules`, not this directory.
 
 ## Using This Directory
 
@@ -23,6 +23,6 @@ export ZSH_MODULES_DIR="$PWD/modules"
 
 ## Recommendation
 
-For production use, keep your modules in `~/.zsh/modules` as configured in your shell.
+For production use, keep your modules in `~/.zephyr/modules` as configured in your shell.
 
 For testing, use the `test-modules/` directory which contains example modules.

@@ -6,7 +6,7 @@ ZEPHYR_PLUGIN_DIR="${0:A:h}"
 
 # Set default paths
 export ZEPHYR_BIN="${ZEPHYR_BIN:-$HOME/.zsh/bin/zephyr}"
-export ZSH_MODULES_DIR="${ZSH_MODULES_DIR:-$HOME/.zsh/modules}"
+export ZSH_MODULES_DIR="${ZSH_MODULES_DIR:-$HOME/.zephyr/modules}"
 
 # Check if zephyr binary exists
 if [[ ! -f "$ZEPHYR_BIN" ]]; then

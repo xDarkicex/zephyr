@@ -350,7 +350,7 @@ run_load :: proc() {
 }
 
 // get_modules_directory resolves the modules directory path
-// Uses ZSH_MODULES_DIR environment variable if set, otherwise defaults to $HOME/.zsh/modules
+// Uses ZSH_MODULES_DIR environment variable if set, otherwise defaults to $HOME/.zephyr/modules
 get_modules_directory :: proc() -> string {
 	debug.debug_enter("get_modules_directory")
 	defer debug.debug_exit("get_modules_directory")
@@ -434,7 +434,7 @@ print_usage :: proc() {
 	fmt.println("")
 	fmt.println("ENVIRONMENT:")
 	fmt.println(
-		"    ZSH_MODULES_DIR           Directory containing modules (default: ~/.zsh/modules)",
+			"    ZSH_MODULES_DIR           Directory containing modules (default: ~/.zephyr/modules)",
 	)
 	fmt.println(
 		"    ZEPHYR_DEBUG              Enable debug output (0-3 or false/true/debug/trace)",

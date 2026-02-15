@@ -121,8 +121,8 @@ mkdir: cannot create directory '/Users/john/.zsh': Permission denied
 1. **Fix directory permissions**
    ```bash
    # Create directory manually
-   mkdir -p ~/.zsh/bin ~/.zsh/modules
-   chmod 755 ~/.zsh ~/.zsh/bin ~/.zsh/modules
+   mkdir -p ~/.zsh/bin ~/.zephyr/modules
+   chmod 755 ~/.zsh ~/.zsh/bin ~/.zephyr/modules
    ```
 
 2. **Install to custom location**
@@ -282,7 +282,7 @@ Network error: GitHub API request failed
 **Symptoms:**
 ```bash
 $ zephyr list
-No modules found in: /Users/john/.zsh/modules
+No modules found in: /Users/john/.zephyr/modules
 ```
 
 **Solutions:**
@@ -290,7 +290,7 @@ No modules found in: /Users/john/.zsh/modules
 1. **Check modules directory**
    ```bash
    # List directory contents
-   ls -la ~/.zsh/modules/
+   ls -la ~/.zephyr/modules/
    
    # Create test module
    zephyr init test-module
@@ -299,7 +299,7 @@ No modules found in: /Users/john/.zsh/modules
 2. **Verify directory structure**
    ```bash
    # Each module needs module.toml
-   find ~/.zsh/modules -name "module.toml"
+   find ~/.zephyr/modules -name "module.toml"
    ```
 
 3. **Check custom modules directory**
@@ -349,7 +349,7 @@ No modules found in: /Users/john/.zsh/modules
 **Symptoms:**
 ```bash
 $ zephyr load
-source: can't open file: /Users/john/.zsh/modules/my-module/missing.zsh
+source: can't open file: /Users/john/.zephyr/modules/my-module/missing.zsh
 ```
 
 **Solutions:**
@@ -363,10 +363,10 @@ source: can't open file: /Users/john/.zsh/modules/my-module/missing.zsh
 2. **Verify files exist**
    ```bash
    # Check module directory
-   ls -la ~/.zsh/modules/my-module/
+   ls -la ~/.zephyr/modules/my-module/
    
    # Fix missing files
-   touch ~/.zsh/modules/my-module/missing.zsh
+   touch ~/.zephyr/modules/my-module/missing.zsh
    ```
 
 3. **Use relative paths**
@@ -430,7 +430,7 @@ ERROR: Circular dependency detected
 1. **Identify the cycle**
    ```bash
    # Check dependencies of each module
-   grep -r "required.*=" ~/.zsh/modules/*/module.toml
+   grep -r "required.*=" ~/.zephyr/modules/*/module.toml
    ```
 
 2. **Break the cycle**
@@ -587,14 +587,14 @@ sudo setsebool -P allow_execstack 1
 **Problem: Windows line endings**
 ```bash
 # Convert line endings
-dos2unix ~/.zsh/modules/*/module.toml
-dos2unix ~/.zsh/modules/*/*.zsh
+dos2unix ~/.zephyr/modules/*/module.toml
+dos2unix ~/.zephyr/modules/*/*.zsh
 ```
 
 **Problem: Path translation issues**
 ```bash
 # Use WSL paths consistently
-export ZSH_MODULES_DIR="/home/user/.zsh/modules"
+export ZSH_MODULES_DIR="/home/user/.zephyr/modules"
 # Not: C:\Users\user\.zsh\modules
 ```
 
@@ -620,9 +620,9 @@ set +x
 cat > debug-zephyr.sh << 'EOF'
 #!/bin/bash
 echo "=== Zephyr Debug Trace ==="
-echo "Modules directory: ${ZSH_MODULES_DIR:-$HOME/.zsh/modules}"
+echo "Modules directory: ${ZSH_MODULES_DIR:-$HOME/.zephyr/modules}"
 echo "Available modules:"
-find "${ZSH_MODULES_DIR:-$HOME/.zsh/modules}" -name "module.toml" -exec dirname {} \; | sort
+find "${ZSH_MODULES_DIR:-$HOME/.zephyr/modules}" -name "module.toml" -exec dirname {} \; | sort
 
 echo -e "\n=== Module Discovery ==="
 zephyr list
@@ -645,10 +645,10 @@ chmod +x debug-zephyr.sh
 ls -la ~/.zsh/bin/zephyr
 
 # Check modules directory permissions
-ls -la ~/.zsh/modules/
+ls -la ~/.zephyr/modules/
 
 # Check individual module permissions
-find ~/.zsh/modules -type f -name "*.zsh" -exec ls -la {} \;
+find ~/.zephyr/modules -type f -name "*.zsh" -exec ls -la {} \;
 ```
 
 ### Validate TOML Syntax
@@ -656,7 +656,7 @@ find ~/.zsh/modules -type f -name "*.zsh" -exec ls -la {} \;
 ```bash
 # Use external TOML validator if available
 pip install toml-cli
-find ~/.zsh/modules -name "module.toml" -exec toml-cli validate {} \;
+find ~/.zephyr/modules -name "module.toml" -exec toml-cli validate {} \;
 
 # Or use Python
 python3 -c "
@@ -668,7 +668,7 @@ try:
     print('Valid TOML')
 except Exception as e:
     print(f'Invalid TOML: {e}')
-" ~/.zsh/modules/my-module/module.toml
+" ~/.zephyr/modules/my-module/module.toml
 ```
 
 ### Network Debugging
@@ -678,7 +678,7 @@ except Exception as e:
 export ZEPHYR_OFFLINE=1  # Disable network (if implemented)
 
 # Check for network dependencies
-grep -r "curl\|wget\|http" ~/.zsh/modules/
+grep -r "curl\|wget\|http" ~/.zephyr/modules/
 
 # Test without network
 sudo ifconfig en0 down  # Disable network temporarily
@@ -698,7 +698,7 @@ TOML parse error: expected '=' after key at line 5
 **Solution:**
 ```bash
 # Check TOML syntax
-cat -n ~/.zsh/modules/problematic-module/module.toml
+cat -n ~/.zephyr/modules/problematic-module/module.toml
 
 # Common issues:
 # - Missing quotes around strings
@@ -730,8 +730,8 @@ File not readable: /path/to/module/file.zsh
 **Solution:**
 ```bash
 # Fix file permissions
-chmod 644 ~/.zsh/modules/*/module.toml
-chmod 644 ~/.zsh/modules/*/*.zsh
+chmod 644 ~/.zephyr/modules/*/module.toml
+chmod 644 ~/.zephyr/modules/*/*.zsh
 ```
 
 ## Getting Help
@@ -751,8 +751,8 @@ which zephyr
 zephyr --version  # If implemented
 
 # Module information
-echo "ZSH_MODULES_DIR: ${ZSH_MODULES_DIR:-$HOME/.zsh/modules}"
-ls -la "${ZSH_MODULES_DIR:-$HOME/.zsh/modules}"
+echo "ZSH_MODULES_DIR: ${ZSH_MODULES_DIR:-$HOME/.zephyr/modules}"
+ls -la "${ZSH_MODULES_DIR:-$HOME/.zephyr/modules}"
 
 # Error reproduction
 zephyr validate 2>&1 | tee zephyr-debug.log

@@ -136,7 +136,7 @@ Or set `ZEPHYR_BIN` to point to your binary.
 
 Check that your modules directory exists:
 ```bash
-ls -la ~/.zsh/modules
+ls -la ~/.zephyr/modules
 ```
 
 If empty, create your first module:

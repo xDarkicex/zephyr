@@ -24,7 +24,7 @@ Manifest and dependency validation are performed before any files are moved into
 After scan + validation, Zephyr checks out files into the temp directory using libgit2 (hooks are not executed).
 
 6. **Move to final location**
-Only after a clean scan, successful validation, and checkout does Zephyr move the module into `~/.zsh/modules/`.
+Only after a clean scan, successful validation, and checkout does Zephyr move the module into `~/.zephyr/modules/`.
 
 ## Git Hooks Blocking
 

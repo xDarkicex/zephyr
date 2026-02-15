@@ -70,7 +70,7 @@ For faster shell startup, you can cache the generated code:
 ```bash
 # Cache Zephyr output for faster loading
 ZEPHYR_CACHE="$HOME/.zsh/.zephyr_cache"
-if [[ ! -f "$ZEPHYR_CACHE" ]] || [[ "$HOME/.zsh/modules" -nt "$ZEPHYR_CACHE" ]]; then
+if [[ ! -f "$ZEPHYR_CACHE" ]] || [[ "$HOME/.zephyr/modules" -nt "$ZEPHYR_CACHE" ]]; then
     $HOME/.zsh/bin/zephyr load > "$ZEPHYR_CACHE"
 fi
 source "$ZEPHYR_CACHE"
@@ -101,12 +101,12 @@ If Zephyr reports "No modules found":
 
 1. Check the modules directory exists:
    ```bash
-   ls -la $HOME/.zsh/modules
+   ls -la $HOME/.zephyr/modules
    ```
 
 2. Verify the core module was created:
    ```bash
-   ls -la $HOME/.zsh/modules/core/
+   ls -la $HOME/.zephyr/modules/core/
    ```
 
 3. Check for TOML syntax errors:
@@ -162,7 +162,7 @@ Here's a complete example of how to integrate Zephyr into your `.zshrc`:
 # ~/.zshrc
 
 # Set up environment
-export ZSH_MODULES_DIR="$HOME/.zsh/modules"
+export ZSH_MODULES_DIR="$HOME/.zephyr/modules"
 
 # Load Zephyr modules
 if [[ -x "$HOME/.zsh/bin/zephyr" ]]; then

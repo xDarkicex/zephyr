@@ -53,7 +53,7 @@ eval "$(zephyr)"
 
 ### Example Output
 
-Given modules in `$HOME/.zsh/modules/`:
+Given modules in `$HOME/.zephyr/modules/`:
 - `core/` (priority: 10)
 - `colors/` (priority: 20, depends on core)
 - `git-helpers/` (priority: 50, depends on core, colors)
@@ -72,21 +72,21 @@ zephyr load
 # === Module: core v1.0.0 ===
 export ZSH_MODULE_CORE_THEME="default"
 export ZSH_MODULE_CORE_AUTO_UPDATE="true"
-source "$HOME/.zsh/modules/core/exports.zsh"
-source "$HOME/.zsh/modules/core/functions.zsh"
+source "$HOME/.zephyr/modules/core/exports.zsh"
+source "$HOME/.zephyr/modules/core/functions.zsh"
 
 # === Module: colors v1.1.0 ===
 export ZSH_MODULE_COLORS_SCHEME="dark"
 typeset -f colors_init >/dev/null 2>&1 && colors_init
-source "$HOME/.zsh/modules/colors/colors.zsh"
+source "$HOME/.zephyr/modules/colors/colors.zsh"
 typeset -f colors_ready >/dev/null 2>&1 && colors_ready
 
 # === Module: git-helpers v2.0.1 ===
 export ZSH_MODULE_GIT_HELPERS_DEFAULT_BRANCH="main"
 export ZSH_MODULE_GIT_HELPERS_AUTO_FETCH="true"
 typeset -f git_check_version >/dev/null 2>&1 && git_check_version
-source "$HOME/.zsh/modules/git-helpers/git-aliases.zsh"
-source "$HOME/.zsh/modules/git-helpers/git-functions.zsh"
+source "$HOME/.zephyr/modules/git-helpers/git-aliases.zsh"
+source "$HOME/.zephyr/modules/git-helpers/git-functions.zsh"
 typeset -f git_setup_completion >/dev/null 2>&1 && git_setup_completion
 ```
 
@@ -127,7 +127,7 @@ eval "$(zephyr load)"
 **No modules found:**
 ```bash
 $ zephyr load
-No modules found in: /Users/john/.zsh/modules
+No modules found in: /Users/john/.zephyr/modules
 ```
 
 **Missing dependency:**
@@ -302,7 +302,7 @@ zephyr list --json --pretty
 **Example Output (compact):**
 ```bash
 $ zephyr list --json
-{"schema_version":"1.0","generated_at":"2026-02-06T10:30:45Z","environment":{"zephyr_version":"1.0.0","modules_directory":"/Users/john/.zsh/modules","platform":{"os":"darwin","arch":"arm64","shell":"zsh","shell_version":"5.9"}},"summary":{"total_modules":4,"compatible_modules":4,"incompatible_modules":0},"modules":[{"name":"core","version":"1.0.0","description":"Core shell utilities","author":"","license":"MIT","path":"/Users/john/.zsh/modules/core","load_order":1,"priority":10,"dependencies":{"required":[],"optional":[],"missing_optional":[]},"platforms":{"os":[],"arch":[],"shell":"","min_version":""},"load":{"files":["exports.zsh","functions.zsh"]},"hooks":{"pre_load":"","post_load":""},"settings":{"theme":"default","auto_update":"true"},"exports":{"functions":["mkcd","extract"],"aliases":["ll","la"],"environment_variables":["ZSH_MODULE_CORE_THEME","ZSH_MODULE_CORE_AUTO_UPDATE"]}}],"incompatible_modules":[]}
+{"schema_version":"1.0","generated_at":"2026-02-06T10:30:45Z","environment":{"zephyr_version":"1.0.0","modules_directory":"/Users/john/.zephyr/modules","platform":{"os":"darwin","arch":"arm64","shell":"zsh","shell_version":"5.9"}},"summary":{"total_modules":4,"compatible_modules":4,"incompatible_modules":0},"modules":[{"name":"core","version":"1.0.0","description":"Core shell utilities","author":"","license":"MIT","path":"/Users/john/.zephyr/modules/core","load_order":1,"priority":10,"dependencies":{"required":[],"optional":[],"missing_optional":[]},"platforms":{"os":[],"arch":[],"shell":"","min_version":""},"load":{"files":["exports.zsh","functions.zsh"]},"hooks":{"pre_load":"","post_load":""},"settings":{"theme":"default","auto_update":"true"},"exports":{"functions":["mkcd","extract"],"aliases":["ll","la"],"environment_variables":["ZSH_MODULE_CORE_THEME","ZSH_MODULE_CORE_AUTO_UPDATE"]}}],"incompatible_modules":[]}
 ```
 
 **Example Output (pretty):**
@@ -313,7 +313,7 @@ $ zephyr list --json --pretty
   "generated_at": "2026-02-06T10:30:45Z",
   "environment": {
     "zephyr_version": "1.0.0",
-    "modules_directory": "/Users/john/.zsh/modules",
+    "modules_directory": "/Users/john/.zephyr/modules",
     "platform": {
       "os": "darwin",
       "arch": "arm64",
@@ -333,7 +333,7 @@ $ zephyr list --json --pretty
       "description": "Core shell utilities and functions",
       "author": "John Doe",
       "license": "MIT",
-      "path": "/Users/john/.zsh/modules/core",
+      "path": "/Users/john/.zephyr/modules/core",
       "load_order": 1,
       "priority": 10,
       "dependencies": {
@@ -373,7 +373,7 @@ $ zephyr list --json --pretty
       "description": "Git workflow utilities",
       "author": "Jane Smith",
       "license": "MIT",
-      "path": "/Users/john/.zsh/modules/git-helpers",
+      "path": "/Users/john/.zephyr/modules/git-helpers",
       "load_order": 2,
       "priority": 50,
       "dependencies": {
@@ -651,7 +651,7 @@ $ zephyr list --json | jq '.modules[] | {name, description, exports: .exports.fu
 **Verbose output (if implemented):**
 ```bash
 $ zephyr validate --verbose
-Scanning modules directory: /Users/john/.zsh/modules
+Scanning modules directory: /Users/john/.zephyr/modules
 
 Found modules:
   ✓ core/module.toml
@@ -831,7 +831,7 @@ $ zephyr init my-aliases
 ✓ Created module: my-aliases
 
 Generated files:
-  /Users/john/.zsh/modules/my-aliases/
+  /Users/john/.zephyr/modules/my-aliases/
   ├── module.toml
   ├── init.zsh
   ├── aliases.zsh
@@ -955,7 +955,7 @@ List any module dependencies here.
 **Module already exists:**
 ```bash
 $ zephyr init core
-✗ Error: Module 'core' already exists at /Users/john/.zsh/modules/core
+✗ Error: Module 'core' already exists at /Users/john/.zephyr/modules/core
 Use a different name or remove the existing module first.
 ```
 
@@ -970,7 +970,7 @@ Module names should use kebab-case (e.g., 'my-module')
 ```bash
 $ zephyr init test-module
 ✗ Error: Cannot create module directory
-Permission denied: /Users/john/.zsh/modules/test-module
+Permission denied: /Users/john/.zephyr/modules/test-module
 ```
 
 ## Environment Variables
@@ -988,7 +988,7 @@ zephyr list
 **Example with multiple directories (future feature):**
 ```bash
 # Search multiple directories
-export ZSH_MODULES_DIR="$HOME/.zsh/modules:$HOME/work/modules:/opt/zsh-modules"
+export ZSH_MODULES_DIR="$HOME/.zephyr/modules:$HOME/work/modules:/opt/zsh-modules"
 zephyr list
 ```
 
@@ -1083,8 +1083,8 @@ eval "$(zephyr load)"
 zephyr init my-new-feature
 
 # Edit the module
-$EDITOR ~/.zsh/modules/my-new-feature/module.toml
-$EDITOR ~/.zsh/modules/my-new-feature/init.zsh
+$EDITOR ~/.zephyr/modules/my-new-feature/module.toml
+$EDITOR ~/.zephyr/modules/my-new-feature/init.zsh
 
 # Validate changes
 zephyr validate
@@ -1130,7 +1130,7 @@ ZSH_MODULES_DIR="/tmp/test-modules" zephyr list
 
 ```bash
 # Backup modules
-tar -czf zsh-modules-backup.tar.gz ~/.zsh/modules/
+tar -czf zsh-modules-backup.tar.gz ~/.zephyr/modules/
 
 # List modules for documentation
 zephyr list > modules-inventory.txt

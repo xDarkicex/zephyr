@@ -2,8 +2,9 @@
 set -euo pipefail
 
 ZSH_DIR="$HOME/.zsh"
+ZEPHYR_DIR="$HOME/.zephyr"
 BIN_DIR="$ZSH_DIR/bin"
-MODULES_DIR="$ZSH_DIR/modules"
+MODULES_DIR="$ZEPHYR_DIR/modules"
 
 echo "Installing Zephyr Shell Loader..."
 
