@@ -49,36 +49,28 @@ init_module :: proc(module_name: string) {
 }
 
 // is_valid_module_name validates that a module name follows naming conventions
+// Must match git install parser rules: lowercase, 1-50 chars,
+// starts with letter or number, then [a-z0-9_-].
 is_valid_module_name :: proc(name: string) -> bool {
     if len(name) == 0 || len(name) > 50 {
         return false
     }
-    
-    // Must start with a letter
-    if !is_letter(rune(name[0])) {
+
+    first := rune(name[0])
+    if !((first >= 'a' && first <= 'z') || (first >= '0' && first <= '9')) {
         return false
     }
-    
-    // Can only contain letters, numbers, hyphens, and underscores
+
     for char in name {
         r := rune(char)
-        if !is_letter(r) && !is_digit(r) && r != '-' && r != '_' {
+        if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
             return false
         }
     }
-    
+
     return true
 }
 
-// is_letter checks if a rune is a letter (a-z, A-Z)
-is_letter :: proc(r: rune) -> bool {
-    return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
-}
-
-// is_digit checks if a rune is a digit (0-9)
-is_digit :: proc(r: rune) -> bool {
-    return r >= '0' && r <= '9'
-}
 
 // replace_chars replaces all occurrences of old_char with new_char in a string
 replace_chars :: proc(s: string, old_char: rune, new_char: rune) -> string {
